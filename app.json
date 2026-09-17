@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Event App",
+    "slug": "event-app",
+    "version": "1.0.0",
+    "scheme": "eventapp",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "platforms": ["ios", "android"],
+    "ios": { "supportsTablet": false, "bundleIdentifier": "com.eventapp.community" },
+    "android": { "package": "com.eventapp.community", "permissions": [], "blockedPermissions": ["android.permission.RECORD_AUDIO"] },
+    "plugins": ["expo-router", ["expo-image-picker", { "photosPermission": "Profil ve etkinlik fotoğrafını seçmek için fotoğraflarına erişim gerekiyor.", "cameraPermission": "Profil ve etkinlik fotoğrafı çekmek için kamera izni gerekiyor.", "microphonePermission": false }]],
+    "experiments": { "typedRoutes": true }
+  }
+}
