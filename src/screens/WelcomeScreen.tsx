@@ -166,7 +166,7 @@ export default function WelcomeScreen({
             Üyelik Başvurusu Yap
           </Touch>
 
-          <Touch onPress={() => navigate("interests")} style={[[ui.wFull, ui.py35, ui.textSm, ui.textWhite50, ui.fontLight]]}>
+          <Touch onPress={() => navigate("login")} style={[[ui.wFull, ui.py35, ui.textSm, ui.textWhite50, ui.fontLight]]}>
             Zaten üye misin?{" "}
             <Label style={[[ui.textWhite70, ui.underline]]}>Giriş Yap</Label>
           </Touch>

@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { AccordionItem, AtmoBackground, Avatar, GlassCard, GlassInput, ProgressStepper } from "../components/GlassUI";
+import { ErrorNotice } from "../components/ErrorNotice";
 import { CheckIcon, ChevronDownIcon, InstagramIcon, KeyIcon, ScrollIcon, UsersIcon } from "../components/Icons";
 import { CONTACT_MEMBERS } from "../data";
 import { useStore } from "../native/Store";
+import { getApiErrorMessage, register } from "../api/client";
 import { Box, Label, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
@@ -26,6 +28,14 @@ const PRINCIPLES = [{
   title: "Taciz ve uygunsuz davranışlardan kaçın",
   desc: "Taciz, tehdit, ayrımcılık, istenmeyen iletişim veya diğer üyeleri rahatsız eden davranışlar toplulukta kabul edilmez."
 }];
+function formatBirthDate(value: string) {
+  const legacyDate = value.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
+  if (legacyDate) return `${legacyDate[3]}/${legacyDate[2]}/${legacyDate[1]}`;
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
 
 /* ---------- Sticky CTA bar ---------- */
 function StickyBar({
@@ -88,7 +98,8 @@ function Step1({
     soyad: store.onboarding.soyad || "",
     email: store.onboarding.email || "",
     telefon: store.onboarding.telefon || "",
-    dogum: store.onboarding.dogum || ""
+    dogum: formatBirthDate(store.onboarding.dogum || ""),
+    sifre: store.onboarding.sifre || ""
   });
   const [principlesOpen, setPrinciplesOpen] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<number | null>(null);
@@ -136,10 +147,14 @@ function Step1({
             ...p,
             telefon: e
           }))} mode="tel" />
-            <GlassInput label="Doğum Tarihi" value={form.dogum} onChangeText={e => setForm(p => ({
+            <GlassInput label="Doğum Tarihi" placeholder="GG/AA/YYYY" value={form.dogum} onChangeText={e => setForm(p => ({
             ...p,
-            dogum: e
-          }))} mode="date" />
+            dogum: formatBirthDate(e)
+          }))} keyboardType="number-pad" maxLength={10} />
+            <GlassInput label="Şifre" placeholder="En az 8 karakter ve özel karakter" value={form.sifre} onChangeText={e => setForm(p => ({
+            ...p,
+            sifre: e
+          }))} secureTextEntry />
           </Box>
 
           {/* Community Principles */}
@@ -209,6 +224,9 @@ function Step2({
 }: {
   navigate: NavigateFn;
 }) {
+  const { data: store, setData: setStore, refreshEvents } = useStore();
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [method, setMethod] = useState<"instagram" | "code" | "reference" | null>(null);
   const [instagram, setInstagram] = useState("");
   const [code, setCode] = useState("");
@@ -223,6 +241,38 @@ function Step2({
     setTimeout(() => setReferenceState("waiting"), 1200);
     setTimeout(() => setReferenceState("approved"), 3000);
     setContactsOpen(false);
+  };
+  const submitApplication = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const form = store.onboarding;
+      const response = await register({
+        firstName: form.ad,
+        lastName: form.soyad,
+        email: form.email,
+        phoneNumber: form.telefon.replace(/\s/g, ""),
+        password: form.sifre,
+        birthDate: form.dogum,
+      });
+      setStore((current) => ({
+        ...current,
+        user: {
+          ...current.user,
+          id: typeof response.user === "object" && response.user && "id" in response.user
+            ? String(response.user.id)
+            : current.user.id,
+          name: `${form.ad} ${form.soyad}`,
+        },
+      }));
+      await refreshEvents();
+      navigate("onboarding-3");
+    } catch (error) {
+      setSubmitError(getApiErrorMessage(error, "Bilgilerini kontrol edip tekrar dene."));
+    } finally {
+      setSubmitting(false);
+    }
   };
   return <Box style={{
     flex: 1
@@ -372,10 +422,20 @@ function Step2({
         </Box>
       </Scroll>
       <StickyBar>
-        <Touch onPress={() => navigate("onboarding-3")} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
+        {submitError && (
+          <Box style={[[ui.mb3]]}>
+            <ErrorNotice
+              title="Başvuru gönderilemedi"
+              message={submitError}
+              onDismiss={() => setSubmitError(null)}
+              onRetry={() => void submitApplication()}
+            />
+          </Box>
+        )}
+        <Touch onPress={() => void submitApplication()} disabled={submitting} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
         color: "#1a1200"
       }]} gradient={["#c8a44a", "#dab96e", "#c09038"]}>
-          Başvuruyu Gönder
+          {submitting ? "Gönderiliyor..." : "Başvuruyu Gönder"}
         </Touch>
       </StickyBar>
     </Box>;

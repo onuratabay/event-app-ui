@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
+import { logout } from "../api/client";
 import BottomNav from "../components/BottomNav";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
@@ -70,6 +71,14 @@ export default function ProfileScreen({
   }));
   const interests = new Set(store.user.interests);
   const [showReferences, setShowReferences] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const signOut = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    await logout();
+    setLoggingOut(false);
+    navigate("welcome");
+  };
   const update = (key: string, value: string) => setUser(prev => ({
     ...prev,
     [key]: value
@@ -96,9 +105,20 @@ export default function ProfileScreen({
             <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>
               Profil
             </Label>
-            {isOwn && <Box style={[[ui.relative]]}>
+            {isOwn && <Box style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>
                 <Touch style={[[ui.textXs, ui.px3, ui.py15, ui.glass, ui.roundedXl, ui.textWhite25]]} glass>
                   ⚙ Ayarlar
+                </Touch>
+                <Touch
+                  onPress={() => void signOut()}
+                  disabled={loggingOut}
+                  accessibilityLabel="Çıkış yap"
+                  style={[[ui.textXs, ui.px3, ui.py15, ui.glass, ui.roundedXl, {
+                    color: loggingOut ? "rgba(255,255,255,.25)" : "#c8a44a",
+                  }]]}
+                  glass
+                >
+                  {loggingOut ? "Çıkılıyor..." : "Çıkış"}
                 </Touch>
                 <Label style={[[ui.fixed, ui.Top2, ui.Right2, ui.px15, ui.py05, ui.roundedFull, ui.text8px, ui.fontBold, ui.trackingWide], {
               backgroundColor: "rgba(124,112,240,0.18)",

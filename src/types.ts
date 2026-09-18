@@ -1,4 +1,4 @@
-export type Screen = "splash" | "welcome" | "onboarding-1" | "onboarding-2" | "onboarding-3" | "approval" | "interests" | "discover" | "event-detail" | "event-room" | "map" | "create-event" | "rooms" | "search" | "notifications" | "profile"
+export type Screen = "splash" | "welcome" | "login" | "onboarding-1" | "onboarding-2" | "onboarding-3" | "approval" | "interests" | "discover" | "event-detail" | "event-room" | "map" | "create-event" | "rooms" | "search" | "notifications" | "profile"
 
 export type NavigateFn = (screen: Screen, opts?: { eventId?: string }) => void
 
