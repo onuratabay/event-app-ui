@@ -1,5 +1,6 @@
 import DateTimePicker from "@react-native-community/datetimepicker"
 import { BlurView } from "expo-blur"
+import * as Haptics from "expo-haptics"
 import { Image } from "expo-image"
 import { LinearGradient, type LinearGradientProps } from "expo-linear-gradient"
 import React, {
@@ -231,7 +232,9 @@ export interface TouchProps extends LayoutProps {
   onPress?: (event: GestureResponderEvent) => void
   disabled?: boolean
   rippleColor?: string
+  haptic?: boolean
 }
+let lastHapticAt = 0
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 export function Touch({
   style,
@@ -244,6 +247,7 @@ export function Touch({
   gradientDirection,
   enter,
   rippleColor,
+  haptic = true,
   ...props
 }: TouchProps) {
   const inherited = useContext(Typography),
@@ -272,7 +276,15 @@ export function Touch({
         accessibilityState={{ ...props.accessibilityState, disabled }}
         disabled={disabled}
         hitSlop={8}
-        onPress={onPress}
+        onPress={onPress ? (event) => {
+          if (disabled) return
+          const now = Date.now()
+          if (haptic && now - lastHapticAt >= 80) {
+            lastHapticAt = now
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+          }
+          onPress(event)
+        } : undefined}
         onPressIn={() => animate(0.97)}
         onPressOut={() => animate(1)}
         android_ripple={rippleColor ? { color: rippleColor } : undefined}

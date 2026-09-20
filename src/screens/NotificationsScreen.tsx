@@ -1,3 +1,4 @@
+import { ReferenceNotifications } from "../components/ReferenceNotifications";
 import { AtmoBackground } from "../components/GlassUI";
 import { ArrowLeftIcon, CheckIcon } from "../components/Icons";
 import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
@@ -22,14 +23,6 @@ const NOTIFS = [{
   time: "1 sa önce",
   unread: true,
   avatar: null
-}, {
-  id: 3,
-  type: "reference",
-  title: "Referans isteği",
-  body: "Berk Arslan seni referans olarak gösterdi. Onaylamak ister misin?",
-  time: "3 sa önce",
-  unread: true,
-  avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80&h=80&fit=crop&auto=format"
 }, {
   id: 4,
   type: "reminder",
@@ -107,6 +100,7 @@ export default function NotificationsScreen({
 
       {/* List */}
       <Scroll style={[[ui.flex1, ui.px5, ui.pb10, ui.spaceY2]]} enter>
+        <ReferenceNotifications />
         {NOTIFS.map(notif => {
         const style = TYPE_ICONS[notif.type];
         return <Box key={notif.id} style={[[ui.flex, ui.itemsStart, ui.gap3, ui.p4, ui.rounded2xl], {

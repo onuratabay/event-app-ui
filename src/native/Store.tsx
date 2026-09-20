@@ -91,7 +91,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (value) {
           const saved = JSON.parse(value)
           if (saved.user?.id === "me" && Array.isArray(saved.events))
-            setData({ ...initial, ...saved })
+            setData({
+              ...initial,
+              ...saved,
+              events: saved.events.map((event: Partial<AppEvent>) => ({
+                ...event,
+                host: event.host || ME,
+                participants: Array.isArray(event.participants)
+                  ? event.participants
+                  : [],
+              })),
+            })
         }
       })
       .then(async () => {

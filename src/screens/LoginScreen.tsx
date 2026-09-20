@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { AccessibilityInfo, Animated, Easing, ScrollView, StyleSheet } from "react-native"
 import { AtmoBackground } from "../components/GlassUI"
 import { ErrorNotice } from "../components/ErrorNotice"
 import { Field, Label, Touch, Box } from "../native/UI"
@@ -9,6 +10,17 @@ import { ui } from "../theme/styles"
 
 export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
   const { refreshEvents } = useStore()
+  const entrance = useRef(new Animated.Value(1)).current
+  useEffect(() => {
+    let active = true
+    void AccessibilityInfo.isReduceMotionEnabled().then(reduceMotion => {
+      if (!active || reduceMotion) return
+      entrance.setValue(0)
+      Animated.timing(entrance, { toValue: 1, duration: 420,
+        easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
+    }).catch(() => {})
+    return () => { active = false; entrance.stopAnimation() }
+  }, [entrance])
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [busy, setBusy] = useState(false)
@@ -33,11 +45,16 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
   }
 
   return (
-    <Box style={[[ui.flex, ui.bg06060e, ui.px8, ui.justifyCenter, ui.overflowHidden]]}>
+    <Box style={{ flex: 1, backgroundColor: "#06060e" }}>
       <AtmoBackground variant="violet" />
-      <Box style={[[ui.relative, ui.spaceY4]]}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.page}
+        keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <Animated.View style={[styles.form, { opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
+        <Box style={styles.heading}>
+        <Label style={styles.eyebrow}>VIBEUS</Label>
         <Label style={[[ui.fontDisplay, ui.text4xl, ui.textWhite]]}>Tekrar hoş geldin.</Label>
         <Label style={[[ui.textWhite50, ui.leadingRelaxed]]}>Vibeus hesabınla devam et.</Label>
+        </Box>
         {errorMessage && (
           <ErrorNotice
             title="Giriş yapılamadı"
@@ -46,33 +63,60 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
             onRetry={submit}
           />
         )}
+        <Label style={styles.fieldLabel}>E-posta</Label>
         <Field
           mode="email"
           value={email}
           onChangeText={setEmail}
-          placeholder="E-posta"
+          placeholder="ornek@eposta.com"
+          accessibilityLabel="E-posta"
           autoComplete="email"
-          style={[[ui.mt4, ui.p4, ui.roundedXl, ui.bgWhite8, ui.textWhite]]}
+          style={styles.input}
         />
+        <Label style={styles.fieldLabel}>Şifre</Label>
         <Field
           value={password}
           onChangeText={setPassword}
-          placeholder="Şifre"
+          placeholder="Şifreni gir"
+          accessibilityLabel="Şifre"
+          autoComplete="current-password"
+          onSubmitEditing={() => void submit()}
+          returnKeyType="go"
           secureTextEntry
-          style={[[ui.p4, ui.roundedXl, ui.bgWhite8, ui.textWhite]]}
+          style={styles.input}
         />
         <Touch
           onPress={submit}
           disabled={busy}
-          style={[[ui.p4, ui.roundedXl, ui.textCenter, ui.fontSemibold, { color: "#1a1200" }]]}
+          style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.fontSemibold, { color: "#1a1200", marginTop: 16, minHeight: 54, justifyContent: "center" }]]}
           gradient={["#c8a44a", "#dab96e", "#c09038"]}
         >
           {busy ? "Bağlanıyor..." : "Giriş Yap"}
         </Touch>
+        <Touch
+          onPress={() => { setErrorMessage(null); navigate("discover") }}
+          disabled={busy}
+          accessibilityRole="button"
+          style={styles.demoButton}
+        >
+          Demo olarak devam et
+        </Touch>
+        <Label style={styles.demoHint}>Örnek verilerle uygulamayı keşfet.</Label>
         <Touch onPress={() => navigate("welcome")} style={[[ui.p3, ui.textCenter, ui.textWhite50]]}>
           Vazgeç
         </Touch>
-      </Box>
+      </Animated.View>
+      </ScrollView>
     </Box>
   )
 }
+const styles = StyleSheet.create({
+  demoButton: { minHeight: 50, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: "rgba(200,164,74,0.25)", backgroundColor: "rgba(200,164,74,0.05)", color: "#dab96e", textAlign: "center", justifyContent: "center", fontFamily: "Outfit-Medium" },
+  demoHint: { color: "#89838a", fontSize: 11, textAlign: "center" },
+  page: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 28, paddingTop: 88, paddingBottom: 36 },
+  form: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 10 },
+  heading: { gap: 12, marginBottom: 28 },
+  eyebrow: { color: "#c8a44a", fontSize: 11, letterSpacing: 4, fontFamily: "Outfit-Medium", marginBottom: 8 },
+  fieldLabel: { color: "#b6b0ae", fontSize: 12, fontFamily: "Outfit-Medium", marginTop: 6, marginLeft: 4 },
+  input: { minHeight: 56, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(200,164,74,0.18)", backgroundColor: "rgba(255,255,255,0.045)", color: "#f0ede8", fontSize: 15 },
+})

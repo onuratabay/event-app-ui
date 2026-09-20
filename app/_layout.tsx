@@ -12,6 +12,7 @@ import {
 } from "react-native"
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context"
 import { StoreProvider } from "../src/native/Store"
+import { ErrorNoticeProvider } from "../src/components/ErrorNotice"
 void SplashScreen.preventAutoHideAsync()
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -36,21 +37,23 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <SafeAreaView style={s.root} edges={["top", "bottom"]}>
         <StatusBar style="light" />
-        <KeyboardAvoidingView
-          style={s.root}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <StoreProvider>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: "#06060e" },
-                animation: "fade",
-                animationDuration: 180,
-              }}
-            />
-          </StoreProvider>
-        </KeyboardAvoidingView>
+        <ErrorNoticeProvider>
+          <KeyboardAvoidingView
+            style={s.root}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            <StoreProvider>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: "#06060e" },
+                  animation: "fade",
+                  animationDuration: 180,
+                }}
+              />
+            </StoreProvider>
+          </KeyboardAvoidingView>
+        </ErrorNoticeProvider>
       </SafeAreaView>
     </SafeAreaProvider>
   )

@@ -54,7 +54,12 @@ export function getApiErrorMessage(error: unknown, fallback = "Lütfen tekrar de
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const accessToken = await AsyncStorage.getItem(ACCESS_TOKEN_KEY)
-  const response = await fetch(`${API_URL}${path}`, {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
+  let response: Response
+  try {
+  response = await fetch(`${API_URL}${path}`, {
+    signal: controller.signal,
     ...options,
     headers: {
       Accept: "application/json",
@@ -63,6 +68,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       ...(options.headers || {}),
     },
   })
+
+  } finally { clearTimeout(timeout) }
 
   if (!response.ok) {
     const body = await response.text()
@@ -115,3 +122,30 @@ export async function getEvents() {
 export function hasRemoteApiConfigured() {
   return Boolean(process.env.EXPO_PUBLIC_API_URL)
 }
+
+export interface ReferenceMember { id: string; name: string; phone: string }
+export interface ReferenceRequest {
+  id: string
+  status: "pending" | "approved" | "declined"
+  direction?: "incoming" | "outgoing"
+  createdAt: string
+  requester: { id: string; name: string }
+  recipient: { id: string; name: string }
+}
+export async function matchReferenceContacts(phones: string[]) {
+  const items: ReferenceMember[] = []
+  const unique = [...new Set(phones)]
+  for (let index = 0; index < unique.length; index += 300) {
+    const result = await request<{ items: ReferenceMember[] }>("/references/contacts", { method: "POST", body: JSON.stringify({ phones: unique.slice(index, index + 300) }) })
+    items.push(...result.items)
+  }
+  return [...new Map(items.map(item => [item.id, item])).values()]
+}
+export function getReferenceRequests() { return request<{ items: ReferenceRequest[] }>("/references/requests") }
+export function sendReferenceRequest(recipientId: string) {
+  return request<ReferenceRequest>("/references/requests", { method: "POST", body: JSON.stringify({ recipientId }) })
+}
+export function respondToReference(id: string, decision: "approved" | "declined") {
+  return request<{ status: "approved" | "declined" }>(`/references/requests/${id}/respond`, { method: "POST", body: JSON.stringify({ decision }) })
+}
+export async function hasSession() { return Boolean(await AsyncStorage.getItem(ACCESS_TOKEN_KEY)) }

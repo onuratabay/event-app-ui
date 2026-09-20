@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AccordionItem, AtmoBackground, Avatar, GlassCard, GlassInput, ProgressStepper } from "../components/GlassUI";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { CheckIcon, ChevronDownIcon, InstagramIcon, KeyIcon, ScrollIcon, UsersIcon } from "../components/Icons";
-import { CONTACT_MEMBERS } from "../data";
+import { ReferencePicker } from "../components/ReferencePicker";
 import { useStore } from "../native/Store";
 import { getApiErrorMessage, register } from "../api/client";
 import { Box, Label, Scroll, Touch } from "../native/UI";
@@ -104,8 +104,22 @@ function Step1({
   const [principlesOpen, setPrinciplesOpen] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<number | null>(null);
   const [accepted, setAccepted] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const continueRegistration = async () => {
+    if (creating) return;
+    setCreating(true); setCreateError(null);
+    try {
+      if (store.onboarding.accountId) { navigate("onboarding-2"); return; }
+      const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: form.telefon.replace(/\s/g, ""), password: form.sifre, birthDate: form.dogum });
+      const id = String((response.user as { id: string }).id);
+      setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}` } }));
+      navigate("onboarding-2");
+    } catch (cause) { setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
+    finally { setCreating(false); }
+  };
   const allFilled = Object.values(form).every(v => v.trim().length > 0);
-  const canContinue = allFilled && accepted;
+  const canContinue = Boolean(store.onboarding.accountId) || (allFilled && accepted);
   return <Box style={{
     flex: 1
   }}>
@@ -123,7 +137,7 @@ function Step1({
               Seninle tanışalım.
             </Label>
             <Label style={[[ui.textSm, ui.textWhite45]]}>
-              Birkaç bilgi, sana daha iyi bir deneyim sunmamızı sağlar.
+              Devam ettiğinde hesabın oluşturulur. Sonraki adımda referans isteyebilirsin.
             </Label>
           </Box>
 
@@ -197,20 +211,11 @@ function Step1({
         </Box>
       </Scroll>
       <StickyBar>
-        <Touch onPress={() => {
-        setStore(p => ({
-          ...p,
-          onboarding: form,
-          user: {
-            ...p.user,
-            name: form.ad + " " + form.soyad
-          }
-        }));
-        navigate("onboarding-2");
-      }} disabled={!canContinue} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
+        {createError && <ErrorNotice title="Kayıt tamamlanamadı" message={createError} onDismiss={() => setCreateError(null)} />}
+        <Touch onPress={() => void continueRegistration()} disabled={!canContinue || creating} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
         color: canContinue ? "#1a1200" : "rgba(255,255,255,0.25)"
       }]} gradient={canContinue ? ["#c8a44a", "#dab96e", "#c09038"] : ["rgba(255,255,255,0.08)", "rgba(255,255,255,0.08)"]}>
-          Devam Et
+          {creating ? "Hesap oluşturuluyor…" : "Devam Et"}
         </Touch>
       </StickyBar>
     </Box>;
@@ -231,42 +236,13 @@ function Step2({
   const [instagram, setInstagram] = useState("");
   const [code, setCode] = useState("");
   const [codeValid, setCodeValid] = useState<boolean | null>(null);
-  const [contactsOpen, setContactsOpen] = useState(false);
-  const [referenceState, setReferenceState] = useState<"idle" | "sent" | "waiting" | "approved">("idle");
-  const [selectedContact, setSelectedContact] = useState<number | null>(null);
   const validateCode = () => setCodeValid(code.toUpperCase() === "EVENT2026");
-  const sendReference = (i: number) => {
-    setSelectedContact(i);
-    setReferenceState("sent");
-    setTimeout(() => setReferenceState("waiting"), 1200);
-    setTimeout(() => setReferenceState("approved"), 3000);
-    setContactsOpen(false);
-  };
   const submitApplication = async () => {
     if (submitting) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const form = store.onboarding;
-      const response = await register({
-        firstName: form.ad,
-        lastName: form.soyad,
-        email: form.email,
-        phoneNumber: form.telefon.replace(/\s/g, ""),
-        password: form.sifre,
-        birthDate: form.dogum,
-      });
-      setStore((current) => ({
-        ...current,
-        user: {
-          ...current.user,
-          id: typeof response.user === "object" && response.user && "id" in response.user
-            ? String(response.user.id)
-            : current.user.id,
-          name: `${form.ad} ${form.soyad}`,
-        },
-      }));
-      await refreshEvents();
+      if (!store.onboarding.accountId) { navigate("onboarding-1"); return; }
       navigate("onboarding-3");
     } catch (error) {
       setSubmitError(getApiErrorMessage(error, "Bilgilerini kontrol edip tekrar dene."));
@@ -286,7 +262,7 @@ function Step2({
               <ProgressStepper current={1} total={3} />
               <Label style={[[ui.textXs, ui.textWhite30]]}>Adım 2/3</Label>
             </Box>
-            <Touch onPress={() => navigate("onboarding-1")} style={[[ui.textXs, ui.textWhite30, ui.mb2, ui.flex, ui.itemsCenter, ui.gap1]]}>
+            <Touch onPress={() => navigate("onboarding-1")} style={{ alignSelf: "flex-start", minHeight: 44, paddingRight: 16, marginBottom: 8, fontSize: 15, fontFamily: "Outfit-Medium", color: "rgba(240,237,232,0.7)", textAlign: "left", justifyContent: "center" }}>
               ← Geri
             </Touch>
             <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite]]}>
@@ -315,7 +291,7 @@ function Step2({
                 {method === "instagram" && <Box style={[[ui.w2, ui.h2, ui.roundedFull, ui.bgC8a44a]]} />}
               </Box>
               {method === "instagram" && <Touch onPress={e => e.stopPropagation()} style={[[ui.mt3]]} enter>
-                  <GlassInput placeholder="@kullaniciadi" value={instagram} onChangeText={e => setInstagram(e)} />
+                  <GlassInput placeholder="@kullaniciadi" value={instagram} onChangeText={value => { const username = value.replace(/@/g, "").trim(); setInstagram(username ? `@${username}` : "") }} />
                 </Touch>}
             </GlassCard>
 
@@ -369,54 +345,7 @@ function Step2({
                 </Box>
               </Box>
 
-              <Box style={[[ui.mt3]]}>
-                {referenceState === "idle" && <Touch onPress={() => setContactsOpen(true)} style={[[ui.wFull, ui.py25, ui.roundedXl, ui.textSm, ui.fontMedium, ui.textWhite60], {
-                backgroundColor: "rgba(255,255,255,0.05)",
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.09)"
-              }]}>
-                    Üye Seç
-                  </Touch>}
-                {referenceState === "sent" && <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.textAmber400, ui.py1]]} enter>
-                    <Label style={[[ui.textSm]]}>İstek gönderildi...</Label>
-                  </Box>}
-                {referenceState === "waiting" && <Box style={[[ui.flex, ui.itemsCenter, ui.gap25, ui.py1]]} enter>
-                    <Avatar uri={CONTACT_MEMBERS[selectedContact!].avatar} name={CONTACT_MEMBERS[selectedContact!].name} size="xs" />
-                    <Label style={[[ui.textSm, ui.textAmber30080]]}>
-                      {CONTACT_MEMBERS[selectedContact!].name} onay bekliyor
-                    </Label>
-                  </Box>}
-                {referenceState === "approved" && <Box style={[[ui.flex, ui.itemsCenter, ui.gap25, ui.py1]]} enter>
-                    <Avatar uri={CONTACT_MEMBERS[selectedContact!].avatar} name={CONTACT_MEMBERS[selectedContact!].name} size="xs" />
-                    <Box style={[[ui.flex, ui.itemsCenter, ui.gap15, ui.textEmerald400]]}>
-                      <CheckIcon size={14} strokeWidth={2} />
-                      <Label style={[[ui.textSm, ui.fontMedium]]}>
-                        {CONTACT_MEMBERS[selectedContact!].name} onayladı
-                      </Label>
-                    </Box>
-                  </Box>}
-
-                {contactsOpen && <Box style={[[ui.mt3, ui.spaceY2]]} enter>
-                    <Label style={[[ui.textXs, ui.textWhite35, ui.mb2]]}>
-                      Event App üyeleri
-                    </Label>
-                    {CONTACT_MEMBERS.map((user, i) => <Touch key={user.id} onPress={() => sendReference(i)} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.gap3, ui.p25, ui.roundedXl, ui.textLeft], {
-                  backgroundColor: "rgba(255,255,255,0.04)",
-                  borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.07)"
-                }]}>
-                        <Avatar uri={user.avatar} name={user.name} size="sm" />
-                        <Box>
-                          <Label style={[[ui.textSm, ui.textWhite80, ui.fontMedium]]}>
-                            {user.name}
-                          </Label>
-                          <Label style={[[ui.textXs, ui.textWhite40]]}>
-                            {user.interests.slice(0, 2).join(" · ")}
-                          </Label>
-                        </Box>
-                      </Touch>)}
-                  </Box>}
-              </Box>
+              <ReferencePicker />
             </GlassCard>
           </Box>
         </Box>

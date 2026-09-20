@@ -29,6 +29,7 @@ class Value {
   constructor(value) {
     this.value = value
   }
+  setValue(value) { this.value = value }
   stopAnimation() {}
   interpolate() {
     return this.value
@@ -47,6 +48,9 @@ Module._load = function (id, parent, isMain) {
       Modal: "Modal",
       Platform: { OS: "ios" },
       Alert: { alert() {} },
+      AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) },
+      AccessibilityInfo: { isReduceMotionEnabled: async () => false, announceForAccessibility() {}, getRecommendedTimeoutMillis: async value => value },
+      Easing: { cubic: value => value ** 3, out: easing => easing },
       Linking: { openURL: async () => {} },
       Share: { share: async () => {} },
       StyleSheet: {
@@ -72,6 +76,8 @@ Module._load = function (id, parent, isMain) {
     return new Proxy({ __esModule: true, default: "Svg" }, {
       get: (o, k) => o[k] || k,
     })
+  if (id === "expo-contacts/legacy") return { Fields: { PhoneNumbers: "phoneNumbers" } }
+  if (id === "expo-haptics") return { impactAsync: async () => {}, ImpactFeedbackStyle: { Light: "light" } }
   if (id === "expo-image") return { Image: "Image" }
   if (id === "expo-linear-gradient") return { LinearGradient: "LinearGradient" }
   if (id === "expo-blur") return { BlurView: "BlurView" }
