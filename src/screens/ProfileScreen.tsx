@@ -1,3 +1,5 @@
+import BackButton from "../components/BackButton";
+import { Alert } from "react-native";
 import { useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
 import { logout } from "../api/client";
@@ -60,6 +62,7 @@ export default function ProfileScreen({
 }: Props) {
   const {
     data: store,
+    resetSession,
     setData: setStore
   } = useStore();
   const EVENTS = store.events;
@@ -75,9 +78,12 @@ export default function ProfileScreen({
   const signOut = async () => {
     if (loggingOut) return;
     setLoggingOut(true);
-    await logout();
-    setLoggingOut(false);
-    navigate("welcome");
+    try {
+      await logout();
+      resetSession();
+      navigate("welcome");
+    } catch { Alert.alert("Çıkış yapılamadı", "Lütfen tekrar dene."); }
+    finally { setLoggingOut(false); }
   };
   const update = (key: string, value: string) => setUser(prev => ({
     ...prev,
@@ -101,6 +107,7 @@ export default function ProfileScreen({
       <Scroll style={[[ui.relative, ui.hFull, ui.pb28]]}>
         {/* Header */}
         <Box style={[[ui.pt14, ui.px5, ui.pb5]]}>
+          <BackButton navigate={navigate} fallback="discover" onPress={() => navigate("discover")} />
           <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb6]]}>
             <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>
               Profil

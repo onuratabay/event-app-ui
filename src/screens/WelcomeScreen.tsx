@@ -1,3 +1,4 @@
+import { useSignedOutEntry } from "../native/session";
 import { AtmoBackground } from "../components/GlassUI";
 import { Box, Label, Picture, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -8,6 +9,8 @@ interface Props {
 export default function WelcomeScreen({
   navigate
 }: Props) {
+  const checkingSession = useSignedOutEntry(navigate);
+  if (checkingSession) return null;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
 

@@ -1,3 +1,4 @@
+import BackButton from "../components/BackButton";
 import { Circle, Path, Polygon, Polyline, Rect } from "react-native-svg";
 import BottomNav from "../components/BottomNav";
 import { ComingSoonCard } from "../components/Expressive";
@@ -23,6 +24,7 @@ export default function RoomsScreen({
 
       <Scroll style={[[ui.relative, ui.hFull, ui.pb28]]}>
         <Box style={[[ui.pt14, ui.px5, ui.pb5]]}>
+          <BackButton navigate={navigate} fallback="discover" onPress={() => navigate("discover")} />
           <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb1]]}>
             Etkinliklerim
           </Label>

@@ -1,3 +1,4 @@
+import { hasSession } from "../api/client";
 import { useEffect } from "react";
 import { AtmoBackground } from "../components/GlassUI";
 import { Box, Label } from "../native/UI";
@@ -10,8 +11,9 @@ export default function SplashScreen({
   navigate
 }: Props) {
   useEffect(() => {
-    const t = setTimeout(() => navigate("welcome"), 2400);
-    return () => clearTimeout(t);
+    let active = true;
+    hasSession().then(session => { if (active) navigate(session ? "discover" : "welcome"); }).catch(() => { if (active) navigate("welcome"); });
+    return () => { active = false; };
   }, [navigate]);
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />

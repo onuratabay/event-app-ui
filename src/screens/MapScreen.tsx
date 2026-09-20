@@ -1,255 +1,250 @@
-import { useState } from "react";
-import { G, Line, Path } from "react-native-svg";
-import BottomNav from "../components/BottomNav";
-import { FilterChip, GlassCard } from "../components/GlassUI";
-import { useStore } from "../native/Store";
-import { Box, Label, Scroll, Touch, Vector } from "../native/UI";
-import { ui } from "../theme/styles";
-import { NavigateFn } from "../types";
-interface Props {
-  navigate: NavigateFn;
+import BackButton from "../components/BackButton"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { ActivityIndicator, AppState, StyleSheet, View } from "react-native"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import * as Location from "expo-location"
+import DiscoveryFilterSheet from "../map/DiscoveryFilterSheet"
+import { apiDate, applyDiscoveryFilters, categoryVisual, dateRange, placeBounds, DEFAULT_FILTERS, filterError, type DiscoveryFilters, type MapPlace } from "../map/filters"
+import MapView, { Marker, type Region } from "react-native-maps"
+import Svg, { Path } from "react-native-svg"
+import BottomNav from "../components/BottomNav"
+import { FilterChip } from "../components/GlassUI"
+import { getApiErrorMessage, getMapEvents, getMapInterests, type ApiEvent } from "../api/client"
+import { mapApiEvent, useStore } from "../native/Store"
+import { Box, Label, Scroll, Touch } from "../native/UI"
+import { COLORS, createIndex, densityPaths, INITIAL_REGION, isVisible, modeForZoom, zoomForRegion } from "../map/model"
+import type { NavigateFn } from "../types"
+
+const MODE_LABELS = { heat: "Yoğunluk", cluster: "Etkinlik kümeleri", event: "Etkinlikler" }
+export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
+  const map = useRef<MapView>(null)
+  const { setData } = useStore()
+  const [events, setEvents] = useState<ApiEvent[]>([])
+  const [region, setRegion] = useState<Region>(INITIAL_REGION)
+  const [size, setSize] = useState({ width: 390, height: 760 })
+  const [filters, setFilters] = useState<DiscoveryFilters>(DEFAULT_FILTERS)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [interests, setInterests] = useState<Array<{ id: string; name: string }>>([])
+  const [now, setNow] = useState(() => new Date())
+  const [nearby, setNearby] = useState<MapPlace | null>(null)
+  const [locating, setLocating] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const interacted = useRef(false)
+  const alive = useRef(true)
+  const filterRef = useRef(filters)
+  filterRef.current = filters
+  const filterRevision = useRef(0)
+  const locationBusy = useRef(false)
+  const range = dateRange(filters, now)
+  const queryKey = JSON.stringify({ dateFrom: apiDate(range.from), dateTo: apiDate(range.to), interestIds: filters.interestIds, ...placeBounds(filters.place, filters.radiusKm) })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [truncated, setTruncated] = useState(false)
+  const [retry, setRetry] = useState(0)
+  const [ready, setReady] = useState(false)
+  const [panelHeight, setPanelHeight] = useState(190)
+  const [selected, setSelected] = useState<ApiEvent[]>([])
+  const centered = useRef(false)
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true); setError(null)
+    getMapEvents(controller.signal, JSON.parse(queryKey)).then(result => {
+      if (controller.signal.aborted) return
+      setEvents(result.items); setTruncated(result.truncated)
+    }).catch(cause => {
+      if (!controller.signal.aborted) setError(getApiErrorMessage(cause, "Etkinlikler yüklenemedi. Tekrar dene."))
+    }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [retry, queryKey])
+  useEffect(() => {
+    const controller = new AbortController()
+    getMapInterests(controller.signal).then(items => { if (!controller.signal.aborted && Array.isArray(items)) setInterests(items) }).catch(() => {})
+    return () => controller.abort()
+  }, [retry])
+  useEffect(() => {
+    alive.current = true
+    AsyncStorage.getItem("event-app:map-filters").then(saved => {
+      if (!saved || interacted.current || !alive.current) return
+      try { const value = JSON.parse(saved); if (!filterError(value)) setFilters(value) } catch { /* Ignore obsolete preferences. */ }
+    }).catch(() => {})
+    const timer = setInterval(() => setNow(new Date()), 60000)
+    const subscription = AppState.addEventListener("change", state => { if (state === "active") { setNow(new Date()); void locate(false) } })
+    void locate(false)
+    return () => { alive.current = false; clearInterval(timer); subscription.remove() }
+  }, [])
+  const applyFilters = (value: DiscoveryFilters) => {
+    interacted.current = true
+    filterRevision.current++
+    setFilters(value); setSelected([]); setFilterOpen(false)
+    void AsyncStorage.setItem("event-app:map-filters", JSON.stringify(value)).catch(() => setLocationError("Filtre bu oturumda uygulandı; cihazına kaydedilemedi."))
+    if (value.place && ready) {
+      centered.current = true
+      const latitudeDelta = value.radiusKm * 2.5 / 111
+      map.current?.animateToRegion({ latitude: value.place.latitude, longitude: value.place.longitude, latitudeDelta, longitudeDelta: latitudeDelta / Math.cos(value.place.latitude * Math.PI / 180) }, 450)
+    }
+  }
+  async function locate(requestPermission: boolean) {
+    if (locationBusy.current) return
+    locationBusy.current = true
+    const revision = filterRevision.current
+    setLocating(true); setLocationError(null)
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+      const permission = requestPermission ? await Location.requestForegroundPermissionsAsync() : await Location.getForegroundPermissionsAsync()
+      if (!permission.granted) {
+        if (requestPermission) setLocationError("Konum izni verilmedi. Sana göre filtresinden şehir veya mekân seçebilirsin.")
+        return
+      }
+      const position = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("timeout")), 12000) }),
+      ])
+      let name = "Bulunduğun konum"
+      try { const [address] = await Location.reverseGeocodeAsync(position.coords); name = address?.city || address?.region || name } catch { /* Coordinates remain usable without a city label. */ }
+      if (!alive.current) return
+      const place = { name, latitude: position.coords.latitude, longitude: position.coords.longitude }
+      setNearby(place)
+      if (requestPermission && revision === filterRevision.current) applyFilters({ ...filterRef.current, place, radiusKm: 15 })
+
+    } catch { if (alive.current) setLocationError("Konum alınamadı. Sana göre filtresinden şehir seçebilirsin.") }
+    finally { locationBusy.current = false; if (timeout) clearTimeout(timeout); if (alive.current) setLocating(false) }
+  }
+  const filtered = useMemo(() => applyDiscoveryFilters(events, filters, now), [events, filters, now])
+  const categories = useMemo(() => [...new Map([...interests, ...events.map(event => event.interest)].map(item => [item.id, item])).values()], [events, interests])
+  const zoom = zoomForRegion(region, size.width)
+  const mode = modeForZoom(zoom)
+  const index = useMemo(() => createIndex(filtered), [filtered])
+  const clusters = useMemo(() => index.getClusters([
+    region.longitude - region.longitudeDelta / 2, Math.max(-85, region.latitude - region.latitudeDelta / 2),
+    region.longitude + region.longitudeDelta / 2, Math.min(85, region.latitude + region.latitudeDelta / 2),
+  ], Math.floor(zoom)), [index, region, zoom])
+  const density = useMemo(() => mode === "heat" ? densityPaths(filtered, region, size.width, size.height) : [], [filtered, region, size, mode])
+  const visible = useMemo(() => filtered.filter(event => isVisible(event, region)), [filtered, region])
+  const heatOpacity = Math.max(0, Math.min(1, (11 - zoom) / 0.65))
+  const markerOpacity = Math.max(0, Math.min(1, (zoom - 10.35) / 0.65))
+  useEffect(() => {
+    if (!ready || centered.current) return
+    const place = filters.place || (!interacted.current ? nearby : null)
+    if (place) {
+      const delta = (filters.place ? filters.radiusKm : 15) * 2.5 / 111
+      map.current?.animateToRegion({ latitude: place.latitude, longitude: place.longitude, latitudeDelta: delta, longitudeDelta: delta / Math.cos(place.latitude * Math.PI / 180) }, 450)
+      centered.current = true
+    } else if (filtered.length) {
+      centered.current = true
+      map.current?.fitToCoordinates(filtered.map(event => ({ latitude: event.latitude, longitude: event.longitude })), {
+        edgePadding: { top: 150, right: 50, bottom: 30, left: 50 }, animated: true,
+      })
+    }
+  }, [ready, filtered, filters.place, filters.radiusKm, nearby])
+  const zoomBy = (factor: number) => map.current?.animateToRegion({ ...region,
+    latitudeDelta: Math.min(120, Math.max(0.0002, region.latitudeDelta * factor)),
+    longitudeDelta: Math.min(350, Math.max(0.0002, region.longitudeDelta * factor)),
+  }, 350)
+  const openEvent = (event: ApiEvent) => {
+    setData(current => ({ ...current, events: [mapApiEvent(event), ...current.events.filter(item => item.id !== event.id)] }))
+    navigate("event-detail", { eventId: event.id })
+  }
+  return <Box style={s.root}>
+    <View style={[StyleSheet.absoluteFill, { bottom: panelHeight + 96 }]} onLayout={event => setSize(event.nativeEvent.layout)}>
+      <MapView ref={map} testID="event-map" style={StyleSheet.absoluteFill} initialRegion={INITIAL_REGION}
+        userInterfaceStyle="dark" rotateEnabled={false} pitchEnabled={false} showsCompass={false}
+        showsPointsOfInterests={false} showsBuildings={false} toolbarEnabled={false}
+        onMapReady={() => setReady(true)} onRegionChange={setRegion} onRegionChangeComplete={setRegion}
+        onPress={() => setSelected([])} legalLabelInsets={{ top: 0, left: 8, right: 8, bottom: 4 }}>
+        {markerOpacity > 0 && clusters.map(feature => {
+          const [longitude, latitude] = feature.geometry.coordinates
+          const props = feature.properties
+          const isCluster = "cluster" in props && props.cluster
+          const event = !isCluster ? filtered.find(item => item.id === props.eventId) : undefined
+          const count = isCluster ? Number(props.point_count) : 1
+          return <Marker key={isCluster ? `cluster-${props.cluster_id}` : String(props.eventId)} coordinate={{ latitude, longitude }} opacity={markerOpacity}
+            tracksViewChanges={true} zIndex={isCluster ? 2 : 3}
+            onPress={press => {
+              press.stopPropagation()
+              if (isCluster) {
+                const id = Number(props.cluster_id)
+                if (zoom >= 17) {
+                  const ids = new Set(index.getLeaves(id, Infinity).map(point => point.properties.eventId))
+                  setSelected(filtered.filter(item => ids.has(item.id)))
+                } else {
+                  const target = Math.min(19, index.getClusterExpansionZoom(id))
+                  const scale = 2 ** (zoom - target)
+                  map.current?.animateToRegion({ latitude, longitude, latitudeDelta: region.latitudeDelta * scale, longitudeDelta: region.longitudeDelta * scale }, 400)
+                }
+              } else if (event) setSelected([event])
+            }}>
+            <View style={{ alignItems: "center" }}><View style={[s.pin, isCluster && s.cluster, { backgroundColor: isCluster ? "#e9ac60" : categoryVisual(event?.interest.name || "").color }]}>
+              <Label style={s.pinText}>{isCluster ? String(count) : categoryVisual(event?.interest.name || "").icon}</Label>
+            </View>
+            {!isCluster && zoom >= 14 && <View style={s.pinLabel}><Label style={s.pinLabelText}>{event?.interest.name} · {event?.startTime}</Label></View>}
+            </View>
+          </Marker>
+        })}
+      </MapView>
+      {mode === "heat" && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: heatOpacity }]}>
+        <Svg width={size.width} height={size.height}>{density.filter(path => path.d).map((path, i) => <Path key={i} d={path.d} fill={path.color} opacity={path.opacity} />)}</Svg>
+      </View>}
+    </View>
+    <Box pointerEvents="box-none" style={s.top}>
+      <Box style={s.heading}><BackButton navigate={navigate} fallback="discover" onPress={() => navigate("discover")} /><Label style={s.title}>Harita</Label><Label style={s.badge}>{visible.length} etkinlik görünümde</Label></Box>
+      <Scroll horizontal style={s.filters}>
+        <FilterChip solid label="✦ Sana göre" selected={filterOpen || !!filters.place || !!filters.timeFrom || !!filters.interestIds.length || filters.datePreset !== "all"} onPress={() => { interacted.current = true; setFilterOpen(true) }} />
+        {([["today", "Bugün"], ["tomorrow", "Yarın"], ["week", "Haftaya"]] as const).map(([id, label]) => <FilterChip solid key={id} label={label} selected={filters.datePreset === id} onPress={() => applyFilters({ ...filters, datePreset: id })} />)}
+        <FilterChip solid label={locating ? "Konum alınıyor…" : nearby ? `${nearby.name} yakınında` : "⌖ Yakınımda"} selected={!!nearby && filters.place?.latitude === nearby.latitude && filters.place?.longitude === nearby.longitude} onPress={() => void locate(true)} />
+        <FilterChip solid label={now.getHours() < 22 ? "Bu akşam" : "Yarın sabah"} selected={false} onPress={() => applyFilters({ ...filters, datePreset: now.getHours() < 22 ? "today" : "tomorrow", timeFrom: now.getHours() < 22 ? "18:00" : "08:00", timeTo: now.getHours() < 22 ? "23:59" : "12:00" })} />
+      </Scroll>
+      <Scroll horizontal style={s.filters}><FilterChip solid label="Tüm türler" selected={!filters.interestIds.length} onPress={() => applyFilters({ ...filters, interestIds: [] })} />{categories.map(item => <FilterChip solid key={item.id} label={`${categoryVisual(item.name).icon} ${item.name}`} selected={filters.interestIds.includes(item.id)} onPress={() => applyFilters({ ...filters, interestIds: filters.interestIds.includes(item.id) ? filters.interestIds.filter(id => id !== item.id) : [...filters.interestIds, item.id] })} />)}</Scroll>
+    </Box>
+    <Box style={s.controls}>
+      <Touch accessibilityLabel="Yakınlaştır" onPress={() => zoomBy(0.5)} style={s.control}><Label style={s.controlText}>+</Label></Touch>
+      <Touch accessibilityLabel="Uzaklaştır" onPress={() => zoomBy(2)} style={s.control}><Label style={s.controlText}>−</Label></Touch>
+      <Touch accessibilityLabel="Tüm etkinlikleri göster" disabled={!filtered.length} onPress={() => map.current?.fitToCoordinates(filtered.map(event => ({ latitude: event.latitude, longitude: event.longitude })), { edgePadding: { top: 150, right: 50, bottom: 30, left: 50 }, animated: true })} style={s.control}><Label style={s.controlText}>◎</Label></Touch>
+    </Box>
+    <Box style={s.bottom}>
+      <Box style={s.panel} onLayout={event => setPanelHeight(event.nativeEvent.layout.height)}>
+        <Box style={s.heading}><Label style={s.panelTitle}>{MODE_LABELS[mode]}</Label><Label style={s.muted}>Otomatik görünüm</Label></Box>
+        <Box style={s.legend}>
+          {mode === "heat" ? ["Seyrek", "Orta", "Yoğun", "Çok yoğun"].map((label, i) => <Box key={label} style={s.legendItem}><View style={[s.dot, { backgroundColor: COLORS[i] }]} /><Label style={s.muted}>{label}</Label></Box>) : <Scroll horizontal style={s.filters}>{categories.filter(item => filtered.some(event => event.interest.id === item.id)).map(item => <Box key={item.id} style={s.legendItem}><Label>{categoryVisual(item.name).icon}</Label><Label style={s.muted}>{item.name}</Label></Box>)}</Scroll>}
+
+        </Box>
+        <Touch onPress={() => setFilterOpen(true)}><Label style={s.gold}>{filters.place ? `${filters.place.name} · ${filters.radiusKm} km` : "Her yerde"} · {filters.datePreset === "all" ? "Yaklaşan" : `${range.from}${range.to && range.to !== range.from ? ` → ${range.to}` : ""}`}{filters.timeFrom ? ` · ${filters.timeFrom}–${filters.timeTo}` : ""}  Düzenle</Label></Touch>
+        {locationError && <Touch onPress={() => { setLocationError(null); setFilterOpen(true) }}><Label style={s.error}>{locationError}</Label></Touch>}
+        {loading ? <Box style={s.legendItem}><ActivityIndicator color="#dcb95d" /><Label style={s.muted}>Etkinlikler yükleniyor…</Label></Box>
+          : error ? <Touch onPress={() => setRetry(value => value + 1)}><Label style={s.error}>{error} Yenile ↻</Label></Touch>
+          : !filtered.length ? <Label style={s.muted}>Bu filtrelerde konumu kayıtlı etkinlik bulunamadı.</Label>
+          : <Label style={s.muted}>{mode === "heat" ? "Yakınlaşarak kümeleri keşfet. Renkler bu görünümdeki göreli yoğunluğu gösterir." : mode === "cluster" ? "Sayılar etkinlik adedidir. Kümeye dokunarak yakınlaş." : "Noktaya dokunarak etkinliği seç. Aynı konumdakiler sayılı gösterilir."}</Label>}
+        {truncated && <Label style={s.error}>İlk 2.000 etkinlik gösteriliyor; yoğunluk tüm veriyi kapsamıyor.</Label>}
+        {selected.length > 0 && <Scroll style={s.selection}>{selected.map(event => <Touch key={event.id} onPress={() => openEvent(event)} style={s.eventRow}><Box style={{ flex: 1 }}><Label style={s.panelTitle}>{event.interest.name}</Label><Label style={s.muted}>{event.date} · {event.startTime}</Label></Box><Label style={s.gold}>Detay →</Label></Touch>)}</Scroll>}
+      </Box>
+    </Box>
+    <BottomNav active="map" navigate={navigate} />
+    {filterOpen && <DiscoveryFilterSheet value={filters} categories={categories} onApply={applyFilters} onClose={() => setFilterOpen(false)} />}
+  </Box>
 }
-const HEAT_ZONES = [{
-  x: 30,
-  y: 28,
-  size: 120,
-  intensity: "high",
-  label: "Çankaya",
-  events: 4
-}, {
-  x: 65,
-  y: 42,
-  size: 90,
-  intensity: "medium",
-  label: "Oran",
-  events: 2
-}, {
-  x: 20,
-  y: 55,
-  size: 70,
-  intensity: "low",
-  label: "Bahçelievler",
-  events: 1
-}, {
-  x: 72,
-  y: 65,
-  size: 100,
-  intensity: "medium",
-  label: "Çayyolu",
-  events: 3
-}, {
-  x: 45,
-  y: 72,
-  size: 60,
-  intensity: "low",
-  label: "Gölbaşı",
-  events: 1
-}];
-const MARKERS = [{
-  x: 28,
-  y: 25,
-  emoji: "🎾",
-  category: "Padel"
-}, {
-  x: 62,
-  y: 38,
-  emoji: "☕",
-  category: "Kahve"
-}, {
-  x: 70,
-  y: 62,
-  emoji: "🎵",
-  category: "Konser"
-}, {
-  x: 44,
-  y: 68,
-  emoji: "🥾",
-  category: "Hiking"
-}, {
-  x: 35,
-  y: 48,
-  emoji: "📷",
-  category: "Fotoğraf"
-}];
-const heatColor = {
-  high: "rgba(200,164,74,0.22)",
-  medium: "rgba(124,112,240,0.16)",
-  low: "rgba(100,180,200,0.10)"
-};
-export default function MapScreen({
-  navigate
-}: Props) {
-  const {
-    data: store
-  } = useStore();
-  const EVENTS = store.events;
-  const [activeFilter, setActiveFilter] = useState("Bugün");
-  const [selectedZone, setSelectedZone] = useState<typeof HEAT_ZONES[0] | null>(null);
-  return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
-      {/* Map placeholder */}
-      <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["#0d0d1f", "#080818", "#0a0a1a"]}>
-        {/* Grid lines to suggest map grid */}
-        <Vector viewBox="0 0 100 100" preserveAspectRatio="none" style={[[ui.fixed, ui.inset0, ui.wFull, ui.hFull, ui.opacity004]]}>
-          {Array.from({
-          length: 12
-        }).map((_, i) => <G key={i}>
-              <Line x1="0" y1={`${(i + 1) * 8.33}%`} x2="100%" y2={`${(i + 1) * 8.33}%`} stroke="white" strokeWidth="0.5" />
-              <Line x1={`${(i + 1) * 8.33}%`} y1="0" x2={`${(i + 1) * 8.33}%`} y2="100%" stroke="white" strokeWidth="0.5" />
-            </G>)}
-        </Vector>
-
-        {/* Road-like curves */}
-        <Vector viewBox="0 0 100 100" preserveAspectRatio="none" style={[[ui.fixed, ui.inset0, ui.wFull, ui.hFull, ui.opacity007]]}>
-          <Path d="M 10 20 Q 30 35 50 30 T 90 25" stroke="#c8a44a" strokeWidth="2" fill="none" />
-          <Path d="M 5 50 Q 25 45 45 55 T 95 48" stroke="white" strokeWidth="1.5" fill="none" />
-          <Path d="M 20 70 Q 45 65 65 72 T 95 68" stroke="white" strokeWidth="1" fill="none" />
-          <Path d="M 35 10 Q 38 40 40 70 T 42 95" stroke="white" strokeWidth="1.5" fill="none" />
-          <Path d="M 65 5 Q 68 35 70 60 T 72 95" stroke="white" strokeWidth="1" fill="none" />
-        </Vector>
-
-        {/* Heat blobs */}
-        {HEAT_ZONES.map((zone, i) => <Touch key={i} onPress={() => setSelectedZone(zone)} style={[[ui.fixed], {
-        left: `${zone.x}%`,
-        top: `${zone.y}%`,
-        transform: [{
-          translateX: "-50%"
-        }, {
-          translateY: "-50%"
-        }]
-      }]}>
-            <Box style={[[ui.roundedFull], {
-          width: zone.size,
-          height: zone.size
-        }]} gradient={[heatColor[zone.intensity as keyof typeof heatColor], "transparent"]} enter />
-          </Touch>)}
-
-        {/* Event markers */}
-        {MARKERS.map((marker, i) => <Touch onPress={() => {
-        const e = EVENTS.find(e => e.category === marker.category) || EVENTS[i % EVENTS.length];
-        navigate("event-detail", {
-          eventId: e.id
-        });
-      }} key={i} style={[[ui.fixed, ui.flex, ui.flexCol, ui.itemsCenter, ui.gap05], {
-        left: `${marker.x}%`,
-        top: `${marker.y}%`,
-        transform: [{
-          translateX: "-50%"
-        }, {
-          translateY: "-50%"
-        }]
-      }]}>
-            <Box style={[[ui.w8, ui.h8, ui.roundedFull, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textSm], {
-          backgroundColor: "rgba(6,6,14,0.85)",
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.15)"
-        }]} glass>
-              {marker.emoji}
-            </Box>
-            <Box style={[[ui.px15, ui.py05, ui.rounded, ui.text9px, ui.textWhite60, ui.fontMedium], {
-          backgroundColor: "rgba(6,6,14,0.7)"
-        }]} glass>
-              {marker.category}
-            </Box>
-          </Touch>)}
-
-        {/* User location */}
-        <Box style={[[ui.fixed], {
-        left: "48%",
-        top: "45%",
-        transform: [{
-          translateX: "-50%"
-        }, {
-          translateY: "-50%"
-        }]
-      }]}>
-          <Box style={[[ui.relative]]}>
-            <Box style={[[ui.w4, ui.h4, ui.roundedFull, ui.bg7c70f0, ui.z10, ui.relative]]} />
-            <Box style={[[ui.fixed, ui.inset0, ui.roundedFull, ui.bg7c70f030]]} enter />
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Top overlay */}
-      <Box style={[[ui.relative]]}>
-        <Box style={[[ui.pt14, ui.px5, ui.pb3]]}>
-          <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb3]]}>
-            <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>
-              Harita
-            </Label>
-            <Box style={[[ui.px3, ui.py15, ui.roundedFull, ui.textXs, ui.textWhite60], {
-            backgroundColor: "rgba(6,6,14,0.7)",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.08)"
-          }]} glass>
-              2 km içinde 4 etkinlik
-            </Box>
-          </Box>
-          <Scroll style={[[ui.flex, ui.gap2]]} horizontal>
-            {["Bugün", "Bu Hafta", "Padel", "Outdoor", "Konser", "Tüm"].map(f => <FilterChip key={f} label={f} selected={activeFilter === f} onPress={() => setActiveFilter(f)} />)}
-          </Scroll>
-        </Box>
-      </Box>
-
-      {/* Zone info tooltip */}
-      {selectedZone && <Box style={[[ui.fixed, ui.top40, ui.left5, ui.right5]]} pointerEvents="none" enter>
-          <GlassCard style={[[ui.p3]]}>
-            <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween]]}>
-              <Box>
-                <Label style={[[ui.textXs, ui.textWhite40]]}>
-                  {selectedZone.label}
-                </Label>
-                <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite80]]}>
-                  Bu bölgede {selectedZone.events} etkinlik var
-                </Label>
-              </Box>
-              <Label style={[[ui.textXs, ui.px2, ui.py1, ui.roundedFull], {
-            backgroundColor: selectedZone.intensity === "high" ? "rgba(200,164,74,0.15)" : selectedZone.intensity === "medium" ? "rgba(124,112,240,0.15)" : "rgba(100,180,200,0.10)",
-            color: selectedZone.intensity === "high" ? "#c8a44a" : selectedZone.intensity === "medium" ? "#a8a0ff" : "#90c8d0"
-          }]}>
-                {selectedZone.intensity === "high" ? "Hareketli" : selectedZone.intensity === "medium" ? "Orta" : "Sakin"}
-              </Label>
-            </Box>
-          </GlassCard>
-        </Box>}
-
-      {/* Bottom sheet - nearby events */}
-      <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.pb28]]}>
-        <Box style={[[ui.mx5, ui.rounded2xl, ui.p4], {
-        backgroundColor: "rgba(8,8,20,0.85)",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.08)"
-      }]} glass>
-          <Box style={[[ui.w8, ui.h1, ui.roundedFull, ui.bgWhite15, ui.mxAuto, ui.mb3]]} />
-          <Label style={[[ui.textXs, ui.textWhite35, ui.mb3]]}>
-            Yakınındaki etkinlikler
-          </Label>
-          <Box style={[[ui.spaceY2]]}>
-            {EVENTS.slice(0, 3).map(event => <Touch key={event.id} onPress={() => navigate("event-detail", {
-            eventId: event.id
-          })} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.gap3, ui.textLeft]]}>
-                <Box style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textXl, ui.flexShrink0], {
-              backgroundColor: "rgba(255,255,255,0.06)",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.08)"
-            }]}>
-                  {event.categoryEmoji}
-                </Box>
-                <Box style={[[ui.flex1, ui.minW0]]}>
-                  <Label style={[[ui.textSm, ui.textWhite80, ui.fontMedium]]} numberOfLines={1}>
-                    {event.title}
-                  </Label>
-                  <Label style={[[ui.textXs, ui.textWhite35]]}>
-                    {event.date} · {event.distance}
-                  </Label>
-                </Box>
-                <Label style={[[ui.textXs, ui.px2, ui.py05, ui.roundedFull, ui.flexShrink0, event.isActive ? [ui.textEmerald400] : [ui.textAmber400]]]}>
-                  {event.isActive ? "●" : "◌"}
-                </Label>
-              </Touch>)}
-          </Box>
-        </Box>
-      </Box>
-
-      <BottomNav active="map" navigate={navigate} />
-    </Box>;
-}
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: "#06060e" },
+  top: { position: "absolute", top: 16, left: 16, right: 16, gap: 8 },
+  heading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  title: { fontFamily: "Fraunces", color: "#fff", fontSize: 32 },
+  badge: { color: "#ddd", backgroundColor: "#10101eed", borderRadius: 20, padding: 10, fontSize: 11 },
+  filters: { flexGrow: 0, flexDirection: "row", gap: 6 },
+  controls: { position: "absolute", right: 16, top: "32%", gap: 8 },
+  control: { width: 44, height: 44, borderRadius: 16, backgroundColor: "#242336", borderWidth: 1.5, borderColor: "#68647b", alignItems: "center", justifyContent: "center" },
+  controlText: { fontSize: 25, color: "#dcb95d" },
+  pinLabel: { marginTop: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9, backgroundColor: "#171523ee" },
+  pinLabelText: { fontFamily: "Outfit-Medium", fontSize: 10, color: "#f0ede8" },
+  pin: { minWidth: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: "#fff", alignItems: "center", justifyContent: "center", paddingHorizontal: 7 },
+  cluster: { minWidth: 44, height: 44, borderRadius: 22, borderColor: "#181823", borderWidth: 3 },
+  pinText: { fontFamily: "Outfit-SemiBold", fontSize: 19, color: "#151320" },
+  bottom: { position: "absolute", bottom: 88, left: 16, right: 16 },
+  panel: { borderRadius: 22, padding: 16, gap: 12, backgroundColor: "#11111f", borderWidth: 1, borderColor: "#ffffff1a" },
+  panelTitle: { fontFamily: "Outfit-SemiBold", color: "#f0ede8", fontSize: 15 },
+  muted: { color: "#ddd9e8", fontSize: 11, lineHeight: 16 },
+  legend: { flexDirection: "row", gap: 14, flexWrap: "wrap" },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  dot: { width: 9, height: 9, borderRadius: 5 },
+  error: { color: "#f3aa91", fontSize: 12 },
+  selection: { maxHeight: 128 },
+  eventRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderTopWidth: 1, borderColor: "#ffffff1a" },
+  gold: { color: "#dcb95d", fontSize: 12 },
+})

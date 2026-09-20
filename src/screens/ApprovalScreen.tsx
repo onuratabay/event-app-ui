@@ -1,3 +1,4 @@
+import BackButton from "../components/BackButton";
 import { useEffect, useState } from "react";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
 import { Box, Label, Touch } from "../native/UI";
@@ -40,6 +41,7 @@ export default function ApprovalScreen({
   }, []);
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.px6, ui.overflowHidden]]}>
       <AtmoBackground variant="gold" />
+      <Box style={{ position: "absolute", top: 20, left: 20, zIndex: 10 }}><BackButton navigate={navigate} fallback="onboarding-3" /></Box>
 
       {/* Particles */}
       {particles.map(p => <Box key={p.id} style={[[], {

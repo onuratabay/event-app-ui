@@ -2,10 +2,10 @@ import { StyleSheet } from "react-native"
 import { ME } from "../data"
 import { Box, Label, Picture, Touch } from "../native/UI"
 import type { NavigateFn, Screen } from "../types"
-import { MessageIcon, SearchIcon } from "./Icons"
+import { MessageIcon, LocationIcon, CompassIcon, PlusIcon } from "./Icons"
 const nav: [Screen, string][] = [
   ["discover", "Keşfet"],
-  ["search", "Ara"],
+  ["map", "Harita"],
   ["create-event", "Oluştur"],
   ["rooms", "Odalar"],
   ["profile", "Profil"],
@@ -41,14 +41,16 @@ export default function BottomNav({
               },
             ]}
           >
-            {screen === "search" ? (
-              <SearchIcon
-                size={20}
+            {screen === "map" ? (
+              <LocationIcon
+                size={24}
+                strokeWidth={1.8}
                 style={{ color: active === screen ? "#c8a44a" : "#777582" }}
               />
             ) : screen === "rooms" ? (
               <MessageIcon
-                size={20}
+                size={24}
+                strokeWidth={1.8}
                 style={{ color: active === screen ? "#c8a44a" : "#777582" }}
               />
             ) : screen === "profile" ? (
@@ -57,19 +59,7 @@ export default function BottomNav({
                 style={{ width: 24, height: 24, borderRadius: 12 }}
               />
             ) : (
-              <Label
-                style={{
-                  fontSize: screen === "create-event" ? 28 : 23,
-                  color:
-                    screen === "create-event"
-                      ? "#1a1200"
-                      : active === screen
-                        ? "#c8a44a"
-                        : "#777582",
-                }}
-              >
-                {screen === "create-event" ? "+" : "◈"}
-              </Label>
+              screen === "create-event" ? <PlusIcon size={24} strokeWidth={1.8} style={{ color: "#1a1200" }} /> : <CompassIcon size={24} strokeWidth={1.8} style={{ color: active === screen ? "#c8a44a" : "#777582" }} />
             )}
             {screen !== "create-event" && (
               <Label

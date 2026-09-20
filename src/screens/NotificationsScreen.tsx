@@ -82,8 +82,8 @@ export default function NotificationsScreen({
       <Box style={[[ui.relative, ui.pt14, ui.px5, ui.pb4, ui.flexShrink0]]} enter>
         <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween]]}>
           <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-            <Touch onPress={() => navigate("discover")} style={[[ui.w9, ui.h9, ui.glass, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite50]]} glass>
-              <ArrowLeftIcon size={16} strokeWidth={1.5} />
+            <Touch accessibilityLabel="Geri git" onPress={() => navigate("discover", { back: true })} style={[[ui.w9, ui.h9, ui.glass, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite50]]} glass>
+              <ArrowLeftIcon size={20} strokeWidth={1.8} />
             </Touch>
             <Box>
               <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>

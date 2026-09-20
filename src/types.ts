@@ -1,6 +1,6 @@
-export type Screen = "splash" | "welcome" | "login" | "onboarding-1" | "onboarding-2" | "onboarding-3" | "approval" | "interests" | "discover" | "event-detail" | "event-room" | "map" | "create-event" | "rooms" | "search" | "notifications" | "profile"
+export type Screen = "splash" | "welcome" | "login" | "forgot-password" | "onboarding-1" | "onboarding-2" | "onboarding-3" | "approval" | "interests" | "discover" | "event-detail" | "event-room" | "map" | "create-event" | "rooms" | "search" | "notifications" | "profile"
 
-export type NavigateFn = (screen: Screen, opts?: { eventId?: string }) => void
+export type NavigateFn = (screen: Screen, opts?: { eventId?: string; back?: boolean }) => void
 
 export interface AppUser {
   id: string
@@ -9,6 +9,7 @@ export interface AppUser {
   city: string
   bio: string
   instagram: string
+  recommendationProfile?: import("./recommendations/model").RecommendationProfile
   interests: string[]
   score: number
   scores: {
@@ -31,6 +32,8 @@ export interface AppEvent {
   date: string
   time: string
   location: string
+  latitude?: number
+  longitude?: number
   distance: string
   level: string
   currentParticipants: number

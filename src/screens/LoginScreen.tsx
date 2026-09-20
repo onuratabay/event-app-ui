@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react"
 import { AccessibilityInfo, Animated, Easing, ScrollView, StyleSheet } from "react-native"
+import BackButton from "../components/BackButton"
 import { AtmoBackground } from "../components/GlassUI"
 import { ErrorNotice } from "../components/ErrorNotice"
 import { Field, Label, Touch, Box } from "../native/UI"
 import { getApiErrorMessage, login } from "../api/client"
-import { useStore } from "../native/Store"
+import { useSignedOutEntry } from "../native/session"
+import { updateStoreUser, useStore } from "../native/Store"
 import type { NavigateFn } from "../types"
 import { ui } from "../theme/styles"
 
 export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
-  const { refreshEvents } = useStore()
+  const { refreshEvents, setData } = useStore()
+  const checkingSession = useSignedOutEntry(navigate)
   const entrance = useRef(new Animated.Value(1)).current
   useEffect(() => {
     let active = true
@@ -34,8 +37,9 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
     setErrorMessage(null)
     setBusy(true)
     try {
-      await login(email.trim(), password)
-      await refreshEvents()
+      const response = await login(email.trim(), password)
+      setData(current => ({ ...current, user: updateStoreUser(current.user, response.user), onboarding: {} }))
+      void refreshEvents().catch(() => {})
       navigate("discover")
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Bilgilerini kontrol edip tekrar dene."))
@@ -44,11 +48,13 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
     }
   }
 
+  if (checkingSession) return null
   return (
     <Box style={{ flex: 1, backgroundColor: "#06060e" }}>
       <AtmoBackground variant="violet" />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.page}
         keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <BackButton navigate={navigate} fallback="welcome" />
       <Animated.View style={[styles.form, { opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
         <Box style={styles.heading}>
         <Label style={styles.eyebrow}>VIBEUS</Label>
@@ -85,6 +91,7 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
           secureTextEntry
           style={styles.input}
         />
+        <Touch accessibilityLabel="Şifremi unuttum" onPress={() => navigate("forgot-password")} style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}><Label style={{ color: "#e1bd65", fontFamily: "Outfit-Medium", fontSize: 14 }}>Şifremi unuttum</Label></Touch>
         <Touch
           onPress={submit}
           disabled={busy}

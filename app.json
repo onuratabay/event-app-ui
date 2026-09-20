@@ -36,6 +36,12 @@
         {
           "contactsPermission": "Referans isteyebileceğin üyeleri bulmak için paylaşmayı seçtiğin kişilere erişim gerekiyor."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Yakınındaki etkinlikleri ve bulunduğun şehre uygun önerileri göstermek için konumuna erişim gerekiyor."
+        }
       ]
     ],
     "experiments": {

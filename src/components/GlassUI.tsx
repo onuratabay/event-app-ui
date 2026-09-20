@@ -84,7 +84,7 @@ export function GlassInput({ label, icon, style, ...props }: InputProps) {
       {label && <Label style={s.label}>{label}</Label>}
       <Field
         {...props}
-        accessibilityLabel={label || props.placeholder}
+        accessibilityLabel={props.accessibilityLabel || label || props.placeholder}
         style={[s.input, style]}
       />
     </Box>
@@ -98,19 +98,21 @@ export function FilterChip({
   selected,
   onPress,
   emoji,
+  solid = false,
 }: {
   label: string
   selected: boolean
   onPress: () => void
   emoji?: string
+  solid?: boolean
 }) {
   return (
     <Touch
       onPress={onPress}
       accessibilityState={{ selected }}
-      style={[s.chip, { flexShrink: 0 }, selected && s.gold]}
+      style={[s.chip, { flexShrink: 0 }, selected && s.gold, solid && { backgroundColor: selected ? "#e1bd65" : "#242336", borderColor: selected ? "#f3d78b" : "#68647b", borderWidth: 1.5, minHeight: 44, paddingHorizontal: 15, paddingVertical: 11 }]}
     >
-      <Label>
+      <Label style={solid ? { color: selected ? "#241b09" : "#faf7f0", fontFamily: "Outfit-SemiBold", fontSize: 13 } : undefined}>
         {emoji ? `${emoji} ` : ""}
         {label}
       </Label>

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import BackButton from "../components/BackButton";
+import { useEffect, useRef, useState } from "react";
 import { AccordionItem, AtmoBackground, Avatar, GlassCard, GlassInput, ProgressStepper } from "../components/GlassUI";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { CheckIcon, ChevronDownIcon, InstagramIcon, KeyIcon, ScrollIcon, UsersIcon } from "../components/Icons";
@@ -101,6 +102,8 @@ function Step1({
     dogum: formatBirthDate(store.onboarding.dogum || ""),
     sifre: store.onboarding.sifre || ""
   });
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [principlesOpen, setPrinciplesOpen] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<number | null>(null);
   const [accepted, setAccepted] = useState(false);
@@ -114,9 +117,9 @@ function Step1({
       const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: form.telefon.replace(/\s/g, ""), password: form.sifre, birthDate: form.dogum });
       const id = String((response.user as { id: string }).id);
       setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}` } }));
-      navigate("onboarding-2");
-    } catch (cause) { setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
-    finally { setCreating(false); }
+      if (mounted.current) navigate("onboarding-2");
+    } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
+    finally { if (mounted.current) setCreating(false); }
   };
   const allFilled = Object.values(form).every(v => v.trim().length > 0);
   const canContinue = Boolean(store.onboarding.accountId) || (allFilled && accepted);
@@ -127,6 +130,7 @@ function Step1({
         <AtmoBackground />
 
         <Box style={[[ui.relative, ui.spaceY8]]}>
+          <BackButton navigate={navigate} fallback="welcome" onPress={() => { setStore(current => ({ ...current, onboarding: { ...current.onboarding, ...form, sifre: "" } })); navigate("welcome", { back: true }); }} />
           {/* Header */}
           <Box style={[[ui.gapY1]]} enter>
             <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb4]]}>
@@ -262,9 +266,7 @@ function Step2({
               <ProgressStepper current={1} total={3} />
               <Label style={[[ui.textXs, ui.textWhite30]]}>Adım 2/3</Label>
             </Box>
-            <Touch onPress={() => navigate("onboarding-1")} style={{ alignSelf: "flex-start", minHeight: 44, paddingRight: 16, marginBottom: 8, fontSize: 15, fontFamily: "Outfit-Medium", color: "rgba(240,237,232,0.7)", textAlign: "left", justifyContent: "center" }}>
-              ← Geri
-            </Touch>
+            <BackButton navigate={navigate} fallback="onboarding-1" />
             <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite]]}>
               Seni biraz daha{"\n"}tanıyalım.
             </Label>
@@ -378,10 +380,12 @@ function Step3({
 }: {
   navigate: NavigateFn;
 }) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   const [stage, setStage] = useState<"waiting" | "simulating">("waiting");
   const handleSimulate = () => {
     setStage("simulating");
-    setTimeout(() => navigate("approval"), 1200);
+    timer.current = setTimeout(() => navigate("approval"), 1200);
   };
   const stages = [{
     label: "Başvuru Alındı",
@@ -397,6 +401,7 @@ function Step3({
       <AtmoBackground variant="violet" />
 
       <Box style={[[ui.relative, ui.wFull, ui.spaceY10]]}>
+        <BackButton navigate={navigate} fallback="onboarding-2" onPress={() => { if (timer.current) clearTimeout(timer.current); navigate("onboarding-2", { back: true }); }} />
         {/* Hourglass */}
         <Box style={[[ui.flex, ui.justifyCenter]]} enter>
           <Box style={[[ui.relative]]}>

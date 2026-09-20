@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Circle, Line, Path, Polygon, Polyline } from "react-native-svg";
+import RecommendationsSheet from "../recommendations/RecommendationsSheet";
+import HeaderIconButton from "../components/HeaderIconButton";
 import BottomNav from "../components/BottomNav";
-import { ComingSoonBanner, HeartButton, RippleButton, SpringButton } from "../components/Expressive";
+import { HeartButton, RippleButton, SpringButton } from "../components/Expressive";
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
-import { BellIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
+import { BellIcon, SearchIcon, SparklesIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
 import { copyEvent, eventLink, shareEvent as shareNativeEvent } from "../native/media";
 import { useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
@@ -401,6 +403,7 @@ export default function DiscoverScreen({
     data: store
   } = useStore();
   const EVENTS = store.events;
+  const [recommendationsOpen, setRecommendationsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("Sana Özel");
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
   const [sortOpen, setSortOpen] = useState(false);
@@ -447,10 +450,11 @@ export default function DiscoverScreen({
               </Box>
             </Box>
 
-            <Touch onPress={() => navigate("notifications")} style={[[ui.relative, ui.w9, ui.h9, ui.glass, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite45]]} glass>
-              <BellIcon size={17} strokeWidth={1.5} />
-              <Label style={[[ui.fixed, ui.top15, ui.right15, ui.w2, ui.h2, ui.roundedFull, ui.bgC8a44a], {}]} />
-            </Touch>
+            <Box style={{ flexDirection: "row", gap: 8 }}>
+              <HeaderIconButton label="Ara" onPress={() => navigate("search")}><SearchIcon size={20} strokeWidth={1.8} style={{ color: "#f0ede8" }} /></HeaderIconButton>
+              <HeaderIconButton label="Sana özel öneriler" highlighted onPress={() => setRecommendationsOpen(true)}><SparklesIcon size={20} strokeWidth={1.8} style={{ color: "#e1bd65" }} /></HeaderIconButton>
+              <HeaderIconButton label="Bildirimler" onPress={() => navigate("notifications")}><BellIcon size={20} strokeWidth={1.8} style={{ color: "#f0ede8" }} /></HeaderIconButton>
+            </Box>
           </Box>
         </Box>
 
@@ -490,17 +494,6 @@ export default function DiscoverScreen({
           })} onShare={() => setShareEvent(event)} />)}
           </Box>
 
-          <Touch onPress={() => navigate("map")} style={{
-          marginHorizontal: 20,
-          padding: 14,
-          borderRadius: 16,
-          backgroundColor: "rgba(255,255,255,.06)"
-        }}>
-            <Label>Harita Görünümü →</Label>
-          </Touch>
-          {/* Coming soon teaser */}
-          <ComingSoonBanner label="Yapay Zeka Önerileri Geliyor" description="Bağlantılarına ve ilgi alanlarına göre kişiselleştirilmiş etkinlikler." />
-          <ComingSoonBanner label="Harita Görünümü" description="Çevrendeki etkinlikleri harita üzerinde keşfet, mesafeyi hissederek seç." />
         </Scroll>
       </Box>
 
@@ -511,5 +504,6 @@ export default function DiscoverScreen({
       {shareEvent && <ShareSheet event={shareEvent} onClose={() => setShareEvent(null)} />}
 
       <BottomNav active="discover" navigate={navigate} />
+      {recommendationsOpen && <RecommendationsSheet navigate={navigate} onClose={() => setRecommendationsOpen(false)} />}
     </Box>;
 }

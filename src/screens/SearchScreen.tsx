@@ -62,8 +62,8 @@ export default function SearchScreen({
         borderWidth: 1,
         borderColor: "rgba(255,255,255,0.11)"
       }]} glass>
-          <Touch onPress={() => navigate("discover")} style={[[ui.flexShrink0, ui.textWhite40]]}>
-            <ArrowLeftIcon size={18} strokeWidth={1.5} />
+          <Touch accessibilityLabel="Geri git" onPress={() => navigate("discover")} style={[[ui.flexShrink0, ui.textWhite40]]}>
+            <ArrowLeftIcon size={20} strokeWidth={1.8} />
           </Touch>
           <SearchIcon size={16} strokeWidth={1.5} style={[[ui.flexShrink0, ui.textWhite30]]} />
           <Field ref={inputRef} value={query} onChangeText={e => setQuery(e)} placeholder="Etkinlik, aktivite veya konum ara..." style={[[ui.flex1, ui.bgTransparent, ui.textSm, ui.textWhite]]} />

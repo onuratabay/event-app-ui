@@ -1,3 +1,4 @@
+import BackButton from "../components/BackButton";
 import { useState } from "react";
 import { AtmoBackground, InterestChip } from "../components/GlassUI";
 import { CameraIcon, ImageIcon } from "../components/Icons";
@@ -35,8 +36,9 @@ export default function InterestsScreen({
       <AtmoBackground variant="violet" />
 
       <Box style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull]]}>
+        <Box style={{ paddingHorizontal: 24, paddingTop: 16 }}><BackButton navigate={navigate} fallback="approval" onPress={() => { setStore(current => ({ ...current, user: { ...current.user, interests: [...selected], avatar: photo || "" } })); navigate("approval", { back: true }); }} /></Box>
         {/* Header */}
-        <Box style={[[ui.pt14, ui.px6, ui.pb5, ui.flexShrink0]]} enter>
+        <Box style={[[ui.pt4, ui.px6, ui.pb5, ui.flexShrink0]]} enter>
           <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite]]}>
             Neler seni{"\n"}heyecanlandırır?
           </Label>

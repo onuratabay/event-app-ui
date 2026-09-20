@@ -13,11 +13,12 @@ export function useNavigate(): NavigateFn {
   const router = useRouter()
   return useCallback(
     (screen, opts) => {
+      if (opts?.back && router.canGoBack()) { router.back(); return }
       const href = {
         pathname: screen === "splash" ? "/" : `/${screen}`,
         params: opts?.eventId ? { eventId: opts.eventId } : {},
       } as Href
-      if (screen === "welcome" || screen === "discover" || roots.has(screen))
+      if (opts?.back || screen === "welcome" || screen === "discover" || roots.has(screen))
         router.replace(href)
       else router.navigate(href)
     },

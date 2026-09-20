@@ -1,3 +1,4 @@
+import BackButton from "../components/BackButton";
 import { useEffect, useRef, useState } from "react";
 import { ScrollView } from "react-native";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
@@ -55,11 +56,7 @@ export default function EventRoomScreen({
       {/* Header */}
       <Box style={[[ui.relative, ui.pt14, ui.px5, ui.pb3, ui.flexShrink0]]}>
         <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-          <Touch onPress={() => navigate("event-detail", {
-          eventId: event.id
-        })} style={[[ui.w8, ui.h8, ui.glass, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textSm, ui.textWhite60]]} glass>
-            ←
-          </Touch>
+          <BackButton navigate={navigate} fallback="rooms" onPress={() => navigate("event-detail", { eventId: event.id, back: true })} />
           <Box style={[[ui.flex1, ui.minW0]]}>
             <Label style={[[ui.fontDisplay, ui.textLg, ui.fontLight, ui.textWhite]]} numberOfLines={1}>
               {event.title}

@@ -48,12 +48,12 @@ export default function EventDetailScreen({
 
           {/* Back + Share */}
           <Box style={[[ui.fixed, ui.top14, ui.left5, ui.right5, ui.flex, ui.itemsCenter, ui.justifyBetween]]}>
-            <Touch onPress={() => navigate("discover")} style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
+            <Touch accessibilityLabel="Geri git" onPress={() => navigate("discover", { back: true })} style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
             backgroundColor: "rgba(0,0,0,0.5)",
             borderWidth: 1,
             borderColor: "rgba(255,255,255,0.1)"
           }]}>
-              <ArrowLeftIcon size={16} strokeWidth={1.5} style={[[ui.textWhite80]]} />
+              <ArrowLeftIcon size={20} strokeWidth={1.8} style={[[ui.textWhite80]]} />
             </Touch>
             <Touch onPress={() => setShareOpen(true)} style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
             backgroundColor: "rgba(0,0,0,0.5)",

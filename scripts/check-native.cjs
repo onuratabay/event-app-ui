@@ -7,6 +7,8 @@ const ts = require("typescript")
 const React = require("react")
 const { create, act } = require("react-test-renderer")
 global.IS_REACT_ACT_ENVIRONMENT = true
+global.__DEV__ = true
+global.fetch = async () => ({ ok: true, json: async () => ({ items: [], total: 0 }) })
 for (const extension of [".ts", ".tsx"])
   require.extensions[extension] = (module, filename) => {
     const source = fs.readFileSync(filename, "utf8")
@@ -38,9 +40,17 @@ class Value {
 const anim = () => ({ start() {}, stop() {} })
 const storage = new Map()
 Module._load = function (id, parent, isMain) {
+  if (id === "expo-location") return {
+    getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: false }),
+    Accuracy: { Balanced: 3 }, geocodeAsync: async () => [], reverseGeocodeAsync: async () => [],
+  }
+  if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker" }
+  if (id === "expo-constants") return { __esModule: true, default: { expoConfig: { hostUri: "192.168.1.15:8081" } } }
   if (id === "react-native")
     return {
       View: "View",
+      ActivityIndicator: "ActivityIndicator",
+      KeyboardAvoidingView: "KeyboardAvoidingView",
       Text: "Text",
       Pressable: "Pressable",
       ScrollView: "ScrollView",
@@ -90,6 +100,8 @@ Module._load = function (id, parent, isMain) {
       default: {
         getItem: async (k) => storage.get(k) || null,
         setItem: async (k, v) => storage.set(k, v),
+        multiRemove: async (keys) => keys.forEach(key => storage.delete(key)),
+        multiSet: async (entries) => entries.forEach(([k, v]) => storage.set(k, v)),
       },
     }
   if (id === "expo-image-picker")
@@ -151,6 +163,41 @@ async function tap(tree, label) {
   audit(tree.toJSON())
 }
 ;(async () => {
+  const { resolveApiUrl } = require("../src/api/config.ts")
+  assert.equal(resolveApiUrl(undefined, "192.168.1.15:8081", "ios"), "http://192.168.1.15:3000")
+  assert.equal(resolveApiUrl(undefined, "192.168.1.25:8081", "android"), "http://192.168.1.25:3000")
+  assert.equal(resolveApiUrl("https://api.example.com/", "192.168.1.15:8081", "ios"), "https://api.example.com")
+  assert.equal(resolveApiUrl(undefined, undefined, "android"), "http://10.0.2.2:3000")
+  const api = require("../src/api/client.ts")
+  const originalFetch = global.fetch
+  let registrationRequest
+  global.fetch = async (url, options) => {
+    if (url.endsWith("/events?page=1&limit=20")) return { ok: true, json: async () => ({ items: [] }) }
+    registrationRequest = { url, body: JSON.parse(options.body) }
+    return { ok: true, json: async () => ({ user: { id: "registered-user" }, tokens: { accessToken: "test-access", refreshToken: "test-refresh" } }) }
+  }
+  let destination
+  const registration = await mount("Onboarding", { step: 1, navigate: (route) => { destination = route } })
+  const fields = registration.root.findAllByType("TextInput")
+  for (const [index, value] of ["Deniz", "Test", "deniz@example.com", "+90 532 123 45 67", "15061995", "Password1!"].entries()) {
+    await act(async () => fields[index].props.onChangeText(value))
+  }
+  await tap(registration, "Topluluk ilkelerini okudum")
+  await tap(registration, "Devam Et")
+  assert.equal(destination, "onboarding-2")
+  assert.equal(registrationRequest.url, "http://192.168.1.15:3000/auth/register")
+  assert.equal(registrationRequest.body.birthDate, "15/06/1995")
+  assert.equal(registrationRequest.body.phoneNumber, "+905321234567")
+  assert.equal(storage.get("event-app:access-token"), "test-access")
+  await act(async () => registration.unmount())
+  global.fetch = async () => { throw new TypeError("Network request failed") }
+  await assert.rejects(() => api.register({}), error => api.getApiErrorMessage(error).includes("Sunucuya bağlanılamadı"))
+  storage.clear()
+  global.fetch = originalFetch
+  await require("./check-map.cjs")({ mount, tap, act, text, storage })
+  await require("./check-session.cjs")({ mount, tap, act, text, storage })
+  await require("./check-recommendations.cjs")({ mount, tap, act, text, storage })
+  await require("./check-password-reset.cjs")({ mount, tap, act, text, storage })
   const names = [
     "Splash",
     "Welcome",

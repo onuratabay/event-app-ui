@@ -26,7 +26,7 @@ export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
     name: `${remote.firstName || ""} ${remote.lastName || ""}`.trim() || user.name,
   }
 }
-function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"][number]): AppEvent {
+export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"][number]): AppEvent {
   const host: AppUser = {
     id: event.owner.id,
     name: `${event.owner.firstName} ${event.owner.lastName}`.trim(),
@@ -47,6 +47,8 @@ function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"][numbe
     date: event.date,
     time: event.startTime,
     location: "",
+    latitude: event.latitude,
+    longitude: event.longitude,
     distance: "",
     level: event.level.name,
     currentParticipants: event.confirmedParticipantCount,
@@ -70,14 +72,18 @@ const Context = createContext<{
   data: Data
   setData: React.Dispatch<React.SetStateAction<Data>>
   refreshEvents: () => Promise<void>
+  resetSession: () => void
 } | null>(null)
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState(initial),
     [ready, setReady] = useState(false),
     [storageError, setStorageError] = useState<string | null>(null)
   const queue = useRef(Promise.resolve())
+  const sessionGeneration = useRef(0)
   const refreshEvents = async () => {
+    const generation = sessionGeneration.current
     const remoteEvents = await getEvents()
+    if (generation !== sessionGeneration.current) return
     if (remoteEvents.items.length > 0) {
       setData((current) => ({
         ...current,
@@ -90,7 +96,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .then((value) => {
         if (value) {
           const saved = JSON.parse(value)
-          if (saved.user?.id === "me" && Array.isArray(saved.events))
+          if (typeof saved.user?.id === "string" && Array.isArray(saved.events))
             setData({
               ...initial,
               ...saved,
@@ -104,12 +110,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             })
         }
       })
-      .then(async () => {
-        try {
-          await refreshEvents()
-        } catch {
-          // Demo data remains available until the user signs in and the API is reachable.
-        }
+      .then(() => {
+        void refreshEvents().catch(() => {})
       })
       .catch(() => setStorageError("Uygulama örnek verilerle açılacak."))
       .finally(() => setReady(true))
@@ -122,7 +124,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [data, ready])
   if (!ready) return null
   return (
-    <Context.Provider value={{ data, setData, refreshEvents }}>
+    <Context.Provider value={{ data, setData, refreshEvents, resetSession: () => { sessionGeneration.current++; setData(initial) } }}>
       {storageError && (
         <ErrorNotice
           title="Yerel kayıt kullanılamadı"
