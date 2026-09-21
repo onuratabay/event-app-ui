@@ -1,8 +1,9 @@
 import BackButton from "../components/BackButton";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AtmoBackground, InterestChip } from "../components/GlassUI";
 import { CameraIcon, ImageIcon } from "../components/Icons";
-import { INTERESTS } from "../data";
+import { Alert } from "react-native";
+import { getMapInterests, setUserInterests, setProfilePhoto, getApiErrorMessage } from "../api/client";
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
@@ -18,6 +19,21 @@ export default function InterestsScreen({
     data: store,
     setData: setStore
   } = useStore();
+  const [catalog, setCatalog] = useState<Array<{ id: string; name: string }>>([]);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { getMapInterests().then(setCatalog).catch(error => Alert.alert('İlgi alanları yüklenemedi', getApiErrorMessage(error))); }, []);
+  const INTERESTS = catalog.map(i => i.name);
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const interests = await setUserInterests(catalog.filter(i => selected.has(i.name)).map(i => i.id));
+      if ((photo || '') !== store.user.avatar) await setProfilePhoto(photo || '');
+      setStore(p => ({ ...p, user: { ...p.user, interests: interests.map(i => i.name), avatar: photo || '' } }));
+      navigate('discover');
+    } catch (error) { Alert.alert('Profil kaydedilemedi', getApiErrorMessage(error)); }
+    finally { setSaving(false); }
+  };
   const ME = store.user;
   const [selected, setSelected] = useState<Set<string>>(new Set(ME.interests));
   const [photo, setPhoto] = useState<string | null>(ME.avatar);
@@ -36,7 +52,7 @@ export default function InterestsScreen({
       <AtmoBackground variant="violet" />
 
       <Box style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull]]}>
-        <Box style={{ paddingHorizontal: 24, paddingTop: 16 }}><BackButton navigate={navigate} fallback="approval" onPress={() => { setStore(current => ({ ...current, user: { ...current.user, interests: [...selected], avatar: photo || "" } })); navigate("approval", { back: true }); }} /></Box>
+        <Box style={{ paddingHorizontal: 24, paddingTop: 16 }}><BackButton navigate={navigate} fallback="approval" onPress={() => navigate("approval", { back: true })} /></Box>
         {/* Header */}
         <Box style={[[ui.pt4, ui.px6, ui.pb5, ui.flexShrink0]]} enter>
           <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite]]}>
@@ -127,17 +143,7 @@ export default function InterestsScreen({
 
         {/* Sticky CTA */}
         <Box style={[[ui.flexShrink0, ui.px6, ui.pb10, ui.pt4], {}]} gradient={["#06060e", "transparent"]} gradientDirection="up">
-          <Touch onPress={() => {
-          setStore(p => ({
-            ...p,
-            user: {
-              ...p.user,
-              interests: [...selected],
-              avatar: photo || p.user.avatar
-            }
-          }));
-          navigate("discover");
-        }} disabled={selected.size === 0} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.textBase, ui.fontSemibold, ui.trackingWide], {
+          <Touch onPress={save} disabled={saving || selected.size === 0 || !catalog.length} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.textBase, ui.fontSemibold, ui.trackingWide], {
           color: selected.size > 0 ? "#1a1200" : "rgba(255,255,255,0.25)"
         }]} gradient={selected.size > 0 ? ["#c8a44a", "#dab96e", "#c09038"] : ["rgba(255,255,255,0.08)", "rgba(255,255,255,0.08)"]}>
             Kurulumu Tamamla

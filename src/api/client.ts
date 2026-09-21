@@ -16,6 +16,7 @@ export interface ApiEvent {
   date: string
   startTime: string
   durationMinutes: number | null
+  locationName?: string
   latitude: number
   longitude: number
   minParticipants: number
@@ -27,6 +28,7 @@ export interface ApiEvent {
   participants: Array<{ id: string; firstName: string; lastName: string }>
   isFavorite: boolean
   status: { enum: string; name: string }
+  viewerParticipationStatus?: string | null
 }
 
 interface EventListResponse {
@@ -50,8 +52,8 @@ export function getApiErrorMessage(error: unknown, fallback = "Lütfen tekrar de
   const match = error.message.match(/\{[\s\S]*\}$/)
   if (!match) return fallback
   try {
-    const payload = JSON.parse(match[0]) as { errors?: Array<{ message?: string }> }
-    return payload.errors?.map((item) => item.message).filter(Boolean).join(" ") || fallback
+    const payload = JSON.parse(match[0]) as { errors?: Array<{ message?: string }>; message?: string | string[] }
+    return payload.errors?.map((item) => item.message).filter(Boolean).join(" ") || (Array.isArray(payload.message) ? payload.message.join(" ") : payload.message) || fallback
   } catch {
     return fallback
   }
@@ -94,6 +96,7 @@ async function request<T>(path: string, options: RequestInit = {}, retryAuth = t
     throw new Error(`API ${response.status}: ${body || response.statusText}`)
   }
 
+  if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
@@ -220,3 +223,43 @@ export function forgotPassword(email: string) {
 export function resetPassword(token: string, newPassword: string) {
   return request<{ message: string }>("/auth/reset-password", { method: "POST", body: JSON.stringify({ token: token.trim(), newPassword, language: "tr" }) }, false)
 }
+
+export interface ApiUser { id: string; firstName: string; lastName: string; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
+export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; recommendationProfile?: import('../recommendations/model').RecommendationProfile }
+export const getCurrentUser = () => request<ApiUser>('/auth/me', { method: 'POST' })
+export const getUserInterests = () => request<Array<{ id: string; name: string }>>('/users/me/interests')
+export const setUserInterests = (interestIds: string[]) => request<Array<{ id: string; name: string }>>('/users/me/interests', { method: 'PUT', body: JSON.stringify({ interestIds }) })
+export const updateProfile = (value: Partial<ApiUser>) => request<ApiUser>('/users/me/profile', { method: 'PATCH', body: JSON.stringify(value) })
+export const setProfilePhoto = (photo: string) => request('/users/me/photo', { method: photo ? 'PUT' : 'DELETE', ...(photo ? { body: JSON.stringify({ photo }) } : {}) })
+export const getPreferences = () => request<Preferences>('/users/me/preferences')
+let preferenceWrites = Promise.resolve<unknown>(undefined)
+export function putPreference<K extends keyof Preferences>(key: K, value: NonNullable<Preferences[K]>) {
+  const version = sessionVersion
+  const write = preferenceWrites.catch(() => {}).then(() => {
+    if (version !== sessionVersion) throw new Error('Oturum değişti.')
+    return request(`/users/me/preferences/${key}`, { method: 'PUT', body: JSON.stringify({ value }) })
+  })
+  preferenceWrites = write
+  return write
+}
+export const getEvent = (id: string) => request<ApiEvent>(`/events/${id}`)
+export const favoriteEvent = (id: string, saved: boolean) => request(`/events/${id}/favorite`, { method: saved ? 'PUT' : 'DELETE' })
+export const participate = (id: string, join: boolean) => request<ApiEvent>(`/events/${id}/${join ? 'join' : 'leave'}`, { method: 'POST' })
+export const getEnums = (group: string) => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`)
+export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value) })
+export interface ApiMessage { id: string; text: string; createdAt: string; user: { id: string; firstName: string; lastName: string } }
+export const getMessages = (id: string) => request<{ items: ApiMessage[] }>(`/events/${id}/messages`)
+export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text }) })
+export async function getMyEvents() {
+  const lists = await Promise.all(['mine', 'participating', 'favorites'].map(async kind => {
+    const items: ApiEvent[] = []
+    for (let page = 1; ; page++) {
+      const result = await request<EventListResponse>(`/events/${kind}?page=${page}&limit=100`)
+      items.push(...result.items)
+      if (!result.items.length || page * 100 >= result.total) return items
+    }
+  }))
+  return lists.flat()
+}
+
+export const archiveLegacyData = (value: Record<string, unknown>) => request('/users/me/legacy-data', { method: 'PUT', body: JSON.stringify({ value }) })

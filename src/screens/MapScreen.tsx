@@ -1,7 +1,7 @@
 import BackButton from "../components/BackButton"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, AppState, StyleSheet, View } from "react-native"
-import AsyncStorage from "@react-native-async-storage/async-storage"
+import { getPreferences, putPreference } from "../api/client"
 import * as Location from "expo-location"
 import DiscoveryFilterSheet from "../map/DiscoveryFilterSheet"
 import { apiDate, applyDiscoveryFilters, categoryVisual, dateRange, placeBounds, DEFAULT_FILTERS, filterError, type DiscoveryFilters, type MapPlace } from "../map/filters"
@@ -63,10 +63,11 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   }, [retry])
   useEffect(() => {
     alive.current = true
-    AsyncStorage.getItem("event-app:map-filters").then(saved => {
+    getPreferences().then(preferences => {
+      const saved = preferences.mapFilters
       if (!saved || interacted.current || !alive.current) return
-      try { const value = JSON.parse(saved); if (!filterError(value)) setFilters(value) } catch { /* Ignore obsolete preferences. */ }
-    }).catch(() => {})
+      try { const value = saved; if (!filterError(value)) setFilters(value) } catch { /* Ignore obsolete preferences. */ }
+    }).catch(() => { if (alive.current) setLocationError("Kayıtlı filtrelerin yüklenemedi. Bağlantını kontrol et.") })
     const timer = setInterval(() => setNow(new Date()), 60000)
     const subscription = AppState.addEventListener("change", state => { if (state === "active") { setNow(new Date()); void locate(false) } })
     void locate(false)
@@ -76,7 +77,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     interacted.current = true
     filterRevision.current++
     setFilters(value); setSelected([]); setFilterOpen(false)
-    void AsyncStorage.setItem("event-app:map-filters", JSON.stringify(value)).catch(() => setLocationError("Filtre bu oturumda uygulandı; cihazına kaydedilemedi."))
+    void putPreference("mapFilters", value).catch(() => setLocationError("Filtre bu oturumda uygulandı; hesabına kaydedilemedi. Tekrar uygula."))
     if (value.place && ready) {
       centered.current = true
       const latitudeDelta = value.radiusKm * 2.5 / 111

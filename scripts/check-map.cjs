@@ -64,7 +64,11 @@ module.exports = async function checkMap({ mount, tap, act, text, storage }) {
   const sent = new URL(capturedUrl)
   assert.equal(sent.searchParams.get("dateFrom"), "21/09/2026")
   assert.equal(sent.searchParams.get("interestId"), "padel")
-  global.fetch = async url => ({ ok: true, json: async () => url.endsWith("/interests") ? [{ id: "padel", name: "Padel" }] : ({ items: points, total: 2 }) })
+  let savedFilters
+  global.fetch = async (url, options) => {
+    if (url.endsWith('/users/me/preferences/mapFilters')) savedFilters = JSON.parse(options.body).value
+    return { ok: true, json: async () => url.endsWith('/interests') ? [{ id: 'padel', name: 'Padel' }] : url.includes('/preferences') ? {} : ({ items: points.map(e => ({ ...e, date: '01/10/2030' })), total: 2 }) }
+  }
   let destination
   const tree = await mount("Map", { navigate: (...args) => { destination = args } })
   assert(text(tree.toJSON()).includes("Yoğunluk"))
@@ -82,7 +86,7 @@ module.exports = async function checkMap({ mount, tap, act, text, storage }) {
   await tap(tree, "İzmir")
   await tap(tree, "Etkinlikleri göster")
   assert.equal(tree.root.findAllByType("Modal").length, 0)
-  assert.equal(JSON.parse(storage.get("event-app:map-filters")).place.name, "İzmir")
+  assert.equal(savedFilters.place.name, "İzmir")
   await tap(tree, "Yakınımda")
   assert(text(tree.toJSON()).includes("Konum izni verilmedi"))
   await act(async () => tree.unmount())

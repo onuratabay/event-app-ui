@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { participate, getApiErrorMessage, getEvent } from "../api/client";
+import { mapApiEvent } from "../native/Store";
+import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 import { Avatar, GlassCard } from "../components/GlassUI";
@@ -21,22 +23,20 @@ export default function EventDetailScreen({
     setData: setStore
   } = useStore();
   const EVENTS = store.events;
-  const event = EVENTS.find(e => e.id === eventId) || EVENTS[0];
-  const joined = event.host.id === "me" || event.participants.some(p => p.id === "me");
-  const setJoined = (join: boolean) => setStore(p => ({
-    ...p,
-    events: p.events.map(e => {
-      if (e.id !== event.id) return e;
-      const count = e.currentParticipants + (join ? 1 : -1);
-      return {
-        ...e,
-        currentParticipants: count,
-        participants: join ? [...e.participants, p.user] : e.participants.filter(u => u.id !== "me"),
-        isActive: count >= e.minParticipants
-      };
-    })
-  }));
+  const event = EVENTS.find(e => e.id === eventId);
   const [shareOpen, setShareOpen] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  useEffect(() => { let active = true; if (eventId) getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(error => { if (active) setLoadError(getApiErrorMessage(error, 'Etkinlik yüklenemedi.')); }); return () => { active = false; }; }, [eventId]);
+  if (!event) return <Box><Touch onPress={() => navigate('discover')}>Geri</Touch><Label>{loadError || 'Etkinlik yükleniyor…'}</Label></Box>;
+  const joined = event.host.id === store.user.id || event.joined || event.participants.some(p => p.id === store.user.id);
+  const setJoined = async (join: boolean) => {
+    if (joining) return;
+    setJoining(true);
+    try { const remote = await participate(event.id, join); setStore(p => ({ ...p, events: p.events.map(e => e.id === remote.id ? mapApiEvent(remote) : e) })); }
+    catch (error) { Alert.alert('Katılım güncellenemedi', getApiErrorMessage(error)); }
+    finally { setJoining(false); }
+  };
   const isForming = !event.isActive;
   const isActive = event.isActive;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
@@ -127,7 +127,7 @@ export default function EventDetailScreen({
               </Label>
             </Box>
             <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.flexWrap]]}>
-              {event.participants.filter(p => p.id !== "me").map(p => <Box key={p.id} style={[[ui.flex, ui.flexCol, ui.itemsCenter, ui.gap1]]}>
+              {event.participants.filter(p => p.id !== store.user.id).map(p => <Box key={p.id} style={[[ui.flex, ui.flexCol, ui.itemsCenter, ui.gap1]]}>
                     <Avatar uri={p.avatar} name={p.name} size="sm" />
                     <Label style={[[ui.text9px, ui.textWhite35, ui.maxW48px, ui.textCenter]]} numberOfLines={1}>
                       {p.name.split(" ")[0]}
@@ -336,13 +336,13 @@ export default function EventDetailScreen({
             </Label>
           </Box>}
 
-        {!joined ? <Touch disabled={event.currentParticipants >= event.maxParticipants} onPress={() => setJoined(true)} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase], {
+        {!joined ? <Touch disabled={joining || event.currentParticipants >= event.maxParticipants} onPress={() => setJoined(true)} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase], {
         color: "#1a1200"
       }]} gradient={["#c8a44a", "#c09038"]} enter>
             Katıl
-          </Touch> : <Touch onPress={() => setJoined(false)} style={[[ui.wFull, ui.py35, ui.rounded2xl, ui.textSm, ui.textWhite35, ui.border, ui.borderWhite8, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.gap2]]}>
+          </Touch> : <Touch disabled={joining || event.host.id === store.user.id} onPress={() => setJoined(false)} style={[[ui.wFull, ui.py35, ui.rounded2xl, ui.textSm, ui.textWhite35, ui.border, ui.borderWhite8, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.gap2]]}>
             <CheckIcon size={14} strokeWidth={2} style={[[ui.textWhite35]]} />
-            Katıldın · İptal Et
+            {event.host.id === store.user.id ? "Bu etkinliği sen düzenliyorsun" : "Katıldın · İptal Et"}
           </Touch>}
       </Box>
     </Box>;

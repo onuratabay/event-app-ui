@@ -25,7 +25,11 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   const oldFetch = global.fetch
   storage.clear()
   const nextWeek = dateRange({ ...DEFAULT_FILTERS, datePreset: "week" }).from
-  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ items: [{ ...event("real-event"), date: apiDate(nextWeek) }], total: 1 }) })
+  let saved
+  global.fetch = async (url, options) => {
+    if (url.endsWith('/preferences/recommendationProfile')) saved = JSON.parse(options.body).value
+    return { ok: true, status: 200, json: async () => ({ items: [{ ...event('real-event'), date: apiDate(nextWeek) }], total: 1 }) }
+  }
   const tree = await mount("Discover")
   assert(!text(tree.toJSON()).includes("Harita Görünümü"))
   assert(!text(tree.toJSON()).includes("Yapay Zeka Önerileri Geliyor"))
@@ -37,7 +41,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   assert(text(tree.toJSON()).includes("1"))
   assert(text(tree.toJSON()).includes("etkinlik buldum"))
   assert(!text(tree.toJSON()).includes("5 etkinlik buldum"))
-  const saved = JSON.parse(storage.get("event-app:v1")).user.recommendationProfile
+  assert.equal(storage.has("event-app:v1"), false)
   assert(saved.equipmentByCity.izmir.includes("racket"))
   await act(async () => tree.unmount())
   storage.clear()

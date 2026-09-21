@@ -1,12 +1,12 @@
 import BackButton from "../components/BackButton";
 import { Alert } from "react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
-import { logout } from "../api/client";
+import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getReferenceRequests, getApiErrorMessage, type ReferenceRequest } from "../api/client";
 import BottomNav from "../components/BottomNav";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
-import { USERS } from "../data";
+
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch, Vector, openExternal } from "../native/UI";
@@ -22,15 +22,13 @@ function InlineEditField({
   multiline = false
 }: {
   value: string;
-  onSave: (v: string) => void;
+  onSave: (v: string) => Promise<void>;
   multiline?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
-  const save = () => {
-    onSave(draft);
-    setEditing(false);
-  };
+  const [saving, setSaving] = useState(false);
+  const save = async () => { if (saving) return; setSaving(true); try { await onSave(draft); setEditing(false); } catch {} finally { setSaving(false); } };
   if (editing) {
     return <Box style={[[]]} enter>
         {multiline ? <Field value={draft} onChangeText={e => setDraft(e)} autoFocus style={[[ui.wFull, ui.bgWhite8, ui.border, ui.borderC8a44a40, ui.roundedXl, ui.px3, ui.py25, ui.textSm, ui.textWhite80]]} multiline /> : <Field value={draft} onChangeText={e => setDraft(e)} autoFocus style={[[ui.wFull, ui.bgWhite8, ui.border, ui.borderC8a44a40, ui.roundedXl, ui.px3, ui.py25, ui.textSm, ui.textWhite80]]} />}
@@ -68,10 +66,6 @@ export default function ProfileScreen({
   const EVENTS = store.events;
   const ME = store.user;
   const user = store.user;
-  const setUser = (update: (u: typeof ME) => typeof ME) => setStore(p => ({
-    ...p,
-    user: update(p.user)
-  }));
   const interests = new Set(store.user.interests);
   const [showReferences, setShowReferences] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -85,22 +79,28 @@ export default function ProfileScreen({
     } catch { Alert.alert("Çıkış yapılamadı", "Lütfen tekrar dene."); }
     finally { setLoggingOut(false); }
   };
-  const update = (key: string, value: string) => setUser(prev => ({
-    ...prev,
-    [key]: value
-  }));
-  const toggleInterest = (i: string) => setStore(p => {
-    const next = new Set(p.user.interests);
-    if (next.has(i)) next.delete(i);else next.add(i);
-    return {
-      ...p,
-      user: {
-        ...p.user,
-        interests: [...next]
-      }
-    };
-  });
-  const myEvents = EVENTS.filter(e => e.host.id === "me" || e.participants.some(p => p.id === "me"));
+  const [references, setReferences] = useState<ReferenceRequest[]>([]);
+  useEffect(() => { getReferenceRequests().then(result => setReferences(result.items.filter(i => i.status === 'approved'))).catch(() => {}); }, []);
+  const update = async (key: string, value: string) => {
+    try {
+      if (key === 'avatar') await setProfilePhoto(value);
+      else if (key === 'name') {
+        const parts = value.trim().split(/\s+/); const lastName = parts.pop() || '';
+        await updateProfile({ firstName: parts.join(' '), lastName });
+      } else await updateProfile({ [key === 'instagram' ? 'instagramUsername' : key]: key === 'instagram' ? value.replace(/^@/, '') : value });
+      setStore(p => ({ ...p, user: { ...p.user, [key]: value } }));
+    } catch (error) { Alert.alert('Profil kaydedilemedi', getApiErrorMessage(error)); throw error; }
+  };
+  const toggleInterest = async (interest: string) => {
+    try {
+      const catalog = await getMapInterests();
+      const chosen = new Set(store.user.interests);
+      if (chosen.has(interest)) chosen.delete(interest); else chosen.add(interest);
+      const saved = await setUserInterests(catalog.filter(i => chosen.has(i.name)).map(i => i.id));
+      setStore(p => ({ ...p, user: { ...p.user, interests: saved.map(i => i.name) } }));
+    } catch (error) { Alert.alert('İlgi alanları kaydedilemedi', getApiErrorMessage(error)); }
+  };
+  const myEvents = EVENTS.filter(e => e.host.id === store.user.id || e.participants.some(p => p.id === store.user.id));
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
 
@@ -143,7 +143,7 @@ export default function ProfileScreen({
             <Touch style={[[ui.relative]]} onPress={async () => {
             if (isOwn) {
               const uri = await selectPhoto();
-              if (uri) update("avatar", uri);
+              if (uri) void update("avatar", uri).catch(() => {});
             }
           }}>
               <Picture uri={user.avatar} accessibilityLabel={user.name} style={[[ui.w20, ui.h20, ui.rounded2xl]]} />
@@ -287,42 +287,10 @@ export default function ProfileScreen({
                 </Label>
               </Touch>
 
-              {showReferences && <Box style={[[ui.px4, ui.pb4, ui.spaceY3, ui.borderT, ui.borderWhite6]]} enter>
-                  <Box>
-                    <Label style={[[ui.textXs, ui.textWhite30, ui.mt3, ui.mb2]]}>
-                      Referans olduğum kişiler
-                    </Label>
-                    <Box style={[[ui.spaceY2]]}>
-                      {USERS.slice(0, 2).map(u => <Box key={u.id} style={[[ui.flex, ui.itemsCenter, ui.gap25]]}>
-                          <Avatar uri={u.avatar} name={u.name} size="xs" />
-                          <Label style={[[ui.textSm, ui.textWhite60]]}>
-                            {u.name}
-                          </Label>
-                          <Label style={[[ui.mlAuto, ui.text10px, ui.textEmerald400, ui.px2, ui.py05, ui.roundedFull], {
-                    backgroundColor: "rgba(52,211,153,0.10)"
-                  }]}>
-                            Onaylandı
-                          </Label>
-                        </Box>)}
-                    </Box>
-                  </Box>
-                  <Box>
-                    <Label style={[[ui.textXs, ui.textWhite30, ui.mb2]]}>
-                      Bana referans olan kişiler
-                    </Label>
-                    <Box style={[[ui.flex, ui.itemsCenter, ui.gap25]]}>
-                      <Avatar uri={USERS[2].avatar} name={USERS[2].name} size="xs" />
-                      <Label style={[[ui.textSm, ui.textWhite60]]}>
-                        {USERS[2].name}
-                      </Label>
-                      <Label style={[[ui.mlAuto, ui.text10px, ui.textEmerald400, ui.px2, ui.py05, ui.roundedFull], {
-                  backgroundColor: "rgba(52,211,153,0.10)"
-                }]}>
-                        Onaylandı
-                      </Label>
-                    </Box>
-                  </Box>
-                </Box>}
+              {showReferences && <Box style={{ padding: 16 }}>
+                {!references.length && <Label>Henüz onaylanmış referans yok.</Label>}
+                {references.map(ref => <Label key={ref.id}>{ref.direction === 'incoming' ? ref.recipient.name : ref.requester.name} · Onaylandı</Label>)}
+              </Box>}
             </GlassCard>
           </Box>}
 
@@ -347,7 +315,7 @@ export default function ProfileScreen({
                     </Label>
                     <Label style={[[ui.textXs, ui.textWhite35]]}>
                       {event.date} ·{" "}
-                      {event.host.id === "me" ? "Organizatör" : "Katılımcı"}
+                      {event.host.id === store.user.id ? "Organizatör" : "Katılımcı"}
                     </Label>
                   </Box>
                   <Box style={[[ui.flex]]}>

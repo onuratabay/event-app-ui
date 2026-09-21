@@ -49,6 +49,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   assert(text(tree.toJSON()).includes("E-posta hizmeti kullanılamıyor"))
   assert(!text(tree.toJSON()).includes("Bu adres kayıtlıysa"))
   await act(async () => tree.unmount())
+  global.fetch = originalFetch
   for (const [screen, props, fallback] of [
     ["Login", {}, "welcome"], ["ForgotPassword", {}, "login"],
     ["Onboarding", { step: 1 }, "welcome"], ["Onboarding", { step: 2 }, "onboarding-1"], ["Onboarding", { step: 3 }, "onboarding-2"],

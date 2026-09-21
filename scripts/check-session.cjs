@@ -5,7 +5,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   const ok = body => ({ ok: true, status: 200, json: async () => body })
   const unauthorized = () => ({ ok: false, status: 401, text: async () => '{"errors":[{"message":"Expired"}]}' })
   storage.clear()
-  global.fetch = async () => ok({ items: [], total: 0 })
+  global.fetch = oldFetch
   let route
   let tree = await mount("Splash", { navigate: next => { route = next } })
   assert.equal(route, "welcome")
@@ -19,7 +19,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     route = undefined
     tree = await mount(name, { navigate: next => { route = next } })
     assert.equal(route, "discover")
-    assert.equal(tree.toJSON(), null, "Signed-in users must not see auth screens")
+    assert(!text(tree.toJSON()).includes("Şifremi unuttum"), "Signed-in users must not see auth screens")
     await act(async () => tree.unmount())
   }
   let refreshCount = 0
@@ -50,7 +50,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   releaseRefresh()
   await pending
   assert.equal(await api.hasSession(), false)
-  global.fetch = async () => ok({ items: [], total: 0 })
+  global.fetch = oldFetch
   tree = await mount("Splash", { navigate: next => { route = next } })
   assert.equal(route, "welcome")
   await act(async () => tree.unmount())

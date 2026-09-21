@@ -1,4 +1,8 @@
-import { useState } from "react";
+import { Alert, Platform } from "react-native";
+import * as Location from "expo-location";
+import { createEvent, getMapInterests, getEnums, getApiErrorMessage } from "../api/client";
+import { mapApiEvent } from "../native/Store";
+import { useEffect, useState } from "react";
 import { AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
 import { ArrowLeftIcon, CameraIcon, GlobeIcon, ImageIcon, LockIcon, SearchIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
@@ -33,44 +37,8 @@ function GoldBtn({
 interface Props {
   navigate: NavigateFn;
 }
-const ACTIVITIES = [{
-  icon: "🎾",
-  label: "Padel"
-}, {
-  icon: "🎾",
-  label: "Tenis"
-}, {
-  icon: "🏃",
-  label: "Koşu"
-}, {
-  icon: "☕",
-  label: "Kahve"
-}, {
-  icon: "🥾",
-  label: "Hiking"
-}, {
-  icon: "🎵",
-  label: "Konser"
-}, {
-  icon: "📷",
-  label: "Fotoğrafçılık"
-}, {
-  icon: "✦",
-  label: "Özel Etkinlik"
-}];
-const LEVELS = ["Başlangıç", "Orta", "İleri", "Tüm Seviyeler"];
 const DURATIONS = ["30 dk", "1 saat", "1.5 saat", "2 saat", "3+ saat"];
 const PRIVACY_ICONS = [GlobeIcon, LockIcon, UserPlusIcon];
-const PRIVACIES = [{
-  label: "Herkese Açık",
-  desc: "Tüm üyeler görebilir"
-}, {
-  label: "Sadece Davetliler",
-  desc: "Davet ettiğin kişiler"
-}, {
-  label: "Bağlantılarıma Öner",
-  desc: "Bağlantıların görebilir"
-}];
 const REQUIREMENTS_SUGGESTIONS: {
   [key: string]: string[];
 } = {
@@ -88,7 +56,18 @@ export default function CreateEventScreen({
     data: store,
     setData: setStore
   } = useStore();
-  const EVENTS = store.events;
+  const [activities, setActivities] = useState<Array<{ id: string; name: string }>>([]);
+  const [levels, setLevels] = useState<Array<{ id: string; name: string }>>([]);
+  const [visibilities, setVisibilities] = useState<Array<{ id: string; name: string; enum: string }>>([]);
+  const [creating, setCreating] = useState(false);
+  const [places, setPlaces] = useState<Array<{ latitude: number; longitude: number }>>([]);
+  const [coordinate, setCoordinate] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [findingPlace, setFindingPlace] = useState(false);
+  const loadCatalog = () => Promise.all([getMapInterests(), getEnums('event_level'), getEnums('event_visibility')]).then(([a, l, v]) => { setActivities(a); setLevels(l); setVisibilities(v); }).catch(error => Alert.alert('Seçenekler yüklenemedi', getApiErrorMessage(error)));
+  useEffect(() => { void loadCatalog(); }, []);
+  const ACTIVITIES = activities.map(a => ({ label: a.name, icon: '✨' }));
+  const LEVELS = levels.map(l => l.name);
+  const PRIVACIES = visibilities.map(v => ({ label: v.name, desc: '' }));
   const [step, setStep] = useState(0);
   const [data, setData] = useState({
     coverImage: "",
@@ -104,6 +83,32 @@ export default function CreateEventScreen({
     requirements: [] as string[],
     privacy: ""
   });
+  const findPlace = async () => {
+    if (findingPlace || !data.location.trim()) return;
+    setFindingPlace(true);
+    try {
+      if (Platform.OS === 'android' && !(await Location.requestForegroundPermissionsAsync()).granted) throw new Error('Konum izni gerekli.');
+      const results = await Location.geocodeAsync(data.location);
+      setPlaces(results); setCoordinate(null);
+      if (!results.length) Alert.alert('Konum bulunamadı', 'Şehir ve açık adresle tekrar ara.');
+    } catch { Alert.alert('Konum aranamadı', 'Konum iznini ve bağlantını kontrol et.'); }
+    finally { setFindingPlace(false); }
+  };
+  const publish = async () => {
+    if (creating) return;
+    const interest = activities.find(i => i.name === data.activity), level = levels.find(i => i.name === data.level), visibility = visibilities.find(i => i.name === data.privacy);
+    if (!interest || !level || !visibility || !coordinate) { Alert.alert('Eksik bilgi', 'Etkinlik türünü, seviyeyi, konumu ve görünürlüğü seç.'); return; }
+    if (data.description.trim().length < 10) { Alert.alert('Açıklama gerekli', 'Etkinliği en az 10 karakterle açıkla.'); return; }
+    setCreating(true);
+    try {
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(data.date) ? data.date.split('-').reverse().join('/') : data.date;
+      const durations: Record<string, number> = { '30 dk': 30, '1 saat': 60, '1.5 saat': 90, '2 saat': 120, '3+ saat': 180 };
+      const event = await createEvent({ interestId: interest.id, levelId: level.id, visibilityId: visibility.id, date, startTime: data.time, durationMinutes: durations[data.duration], ...coordinate, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants, description: data.description.trim(), requirements: data.requirements.join('\n'), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
+      setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)] }));
+      navigate('event-detail', { eventId: event.id });
+    } catch (error) { Alert.alert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
+    finally { setCreating(false); }
+  };
   const next = () => setStep(s => s + 1);
   const back = () => {
     if (step > 0) setStep(s => s - 1);else navigate("discover");
@@ -166,38 +171,7 @@ export default function CreateEventScreen({
             </Box>
           </GlassCard>
 
-          <Touch onPress={() => {
-          const id = "event-" + Date.now();
-          setStore(p => ({
-            ...p,
-            events: [{
-              id,
-              title: data.activity,
-              category: data.activity,
-              categoryEmoji: ACTIVITIES.find(a => a.label === data.activity)?.icon || "✦",
-              date: data.date,
-              time: data.time,
-              location: data.location,
-              distance: "0 km",
-              level: data.level,
-              currentParticipants: 1,
-              minParticipants: data.minParticipants,
-              maxParticipants: data.maxParticipants,
-              host: p.user,
-              participants: [p.user],
-              coverImage: data.coverImage || EVENTS[0].coverImage,
-              description: data.description,
-              requirements: data.requirements,
-              duration: data.duration,
-              privacy: data.privacy,
-              isActive: data.minParticipants <= 1,
-              isSaved: false
-            }, ...p.events]
-          }));
-          navigate("event-detail", {
-            eventId: id
-          });
-        }} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.mb4], {
+          <Touch onPress={publish} disabled={creating} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.mb4], {
           color: "#1a1200"
         }]} gradient={["#c8a44a", "#c09038"]}>
             Etkinliği Oluştur 🚀
@@ -233,7 +207,8 @@ export default function CreateEventScreen({
                 Seninle birlikte ne yapacağımızı anlat.
               </Label>
               <Box style={[[ui.grid, ui.gap3]]} columns={2}>
-                {ACTIVITIES.map(a => <Touch key={a.label} onPress={() => selectAndNext("activity", a.label)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, data.activity === a.label ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
+                {!activities.length && <Touch onPress={loadCatalog}>Seçenekleri yeniden yükle</Touch>}
+              {ACTIVITIES.map(a => <Touch key={a.label} onPress={() => selectAndNext("activity", a.label)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, data.activity === a.label ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
                     <Label style={[[ui.text3xl, ui.mb2]]}>{a.icon}</Label>
                     <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>
                       {a.label}
@@ -298,39 +273,12 @@ export default function CreateEventScreen({
               </Label>
               <Box style={[[ui.relative]]}>
                 <SearchIcon size={15} strokeWidth={1.5} style={[[ui.fixed, ui.left35, ui.top12, ui.TranslateY12, ui.textWhite25, ui.z10]]} />
-                <Field placeholder="Adres veya mekan adı..." value={data.location} onChangeText={e => setData(p => ({
-              ...p,
-              location: e
-            }))} style={[[ui.glass, ui.wFull, ui.roundedXl, ui.pl9, ui.pr4, ui.py35, ui.textWhite, ui.textSm]]} glass />
-              </Box>
-
-              <Box style={[[ui.spaceY2]]}>
-                {["Çankaya Padel Merkezi", "Ulus Meydanı", "Oran Spor Kompleksi", "Çayyolu Venue"].map(loc => <Touch key={loc} onPress={() => {
-              setData(p => ({
-                ...p,
-                location: loc
-              }));
-            }} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.gap3, ui.p3, ui.roundedXl, ui.textLeft, ui.border, ui.borderWhite6, ui.bgWhite003]]}>
-                    <Label style={[[ui.textWhite40]]}>◎</Label>
-                    <Label style={[[ui.textSm, ui.textWhite65]]}>{loc}</Label>
-                  </Touch>)}
-              </Box>
-
-              {/* Map placeholder */}
-              <Box style={[[ui.h40, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-            backgroundColor: "rgba(255,255,255,0.04)",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.10)"
-          }]}>
-                <Box style={[[ui.textCenter, ui.flex, ui.flexCol, ui.itemsCenter, ui.gap2]]}>
-                  <ImageIcon size={24} strokeWidth={1.2} style={[[ui.textWhite15]]} />
-                  <Label style={[[ui.textXs, ui.textWhite25]]}>
-                    Haritadan seç
-                  </Label>
-                </Box>
+                <Field placeholder="Adres veya mekan adı..." value={data.location} onChangeText={e => { setCoordinate(null); setPlaces([]); setData(p => ({ ...p, location: e })); }} style={[[ui.glass, ui.wFull, ui.roundedXl, ui.pl9, ui.pr4, ui.py35, ui.textWhite, ui.textSm]]} glass />
               </Box>
 
               <Box style={[[ui.h4]]} />
+              <Touch onPress={findPlace} disabled={findingPlace}><Label>{findingPlace ? 'Konum aranıyor…' : 'Adresi bul'}</Label></Touch>
+              {places.map((place, index) => <Touch key={index} onPress={() => setCoordinate(place)} style={{ padding: 12, backgroundColor: '#242336', borderRadius: 12 }}><Label>{coordinate === place ? '✓ ' : ''}{data.location} · {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}</Label></Touch>)}
             </Box>}
 
           {/* Step 5 - Participants */}
@@ -416,14 +364,7 @@ export default function CreateEventScreen({
                 </Label>
               </Touch>
 
-              <Box style={[[ui.grid, ui.gap2]]} columns={3}>
-                {["https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=200&h=120&fit=crop", "https://images.unsplash.com/photo-1551632811-561732d1e306?w=200&h=120&fit=crop", "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&h=120&fit=crop"].map((src, i) => <Touch key={i} style={[[ui.h20, ui.roundedXl, ui.overflowHidden]]} onPress={() => setData(p => ({
-              ...p,
-              coverImage: src
-            }))}>
-                    <Picture uri={src} accessibilityLabel="" style={[[ui.wFull, ui.hFull, ui.opacity60]]} />
-                  </Touch>)}
-              </Box>
+
 
               <Box style={[[ui.h4]]} />
             </Box>}
@@ -473,7 +414,7 @@ export default function CreateEventScreen({
               </Label>
               <Box style={[[ui.spaceY3]]}>
                 {PRIVACIES.map((p, i) => {
-              const Icon = PRIVACY_ICONS[i];
+              const Icon = PRIVACY_ICONS[i % PRIVACY_ICONS.length];
               return <Touch key={p.label} onPress={() => selectAndNext("privacy", p.label)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.textLeft, ui.flex, ui.itemsCenter, ui.gap4, ui.border, data.privacy === p.label ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
                       <Box style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0, data.privacy === p.label ? [ui.textC8a44a] : [ui.textWhite35]], {
                   backgroundColor: data.privacy === p.label ? "rgba(200,164,74,0.10)" : "rgba(255,255,255,0.05)",
@@ -499,7 +440,7 @@ export default function CreateEventScreen({
 
       {/* Sticky CTA for steps that need explicit continue */}
       {(step === 2 || step === 4 || step === 5 || step === 6 || step === 7) && <StickyBar>
-          <GoldBtn onPress={next} disabled={step === 2 && (!data.date || !data.time) || step === 4 && !data.location}>
+          <GoldBtn onPress={next} disabled={step === 2 && (!data.date || !data.time) || step === 4 && !coordinate}>
             Devam Et
           </GoldBtn>
         </StickyBar>}

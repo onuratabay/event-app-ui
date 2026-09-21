@@ -1,3 +1,5 @@
+import { favoriteEvent, getApiErrorMessage } from "../api/client";
+import { Alert } from "react-native";
 import { useState } from "react";
 import { Circle, Line, Path, Polygon, Polyline } from "react-native-svg";
 import RecommendationsSheet from "../recommendations/RecommendationsSheet";
@@ -258,13 +260,14 @@ function EventCard({
     setData
   } = useStore();
   const saved = event.isSaved;
-  const setSaved = (value: boolean) => setData(p => ({
-    ...p,
-    events: p.events.map(e => e.id === event.id ? {
-      ...e,
-      isSaved: value
-    } : e)
-  }));
+  const [saving, setSaving] = useState(false);
+  const setSaved = async (value: boolean) => {
+    if (saving) return;
+    setSaving(true);
+    try { await favoriteEvent(event.id, value); setData(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, isSaved: value } : e) })); }
+    catch (error) { Alert.alert('Favori kaydedilemedi', getApiErrorMessage(error)); }
+    finally { setSaving(false); }
+  };
   const progress = event.currentParticipants / event.minParticipants;
   const isForming = !event.isActive;
   return <Box style={[[], {}]} enter>
@@ -400,7 +403,7 @@ export default function DiscoverScreen({
   navigate
 }: Props) {
   const {
-    data: store
+    data: store, refreshEvents
   } = useStore();
   const EVENTS = store.events;
   const [recommendationsOpen, setRecommendationsOpen] = useState(false);
@@ -412,12 +415,16 @@ export default function DiscoverScreen({
     if (activeFilter === "Padel" || activeFilter === "Konser") return e.category === activeFilter;
     if (activeFilter === "Outdoor") return ["Hiking", "Koşu", "Outdoor"].includes(e.category);
     if (activeFilter === "Sanat") return ["Fotoğraf", "Fotoğrafçılık", "Sanat"].includes(e.category);
-    if (activeFilter === "Bugün") return e.date === "Bugün";
+    const parts = e.date.split('/').map(Number);
+    const day = new Date(parts[2], parts[1] - 1, parts[0]);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (activeFilter === "Bugün") return day.getTime() === today.getTime();
+    if (activeFilter === "Bu Hafta") return day >= today && day.getTime() < today.getTime() + 7 * 86400000;
     if (activeFilter === "Yakınımda") return parseFloat(e.distance.replace(",", ".")) <= 5;
     return true;
   }).sort((a, b) => {
     const distance = (e: AppEvent) => parseFloat(e.distance.replace(",", "."));
-    const time = (e: AppEvent) => (e.date === "Bugün" ? 0 : e.date === "Yarın" ? 1 : 2) * 1440 + Number(e.time.slice(0, 2)) * 60 + Number(e.time.slice(3));
+    const time = (e: AppEvent) => { const [d,m,y] = e.date.split("/").map(Number); return new Date(y,m-1,d,Number(e.time.slice(0,2)),Number(e.time.slice(3))).getTime(); };
     return sortBy === "distance-near" ? distance(a) - distance(b) : sortBy === "distance-far" ? distance(b) - distance(a) : sortBy === "time-asc" ? time(a) - time(b) : sortBy === "time-desc" ? time(b) - time(a) : 0;
   });
   const sortLabel = SORT_OPTIONS.find(o => o.value === sortBy)?.label ?? "Önerilen";
@@ -489,6 +496,7 @@ export default function DiscoverScreen({
         {/* Events */}
         <Scroll style={[[ui.flex1, ui.pb28, ui.spaceY4]]} enter>
           <Box style={[[ui.px5, ui.spaceY4]]}>
+            {!visibleEvents.length && <Box style={{ padding: 20, gap: 12 }}><Label>Henüz gösterilecek etkinlik yok.</Label><Touch onPress={() => { void refreshEvents().catch(() => {}); }}><Label>Yenile</Label></Touch></Box>}
             {visibleEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} onPress={() => navigate("event-detail", {
             eventId: event.id
           })} onShare={() => setShareEvent(event)} />)}

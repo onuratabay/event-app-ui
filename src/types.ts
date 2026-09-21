@@ -46,6 +46,7 @@ export interface AppEvent {
   requirements: string[]
   isActive: boolean
   isSaved: boolean
+  joined?: boolean
   duration?: string
   privacy?: string
 }

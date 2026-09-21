@@ -1,5 +1,5 @@
 import { StyleSheet } from "react-native"
-import { ME } from "../data"
+import { useStore } from "../native/Store"
 import { Box, Label, Picture, Touch } from "../native/UI"
 import type { NavigateFn, Screen } from "../types"
 import { MessageIcon, LocationIcon, CompassIcon, PlusIcon } from "./Icons"
@@ -17,6 +17,8 @@ export default function BottomNav({
   active: Screen
   navigate: NavigateFn
 }) {
+  const { data } = useStore()
+  const ME = data.user
   return (
     <Box pointerEvents="box-none" style={s.frame}>
       <Box glass style={s.bar}>

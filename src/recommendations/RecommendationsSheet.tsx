@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { ActivityIndicator, type ScrollView, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native"
 import * as Location from "expo-location"
-import { getApiErrorMessage, getMapEvents } from "../api/client"
+import { getApiErrorMessage, getMapEvents, putPreference } from "../api/client"
 import { FilterChip, GlassInput } from "../components/GlassUI"
 import HeaderIconButton from "../components/HeaderIconButton"
 import { SparklesIcon } from "../components/Icons"
@@ -41,8 +41,10 @@ export default function RecommendationsSheet({ onClose, navigate }: { onClose: (
     setBusy(true); setError(null); setResults(null)
     const savedRange = dateRange(recommendationFilters(profile, dummy))
     const savedProfile: RecommendationProfile = { ...profile, trip: { ...profile.trip, datePreset: "custom", dateFrom: savedRange.from, dateTo: savedRange.to } }
-    setData(current => ({ ...current, user: { ...current.user, recommendationProfile: savedProfile } }))
     try {
+      await putPreference("recommendationProfile", savedProfile)
+      if (controller.signal.aborted) return
+      setData(current => ({ ...current, user: { ...current.user, recommendationProfile: savedProfile } }))
       let place: MapPlace
       if ("latitude" in location) place = { name: location.name, latitude: location.latitude, longitude: location.longitude }
       else {
@@ -82,7 +84,7 @@ export default function RecommendationsSheet({ onClose, navigate }: { onClose: (
             <Box style={s.wrap}>{EQUIPMENT.map(item => <FilterChip solid key={item.id} label={item.label} selected={(profile.equipmentByCity[location.city] || []).includes(item.id)} onPress={() => update(previous => ({ ...previous, equipmentByCity: { ...previous.equipmentByCity, [location.city]: toggle(previous.equipmentByCity[location.city] || [], item.id) } }))} />)}</Box>
             <Label style={s.section}>{location.name} için ne yapmak istersin?</Label>
             <Box style={s.wrap}>{ACTIVITIES.map(item => <FilterChip solid key={item.id} label={`${item.icon} ${item.label}`} selected={(profile.activitiesByPlace[location.id] || []).includes(item.id)} onPress={() => update(previous => ({ ...previous, activitiesByPlace: { ...previous.activitiesByPlace, [location.id]: toggle(previous.activitiesByPlace[location.id] || [], item.id) } }))} />)}</Box>
-            <Label style={s.hint}>Tür seçmezsen kaydettiğin ekipmana uygun etkinlikleri ararım. Tercihlerin bu cihazdaki profilinde saklanır.</Label>
+            <Label style={s.hint}>Tür seçmezsen kaydettiğin ekipmana uygun etkinlikleri ararım. Tercihlerin hesabına kaydedilir; diğer cihazlarında da kullanılır.</Label>
             {results && <Box style={s.results} onLayout={event => scroll.current?.scrollTo({ y: event.nativeEvent.layout.y, animated: true })}>
               <Label style={s.resultTitle}>{results.length ? `${period} ${location.name} için sana özel ${results.length}${activities.length === 1 ? ` ${activities[0].label.toLocaleLowerCase("tr-TR")}` : ""} etkinlik buldum.` : "Bu planla eşleşen etkinlik henüz yok."}</Label>
               {!results.length && <Label style={s.hint}>Tarihi, yeri veya etkinlik tercihlerini değiştirerek tekrar deneyebilirsin.</Label>}

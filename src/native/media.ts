@@ -1,5 +1,5 @@
 import * as Clipboard from "expo-clipboard"
-import { File, Paths } from "expo-file-system"
+
 import * as ImagePicker from "expo-image-picker"
 import { Alert, Share } from "react-native"
 import type { AppEvent } from "../types"
@@ -19,15 +19,11 @@ export async function selectPhoto(camera = false): Promise<string | null> {
       camera
         ? ImagePicker.launchCameraAsync
         : ImagePicker.launchImageLibraryAsync
-    )({ mediaTypes: ["images"], allowsEditing: true, quality: 0.85 })
+    )({ mediaTypes: ["images"], allowsEditing: true, quality: 0.75, base64: true })
     if (result.canceled) return null
-    const original = new File(result.assets[0].uri)
-    const saved = new File(
-      Paths.document,
-      `photo-${Date.now()}.${original.extension.replace(".", "") || "jpg"}`,
-    )
-    original.copy(saved)
-    return saved.uri
+    const asset = result.assets[0]
+    if (!asset.base64) throw new Error('Fotoğraf okunamadı')
+    return `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
   } catch {
     Alert.alert("Fotoğraf eklenemedi", "Lütfen tekrar dene.")
     return null

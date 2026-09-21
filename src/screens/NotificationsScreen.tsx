@@ -7,39 +7,7 @@ import { NavigateFn } from "../types";
 interface Props {
   navigate: NavigateFn;
 }
-const NOTIFS = [{
-  id: 1,
-  type: "join",
-  title: "Onur Kaya etkinliğine katıldı",
-  body: "Padel After Work — 1 kişi daha katıldı, hâlâ 1 yer var.",
-  time: "14 dk önce",
-  unread: true,
-  avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&auto=format"
-}, {
-  id: 2,
-  type: "active",
-  title: "Etkinliğin aktifleşti",
-  body: "Ankara Photo Walk minimum katılımcıya ulaştı. Etkinlik odası açıldı.",
-  time: "1 sa önce",
-  unread: true,
-  avatar: null
-}, {
-  id: 4,
-  type: "reminder",
-  title: "Yarın etkinliğin var",
-  body: "Ankara Photo Walk — yarın saat 09:00'da Ulus Meydanı'nda.",
-  time: "1 gün önce",
-  unread: false,
-  avatar: null
-}, {
-  id: 5,
-  type: "score",
-  title: "Yeni bir değerlendirme aldın",
-  body: "Event Skorun güncellendi: 4.8 → 4.9",
-  time: "2 gün önce",
-  unread: false,
-  avatar: null
-}];
+const NOTIFS: Array<{ id: number; type: string; title: string; body: string; time: string; unread: boolean; avatar: string | null }> = [];
 const TYPE_ICONS: Record<string, {
   bg: string;
   color: string;

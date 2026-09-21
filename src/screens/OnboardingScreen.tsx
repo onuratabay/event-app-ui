@@ -1,3 +1,4 @@
+import { updateProfile } from "../api/client";
 import BackButton from "../components/BackButton";
 import { useEffect, useRef, useState } from "react";
 import { AccordionItem, AtmoBackground, Avatar, GlassCard, GlassInput, ProgressStepper } from "../components/GlassUI";
@@ -240,13 +241,14 @@ function Step2({
   const [instagram, setInstagram] = useState("");
   const [code, setCode] = useState("");
   const [codeValid, setCodeValid] = useState<boolean | null>(null);
-  const validateCode = () => setCodeValid(code.toUpperCase() === "EVENT2026");
+  const validateCode = () => { setCodeValid(false); setSubmitError("Davet koduyla üyelik şu anda kullanılamıyor. Referans isteğiyle devam edebilirsin."); };
   const submitApplication = async () => {
     if (submitting) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
       if (!store.onboarding.accountId) { navigate("onboarding-1"); return; }
+      if (instagram.trim()) await updateProfile({ instagramUsername: instagram.replace(/^@/, "").trim() });
       navigate("onboarding-3");
     } catch (error) {
       setSubmitError(getApiErrorMessage(error, "Bilgilerini kontrol edip tekrar dene."));

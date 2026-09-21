@@ -1,8 +1,9 @@
 import BackButton from "../components/BackButton";
 import { useEffect, useRef, useState } from "react";
-import { ScrollView } from "react-native";
+import { ScrollView, Alert } from "react-native";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
-import { CHAT_MESSAGES } from "../data";
+import { getMessages, sendMessage, getApiErrorMessage, getEvent, type ApiMessage } from "../api/client";
+import { EMPTY_USER, mapApiEvent } from "../native/Store";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -21,15 +22,19 @@ export default function EventRoomScreen({
   } = useStore();
   const EVENTS = store.events;
   const ME = store.user;
-  const event = EVENTS.find(e => e.id === eventId) || EVENTS[1];
-  const messages = store.messages[event.id] || CHAT_MESSAGES;
-  const setMessages = (update: (prev: typeof CHAT_MESSAGES) => typeof CHAT_MESSAGES) => setStore(p => ({
-    ...p,
-    messages: {
-      ...p.messages,
-      [event.id]: update(p.messages[event.id] || CHAT_MESSAGES)
-    }
-  }));
+  const event = EVENTS.find(e => e.id === eventId);
+  const [messages, setMessages] = useState<import('../types').ChatMessage[]>([]);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const mapMessage = (message: ApiMessage) => ({ id: message.id, text: message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}` } });
+  useEffect(() => {
+    if (!eventId) return;
+    let active = true;
+    const load = async () => { try { const result = await getMessages(eventId); if (active) { setMessages(result.items.map(mapMessage)); setError(''); } } catch (cause) { if (active) setError(getApiErrorMessage(cause, 'Mesajlar yüklenemedi.')); } };
+    void getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(() => {});
+    void load(); const timer = setInterval(load, 10000);
+    return () => { active = false; clearInterval(timer); };
+  }, [eventId]);
   const [input, setInput] = useState("");
   const messagesEnd = useRef<ScrollView>(null);
   useEffect(() => {
@@ -37,21 +42,17 @@ export default function EventRoomScreen({
       animated: true
     });
   }, [messages]);
-  const send = () => {
-    if (!input.trim()) return;
-    setMessages(prev => [...prev, {
-      id: `m-${Date.now()}`,
-      user: ME,
-      text: input.trim(),
-      time: new Date().toLocaleTimeString("tr-TR", {
-        hour: "2-digit",
-        minute: "2-digit"
-      })
-    }]);
-    setInput("");
+  const send = async () => {
+    if (!input.trim() || !eventId || sending) return;
+    setSending(true);
+    try { const saved = await sendMessage(eventId, input.trim()); setMessages(prev => [...prev.filter(m => m.id !== saved.id), mapMessage(saved)]); setInput(''); }
+    catch (cause) { Alert.alert('Mesaj gönderilemedi', getApiErrorMessage(cause)); }
+    finally { setSending(false); }
   };
+  if (!event) return <Box><Touch onPress={() => navigate('rooms')}>Geri</Touch><Label>{error || 'Etkinlik yükleniyor…'}</Label></Box>;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
+      {error && <Label>{error}</Label>}
 
       {/* Header */}
       <Box style={[[ui.relative, ui.pt14, ui.px5, ui.pb3, ui.flexShrink0]]}>
@@ -131,7 +132,7 @@ export default function EventRoomScreen({
       animated: true
     })} style={[[ui.flex1, ui.px5, ui.py4, ui.spaceY4]]}>
         {messages.map(msg => {
-        const isMe = msg.user.id === "me";
+        const isMe = msg.user.id === store.user.id;
         return <Box key={msg.id} style={[[ui.flex, ui.gap25, isMe ? [ui.flexRowReverse] : []]]}>
               {!isMe && <Picture uri={msg.user.avatar} accessibilityLabel={msg.user.name} style={[[ui.w7, ui.h7, ui.roundedFull, ui.flexShrink0, ui.mt05]]} />}
               <Box style={[[ui.maxW72, isMe ? [ui.itemsEnd] : [ui.itemsStart], ui.flex, ui.flexCol, ui.gap1]]}>
@@ -166,7 +167,7 @@ export default function EventRoomScreen({
         borderColor: "rgba(255,255,255,0.10)"
       }]} glass>
           <Field value={input} onChangeText={e => setInput(e)} onSubmitEditing={send} placeholder="Bir mesaj yaz..." style={[[ui.flex1, ui.bgTransparent, ui.textSm, ui.textWhite, ui.py15]]} />
-          <Touch onPress={send} disabled={!input.trim()} style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0], {}]} gradient={["#c8a44a", "#c09038"]}>
+          <Touch onPress={send} accessibilityLabel="Mesaj gönder" disabled={sending || !input.trim()} style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0], {}]} gradient={["#c8a44a", "#c09038"]}>
             <Label style={[[ui.text1a1200, ui.textSm]]}>↑</Label>
           </Touch>
         </Box>

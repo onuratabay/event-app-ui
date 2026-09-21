@@ -42,7 +42,7 @@ const storage = new Map()
 Module._load = function (id, parent, isMain) {
   if (id === "expo-location") return {
     getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: false }),
-    Accuracy: { Balanced: 3 }, geocodeAsync: async () => [], reverseGeocodeAsync: async () => [],
+    Accuracy: { Balanced: 3 }, geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => [],
   }
   if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker" }
   if (id === "expo-constants") return { __esModule: true, default: { expoConfig: { hostUri: "192.168.1.15:8081" } } }
@@ -169,6 +169,8 @@ async function tap(tree, label) {
   assert.equal(resolveApiUrl("https://api.example.com/", "192.168.1.15:8081", "ios"), "https://api.example.com")
   assert.equal(resolveApiUrl(undefined, undefined, "android"), "http://10.0.2.2:3000")
   const api = require("../src/api/client.ts")
+  const server = require("./mock-server.cjs")();
+  global.fetch = server.fetch;
   const originalFetch = global.fetch
   let registrationRequest
   global.fetch = async (url, options) => {
@@ -198,6 +200,7 @@ async function tap(tree, label) {
   await require("./check-session.cjs")({ mount, tap, act, text, storage })
   await require("./check-recommendations.cjs")({ mount, tap, act, text, storage })
   await require("./check-password-reset.cjs")({ mount, tap, act, text, storage })
+  await require("./check-server-state.cjs")({ mount, tap, act, text, storage })
   const names = [
     "Splash",
     "Welcome",
@@ -253,24 +256,29 @@ async function tap(tree, label) {
   await act(async () => { await new Promise(r=>setTimeout(r,220)) })
   const location=createEvent.root.findByType("TextInput")
   await act(async()=>location.props.onChangeText("Native Test Mekanı"))
+  await tap(createEvent,"Adresi bul")
+  await tap(createEvent,"39.9200")
   await tap(createEvent,"Devam Et")
   await tap(createEvent,"Devam Et")
   await tap(createEvent,"Devam Et")
+  const description = createEvent.root.findAllByType("TextInput")[0]
+  await act(async () => description.props.onChangeText("Sunucuya kaydedilen test etkinliği"))
   await tap(createEvent,"Devam Et")
   await tap(createEvent,"Herkese Açık")
   await act(async () => { await new Promise(r=>setTimeout(r,220)) })
   assert(text(createEvent.toJSON()).includes("Önizleme"))
   await tap(createEvent,"Etkinliği Oluştur")
-  const persisted=JSON.parse(storage.get("event-app:v1"))
-  assert.equal(persisted.events[0].location,"Native Test Mekanı")
-  assert.equal(persisted.events[0].privacy,"Herkese Açık")
-  assert.equal(persisted.events[0].duration,"1 saat")
+  assert.equal(server.events[0].id, 'created-on-server')
+  assert.equal(server.events[0].locationName, 'Native Test Mekanı')
+  assert.equal(server.events[0].visibilityId, 'public')
+  assert.equal(server.events[0].durationMinutes, 60)
+  assert.equal(storage.has('event-app:v1'), false, 'No domain data is written to device storage')
   const routes=fs.readdirSync(path.join(__dirname,"../app"))
   for(const screen of [...names.filter(n=>n!=="Splash"&&n!=="Onboarding").map(n=>n.replace(/[A-Z]/g,(c,i)=>(i?"-":"")+c.toLowerCase())),"onboarding-1","onboarding-2","onboarding-3"]){assert(routes.includes(screen+".tsx"),`Missing route ${screen}`)}
   await act(async () => createEvent.unmount())
   assert.equal(errors.length, 0, errors.join("\n"))
   console.log(
-    "PASS: 16 screens/states render as native hosts; search, join/cancel, persistence, all 10 creation steps and route coverage.",
+    "PASS: 16 screens/states render as native hosts; search, server-backed join/cancel, no local domain persistence, all 10 creation steps and route coverage.",
   )
 })()
   .catch((error) => {

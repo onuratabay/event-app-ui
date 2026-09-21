@@ -17,8 +17,8 @@ export default function RoomsScreen({
     data: store
   } = useStore();
   const EVENTS = store.events;
-  const activeEvents = EVENTS.filter(e => e.isActive && (e.host.id === "me" || e.participants.some(p => p.id === "me")));
-  const formingEvents = EVENTS.filter(e => !e.isActive);
+  const activeEvents = EVENTS.filter(e => e.isActive && (e.host.id === store.user.id || e.participants.some(p => p.id === store.user.id)));
+  const formingEvents = EVENTS.filter(e => !e.isActive && (e.host.id === store.user.id || e.joined || e.participants.some(p => p.id === store.user.id)));
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground />
 

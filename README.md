@@ -6,7 +6,7 @@ Expo SDK 57, React Native 0.86 and TypeScript application for iOS and Android.
 
 Use Node.js 22. Run `npm install`, then `npx expo start`. Open the QR code with Expo Go for SDK 57. The phone and computer should share a network. `npm run ios` and `npm run android` open an available simulator/emulator.
 
-The application uses Expo Go-compatible native modules. A development build is not required for the implemented features. The custom `eventapp://` scheme is registered in an installed application build; Expo Go uses Expo development URLs. Shared links to locally created events only resolve on devices with that event's data.
+The application uses Expo Go-compatible native modules. A development build is not required for the implemented features. The custom `eventapp://` scheme is registered in an installed application build; Expo Go uses Expo development URLs. Shared event links load the event from the backend, subject to the viewer's access rights.
 
 ## API connection during development
 
@@ -26,16 +26,20 @@ Run the `vibe-us` backend on port 3000 with working MySQL credentials. In Expo G
 
 - `npm run typecheck`
 - `npx expo install --check`
-- `npm test`: renders all 16 screen states against native host mocks; checks search, participation/cancellation, persisted state, every event-creation step and route coverage.
+- `npm test`: renders all 16 screen states against native host mocks; checks search, participation/cancellation, server-backed state, account isolation, every event-creation step and route coverage.
 - `npm run export:native`: generates both iOS and Android Metro/Hermes bundles.
 
 Host-mock tests and bundle export do not replace device testing. Camera permission prompts, keyboard/safe areas, gestures and visual fidelity still require verification in Expo Go on physical iOS/Android devices. This machine's Xcode license has not been accepted, so simulator verification was unavailable.
 
 ## Current data and behavior
 
-The original prototype's sample users, events, Turkish text and application flows are retained. Profile edits, interests, participation, saved events, created events and chat messages persist locally using AsyncStorage. Selected photos are copied into the app's document directory. Date/time selection, image picking, copying and system sharing use native APIs.
+Application data is owned by the Vibeus backend. Profile fields, photos, interests, favorites, participation, event creation, city/equipment/travel preferences and event chat use authenticated APIs and MySQL. StoreProvider is an in-memory view of server responses; it does not write domain data to AsyncStorage. Date/time inputs, open sheets and unfinished forms are transient UI state. Access/refresh tokens remain on the device to preserve login.
 
-Authentication and reference requests connect to the Vibeus API. Shared chat and push notifications remain prototype behavior. Remote event/avatar images require internet and have a fallback on failure.
+Event creation loads types/levels/visibility from API catalogs and requires an explicitly selected geocoding result. Selected photos are uploaded as data URIs; the app no longer copies them into its document directory. Messages are fetched on entering a room and every 10 seconds, with the latest 100 displayed. Only the owner or confirmed participants can access chat. Push notifications are not implemented; mock notifications and mock reference people are no longer shown.
+
+On authenticated startup, the old `event-app:v1` cache is migrated only if its user ID matches the server account. Its user/event/message records are archived server-side at `GET /users/me/legacy-data` so local-only prototype records are not silently lost or mistaken for real memberships. Map and recommendation preferences move to active server preferences before the old cache is removed. Another account's legacy cache is retained until that account logs in; failed transfers retain their source for retry. Sample `me` records are discarded. Legacy archives are historical records, not active events; old prototype events had no validated catalog IDs or coordinates.
+
+The backend must run migration `1790000000000-ServerOwnedUserData` before using this app version. It adds user city/bio fields, event location names, user preference storage and shared chat messages. Offline/API failures display errors; the app never falls back to sample accounts or events.
 
 EAS preview/production profiles are provided in `eas.json`. Set your own application identifiers in `app.json` before store distribution.
 
@@ -57,7 +61,7 @@ References: [Expo native maps](https://docs.expo.dev/versions/latest/sdk/map-vie
 
 ### Personal discovery filters
 
-“Sana göre” opens a draft filter sheet: date range, availability hours, city/venue search, search radius and multiple event types. Apply saves preferences on this device; closing discards draft changes. Native geocoding searches a city, neighbourhood or named venue; users select a result before applying. Ankara, İzmir and İstanbul shortcuts work without geocoding. A venue search filters by coordinates and chosen radius, not a venue ID (events do not currently store venue IDs).
+“Sana göre” opens a draft filter sheet: date range, availability hours, city/venue search, search radius and multiple event types. Apply saves preferences in the authenticated account; closing discards draft changes. Native geocoding searches a city, neighbourhood or named venue; users select a result before applying. Ankara, İzmir and İstanbul shortcuts work without geocoding. A venue search filters by coordinates and chosen radius, not a venue ID (events do not currently store venue IDs).
 
 Foreground location is used only with permission; the Nearby button requests it when needed. Existing permission enables a current city suggestion on entry/foreground. Denial or lookup failure leaves manual place selection available. Today/Tomorrow labels update on foreground and once per minute. The current hour chooses an Evening or Tomorrow Morning suggestion.
 
@@ -73,7 +77,7 @@ The bottom navigation uses Discover, Map, Create, Rooms and Profile. Search is n
 
 The sparkle button beside Search opens a preference and recommendations sheet. The device profile remembers equipment separately for Ankara/İzmir, preferred activities separately for Ankara/İzmir/Eymir/Çeşme, and the trip's explicit calendar dates. Existing profile interests prefill activity preferences. Eymir/Çeşme coordinates are resolved by native geocoding rather than invented venue locations.
 
-Recommendations currently use deterministic matching of live API events to the selected dates, location, activities and city-specific equipment, with equipment matches ranked first, then distance. Completed/cancelled/full events are excluded. Results are capped at five, but all counts and explanations reflect actual matches. This does not call an external LLM or invent events. Preferences persist locally as part of the current user's stored profile, not on the backend.
+Recommendations currently use deterministic matching of live API events to the selected dates, location, activities and city-specific equipment, with equipment matches ranked first, then distance. Completed/cancelled/full events are excluded. Results are capped at five, but all counts and explanations reflect actual matches. This does not call an external LLM or invent events. Preferences persist in the authenticated user's backend account.
 
 Header actions use 20px icons, 1.8px strokes and 44px touch targets. Bottom navigation glyphs use 24px icons with the same stroke weight.
 

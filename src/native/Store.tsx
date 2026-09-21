@@ -6,9 +6,9 @@ import React, {
   useRef,
   useState,
 } from "react"
-import { getEvents } from "../api/client"
+import { getEvents, getCurrentUser, getUserInterests, getPreferences, getMyEvents, hasSession, putPreference, archiveLegacyData } from "../api/client"
 import { ErrorNotice } from "../components/ErrorNotice"
-import { EVENTS, ME } from "../data"
+export const EMPTY_USER: AppUser = { id: '', name: '', avatar: '', city: '', bio: '', instagram: '', interests: [], score: 0, scores: { punctuality: 0, communication: 0, community: 0 }, stats: { attended: 0, connections: 0, organized: 0 } }
 import type { AppEvent, AppUser, ChatMessage } from "../types"
 interface Data {
   user: AppUser
@@ -16,15 +16,12 @@ interface Data {
   messages: Record<string, ChatMessage[]>
   onboarding: Record<string, string>
 }
-const initial: Data = { user: ME, events: EVENTS, messages: {}, onboarding: {} }
+const initial: Data = { user: EMPTY_USER, events: [], messages: {}, onboarding: {} }
 export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
   if (!remoteUser || typeof remoteUser !== "object") return user
-  const remote = remoteUser as { id?: string; firstName?: string; lastName?: string }
-  return {
-    ...user,
-    id: remote.id || user.id,
-    name: `${remote.firstName || ""} ${remote.lastName || ""}`.trim() || user.name,
-  }
+  const remote = remoteUser as import('../api/client').ApiUser
+  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0 }
+
 }
 export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"][number]): AppEvent {
   const host: AppUser = {
@@ -46,7 +43,7 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     categoryEmoji: "✨",
     date: event.date,
     time: event.startTime,
-    location: "",
+    location: event.locationName || "",
     latitude: event.latitude,
     longitude: event.longitude,
     distance: "",
@@ -65,6 +62,7 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     requirements: event.requirements ? [event.requirements] : [],
     isActive: event.status.enum === "started",
     isSaved: event.isFavorite,
+    joined: event.viewerParticipationStatus === "confirmed",
     duration: event.durationMinutes ? `${event.durationMinutes} dk` : undefined,
   }
 }
@@ -75,67 +73,53 @@ const Context = createContext<{
   resetSession: () => void
 } | null>(null)
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [data, setData] = useState(initial),
-    [ready, setReady] = useState(false),
-    [storageError, setStorageError] = useState<string | null>(null)
-  const queue = useRef(Promise.resolve())
+  const [data, setData] = useState(initial)
+  const [storageError, setStorageError] = useState<string | null>(null)
   const sessionGeneration = useRef(0)
+  // A callback retained by an unmounted screen cannot write into the next account's view.
+  const renderGeneration = sessionGeneration.current
+  const setAccountData: React.Dispatch<React.SetStateAction<Data>> = update => {
+    if (renderGeneration === sessionGeneration.current) setData(update)
+  }
   const refreshEvents = async () => {
     const generation = sessionGeneration.current
-    const remoteEvents = await getEvents()
-    if (generation !== sessionGeneration.current) return
-    if (remoteEvents.items.length > 0) {
-      setData((current) => ({
-        ...current,
-        events: remoteEvents.items.map(mapApiEvent),
-      }))
+    try {
+      const [remote, interests, preferences, events, mine] = await Promise.all([getCurrentUser(), getUserInterests(), getPreferences(), getEvents(), getMyEvents()])
+      if (generation !== sessionGeneration.current) return
+      // Migrate only preferences belonging to this authenticated account, never demo events or users.
+      const legacy = await AsyncStorage.getItem('event-app:v1')
+      let old: { user?: { id?: string; recommendationProfile?: import('../recommendations/model').RecommendationProfile }; events?: unknown[]; messages?: Record<string, unknown> } | null = null
+      try { old = legacy ? JSON.parse(legacy) : null } catch { /* A malformed legacy cache must not block server data. */ }
+      if (generation !== sessionGeneration.current) return
+      if (old?.user?.id === remote.id) {
+        await archiveLegacyData({ user: old.user, events: old.events || [], messages: old.messages || {} })
+        if (generation !== sessionGeneration.current) return
+        if (!preferences.recommendationProfile && old.user.recommendationProfile) {
+          await putPreference('recommendationProfile', old.user.recommendationProfile)
+          if (generation !== sessionGeneration.current) return
+          preferences.recommendationProfile = old.user.recommendationProfile
+        }
+        const oldFilters = await AsyncStorage.getItem('event-app:map-filters')
+        if (generation !== sessionGeneration.current) return
+        if (!preferences.mapFilters && oldFilters) await putPreference('mapFilters', JSON.parse(oldFilters))
+      }
+      if (generation !== sessionGeneration.current) return
+      if (!old?.user?.id || old.user.id === 'me' || old.user.id === remote.id) await AsyncStorage.multiRemove(['event-app:v1', 'event-app:map-filters'])
+      const all = [...new Map([...events.items, ...mine].map(event => [event.id, event])).values()]
+      setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), interests: interests.map(i => i.name), recommendationProfile: preferences.recommendationProfile }, events: all.map(mapApiEvent) }))
+      setStorageError(null)
+    } catch (error) {
+      if (generation === sessionGeneration.current) setStorageError('Hesap verileri sunucudan yüklenemedi. Bağlantını kontrol edip tekrar dene.')
+      throw error
     }
   }
-  useEffect(() => {
-    AsyncStorage.getItem("event-app:v1")
-      .then((value) => {
-        if (value) {
-          const saved = JSON.parse(value)
-          if (typeof saved.user?.id === "string" && Array.isArray(saved.events))
-            setData({
-              ...initial,
-              ...saved,
-              events: saved.events.map((event: Partial<AppEvent>) => ({
-                ...event,
-                host: event.host || ME,
-                participants: Array.isArray(event.participants)
-                  ? event.participants
-                  : [],
-              })),
-            })
-        }
-      })
-      .then(() => {
-        void refreshEvents().catch(() => {})
-      })
-      .catch(() => setStorageError("Uygulama örnek verilerle açılacak."))
-      .finally(() => setReady(true))
-  }, [])
-  useEffect(() => {
-    if (ready)
-      queue.current = queue.current
-        .then(() => AsyncStorage.setItem("event-app:v1", JSON.stringify(data)))
-        .catch(() => setStorageError("Değişiklikler bu oturumda kullanılabilir."))
-  }, [data, ready])
-  if (!ready) return null
-  return (
-    <Context.Provider value={{ data, setData, refreshEvents, resetSession: () => { sessionGeneration.current++; setData(initial) } }}>
-      {storageError && (
-        <ErrorNotice
-          title="Yerel kayıt kullanılamadı"
-          message={storageError}
-          onDismiss={() => setStorageError(null)}
-        />
-      )}
-      {children}
-    </Context.Provider>
-  )
+  useEffect(() => { void hasSession().then(active => { if (active) return refreshEvents() }).catch(() => {}) }, [])
+  return <Context.Provider value={{ data, setData: setAccountData, refreshEvents, resetSession: () => { sessionGeneration.current++; setData(initial); setStorageError(null) } }}>
+    {storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}
+    {children}
+  </Context.Provider>
 }
+
 export function useStore() {
   const store = useContext(Context)
   if (!store) throw new Error("StoreProvider missing")
