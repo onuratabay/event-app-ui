@@ -28,5 +28,6 @@ module.exports = function () {
     } else result = { items: [], total: 0 }
     return { ok: true, status: 200, json: async () => result }
   }
-  return { fetch, events, preferences, requests, user }
+  const saveMessage = text => { const message = { id: String(messages.length), text, user, createdAt: new Date().toISOString() }; messages.push(message); return message }
+  return { fetch, events, preferences, requests, user, saveMessage }
 }

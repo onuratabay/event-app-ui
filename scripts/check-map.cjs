@@ -64,6 +64,12 @@ module.exports = async function checkMap({ mount, tap, act, text, storage }) {
   const sent = new URL(capturedUrl)
   assert.equal(sent.searchParams.get("dateFrom"), "21/09/2026")
   assert.equal(sent.searchParams.get("interestId"), "padel")
+  assert.equal(sent.searchParams.get("includePhotos"), "false")
+  let limitedCalls = 0
+  global.fetch = async () => { limitedCalls++; return { ok: true, json: async () => ({ items: [points[0]], total: 10000 }) } }
+  const limited = await api.getMapEvents()
+  assert.equal(limitedCalls, 5)
+  assert.equal(limited.truncated, true)
   let savedFilters
   global.fetch = async (url, options) => {
     if (url.endsWith('/users/me/preferences/mapFilters')) savedFilters = JSON.parse(options.body).value

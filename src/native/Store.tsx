@@ -1,8 +1,10 @@
+import { startSocket, stopSocket, onSocket, watchEvent } from '../services/socket'
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import React, {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react"
@@ -60,8 +62,10 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     coverImage: event.coverPhoto || "",
     description: event.description,
     requirements: event.requirements ? [event.requirements] : [],
+    status: event.status.enum,
     isActive: event.status.enum === "started",
     isSaved: event.isFavorite,
+    waitlisted: event.viewerParticipationStatus === 'waitlisted',
     joined: event.viewerParticipationStatus === "confirmed",
     duration: event.durationMinutes ? `${event.durationMinutes} dk` : undefined,
   }
@@ -70,11 +74,16 @@ const Context = createContext<{
   data: Data
   setData: React.Dispatch<React.SetStateAction<Data>>
   refreshEvents: () => Promise<void>
+  loadMoreEvents: () => Promise<void>
+  moreEvents: boolean
   resetSession: () => void
 } | null>(null)
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState(initial)
   const [storageError, setStorageError] = useState<string | null>(null)
+  const [moreEvents, setMoreEvents] = useState(false)
+  const page = useRef(1)
+  const loadingMore = useRef(false)
   const sessionGeneration = useRef(0)
   // A callback retained by an unmounted screen cannot write into the next account's view.
   const renderGeneration = sessionGeneration.current
@@ -105,16 +114,47 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       if (generation !== sessionGeneration.current) return
       if (!old?.user?.id || old.user.id === 'me' || old.user.id === remote.id) await AsyncStorage.multiRemove(['event-app:v1', 'event-app:map-filters'])
-      const all = [...new Map([...events.items, ...mine].map(event => [event.id, event])).values()]
+      const all = [...new Map([...events.items, ...mine.items].map(event => [event.id, event])).values()]
       setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), interests: interests.map(i => i.name), recommendationProfile: preferences.recommendationProfile }, events: all.map(mapApiEvent) }))
+      page.current = 1; setMoreEvents(mine.hasMore)
       setStorageError(null)
     } catch (error) {
       if (generation === sessionGeneration.current) setStorageError('Hesap verileri sunucudan yüklenemedi. Bağlantını kontrol edip tekrar dene.')
       throw error
     }
   }
+  const loadMoreEvents = async () => {
+    if (loadingMore.current || !moreEvents) return
+    loadingMore.current = true
+    const generation = sessionGeneration.current
+    try {
+      const result = await getMyEvents(page.current + 1)
+      if (generation !== sessionGeneration.current) return
+      page.current++; setMoreEvents(result.hasMore)
+      setData(current => ({ ...current, events: [...new Map([...current.events, ...result.items.map(mapApiEvent)].map(event => [event.id, event])).values()] }))
+    } catch { setStorageError('Sonraki etkinlikler yüklenemedi.') }
+    finally { loadingMore.current = false }
+  }
   useEffect(() => { void hasSession().then(active => { if (active) return refreshEvents() }).catch(() => {}) }, [])
-  return <Context.Provider value={{ data, setData: setAccountData, refreshEvents, resetSession: () => { sessionGeneration.current++; setData(initial); setStorageError(null) } }}>
+  useLayoutEffect(() => { if (data.user.id) startSocket(data.user.id); return stopSocket }, [data.user.id])
+  const watchKey = data.events.map(e => e.id).sort().slice(0, 100).join(',')
+  useEffect(() => { const releases = watchKey.split(',').filter(Boolean).map(watchEvent); return () => releases.forEach(release => release()) }, [watchKey, data.user.id])
+  useEffect(() => {
+    const patch = (name: string) => onSocket(name, delta => setData(current => ({ ...current, events: current.events.map(event => event.id !== delta.eventId ? event : {
+      ...event,
+      ...(name === 'event:participant_left' ? { participants: event.participants.filter(person => person.id !== delta.userId) } : {}),
+      ...(name === 'event:participant_joined' && delta.participant ? { participants: [...event.participants.filter(person => person.id !== delta.userId), { ...EMPTY_USER, id: delta.userId, name: `${delta.participant.firstName} ${delta.participant.lastName}` }] } : {}),
+      ...(name === 'event:waitlist_joined' && delta.userId === current.user.id ? { waitlisted: true } : {}),
+      ...(typeof delta.participantCount === 'number' ? { currentParticipants: delta.participantCount } : {}),
+      ...(typeof delta.joined === 'boolean' ? { joined: delta.joined } : {}),
+      ...(delta.status ? { status: delta.status, isActive: delta.status === 'started' } : {}),
+      ...(delta.userId === current.user.id && name === 'event:participant_joined' ? { joined: true, waitlisted: false } : {}),
+      ...(delta.userId === current.user.id && name === 'event:participant_left' ? { joined: false, waitlisted: false } : {}),
+    }) })))
+    const cleanups = ['event:waitlist_joined', 'event:summary', 'event:participant_count_changed', 'event:participant_joined', 'event:participant_left', 'event:started', 'event:cancelled', 'event:ended', 'event:updated'].map(patch)
+    return () => cleanups.forEach(cleanup => cleanup())
+  }, [])
+  return <Context.Provider value={{ data, loadMoreEvents, moreEvents, setData: setAccountData, refreshEvents, resetSession: () => { stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null) } }}>
     {storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}
     {children}
   </Context.Provider>

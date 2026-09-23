@@ -1,0 +1,36 @@
+module.exports = async ({ storage }) => {
+  const assert = require('node:assert/strict')
+  const fake = require('./mock-socket.cjs')
+  const manager = require('../src/services/socket.ts')
+  const api = require('../src/api/client.ts')
+  const sent = []
+  fake.setAction(async (name, payload) => { sent.push({ name, payload }); return [] })
+  storage.set('event-app:access-token', 'test-token')
+  const before = fake.instances.length
+  manager.startSocket('user'); manager.startSocket('user')
+  assert.equal(fake.instances.length, before + 1, 'One connection per account, not one per consumer')
+  const connection = fake.instances.at(-1)
+  let received = 0
+  const cleanup = manager.onSocket('chat:message_created', () => received++)
+  connection.receive('chat:message_created', {})
+  cleanup(); connection.receive('chat:message_created', {})
+  assert.equal(received, 1, 'Unmounted listeners must not receive messages')
+  const releases = Array.from({ length: 500 }, (_, index) => manager.watchEvent(String(index)))
+  await new Promise(resolve => setTimeout(resolve, 60))
+  assert.equal(sent.filter(row => row.name === 'event:watch_batch').length, 1, '500 watches must be batched, not 500 DB trips')
+  releases.forEach(release => release())
+  await new Promise(resolve => setTimeout(resolve, 60))
+  assert.equal(sent.filter(row => row.name === 'event:unwatch_batch').length, 1)
+  const requests = JSON.stringify(api.apiRequestCounts)
+  const sendCount = sent.length
+  await new Promise(resolve => setTimeout(resolve, 100))
+  assert.equal(JSON.stringify(api.apiRequestCounts), requests, 'Idle does not create REST requests')
+  assert.equal(sent.length, sendCount, 'Idle does not query through the socket either')
+  manager.stopSocket()
+  assert.equal(connection.connected, false)
+  assert.equal(connection.eventNames().length, 0)
+  assert.equal(connection.any.size, 0)
+  await assert.rejects(manager.socketAction('chat:message', {}), /bağlantı/)
+  storage.clear()
+  console.log('PASS: singleton socket, batched subscriptions, listener cleanup, idle request silence, logout disconnect and no offline mutation buffering.')
+}

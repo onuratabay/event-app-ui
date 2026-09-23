@@ -44,14 +44,17 @@ export interface AppEvent {
   coverImage: string
   description: string
   requirements: string[]
+  status?: string
   isActive: boolean
   isSaved: boolean
+  waitlisted?: boolean
   joined?: boolean
   duration?: string
   privacy?: string
 }
 
 export interface ChatMessage {
+  createdAt?: string
   id: string
   user: AppUser
   text: string

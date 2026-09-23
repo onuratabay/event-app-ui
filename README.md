@@ -35,7 +35,7 @@ Host-mock tests and bundle export do not replace device testing. Camera permissi
 
 Application data is owned by the Vibeus backend. Profile fields, photos, interests, favorites, participation, event creation, city/equipment/travel preferences and event chat use authenticated APIs and MySQL. StoreProvider is an in-memory view of server responses; it does not write domain data to AsyncStorage. Date/time inputs, open sheets and unfinished forms are transient UI state. Access/refresh tokens remain on the device to preserve login.
 
-Event creation loads types/levels/visibility from API catalogs and requires an explicitly selected geocoding result. Selected photos are uploaded as data URIs; the app no longer copies them into its document directory. Messages are fetched on entering a room and every 10 seconds, with the latest 100 displayed. Only the owner or confirmed participants can access chat. Push notifications are not implemented; mock notifications and mock reference people are no longer shown.
+Event creation loads types/levels/visibility from API catalogs and requires an explicitly selected geocoding result. Selected photos are uploaded as data URIs; the app no longer copies them into its document directory. Messages are fetched on entering a room and using the explicit refresh button, with the latest 100 displayed. No periodic chat requests run in the background. Only the owner or confirmed participants can access chat. Push notifications are not implemented; mock notifications and mock reference people are no longer shown.
 
 On authenticated startup, the old `event-app:v1` cache is migrated only if its user ID matches the server account. Its user/event/message records are archived server-side at `GET /users/me/legacy-data` so local-only prototype records are not silently lost or mistaken for real memberships. Map and recommendation preferences move to active server preferences before the old cache is removed. Another account's legacy cache is retained until that account logs in; failed transfers retain their source for retry. Sample `me` records are discarded. Legacy archives are historical records, not active events; old prototype events had no validated catalog IDs or coordinates.
 
@@ -88,3 +88,13 @@ Login links to `/forgot-password`. The recovery screen requests a reset email, a
 Actual email delivery requires the backend SMTP environment variables described in `vibe-us/docs/security-and-mail.md`; the current local backend has no SMTP configuration. Recovery tests mock the transport and do not send email.
 
 A shared 44px back control is available throughout login, recovery, registration, application status, approval and interest selection. History-aware navigation returns to the actual preceding screen with a fallback for direct entry. The initial welcome/splash screens have no preceding step. Map, Profile and Rooms provide an explicit return to Discover; detail screens retain history-based back actions.
+
+Map/recommendation queries request `includePhotos=false`, so MySQL never reads cover BLOBs for those calls. A query fetches at most 500 events; the map warns when filters need narrowing. Covers appear when opening full event detail. Traffic regression tests verify the image-free query, page budget and absence of chat polling.
+
+### Gerçek zamanlı veri
+
+Tek bağlantı `src/services/socket.ts` içindedir. Veri polling'i yoktur: sohbet, referans, katılımcı sayısı ve durum değişiklikleri küçük socket yamalarıyla işlenir. REST ilk yükleme/geçmiş/CRUD için korunur. Kişisel etkinlik listelerinin devamı Odalar ekranından yüklenir. Mesaj geçmişi 30 kayıtla başlar; eski mesajlar imleçle sayfalanır.
+
+`[API REQUEST]` geliştirme logları method, endpoint, süre, yaklaşık JSON boyutu ve istek sayısını gösterir. Socket logları içerik veya token yazmaz. Uygulama arka planda bağlantıyı keser; yeniden bağlantıda yalnızca ilgili küçük özetler/açık oda eşitlenir. JWT yenilemesi ve WebSocket heartbeat'leri normal güvenlik/bağlantı trafiğidir.
+
+Backend'deki `docs/realtime-traffic.md` olay sözleşmesini, ölçüm sınırlarını ve gereken `1790020000000-RealtimeEventActivity` migration'ını açıklar. Migration bu çalışma sırasında canlı DB'ye uygulanmadı. Yeni backend ile kullanmadan önce uygulanmalıdır. Mevcut backend/Expo servisleri kapalı bırakıldı.

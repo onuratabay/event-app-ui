@@ -1,3 +1,4 @@
+import { useEventDeltas, patchApiEvent } from '../services/event-deltas'
 import { useEffect, useRef, useState } from "react"
 import { ActivityIndicator, type ScrollView, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native"
 import * as Location from "expo-location"
@@ -15,6 +16,7 @@ export default function RecommendationsSheet({ onClose, navigate }: { onClose: (
   const { data, setData } = useStore()
   const [profile, setProfile] = useState(() => data.user.recommendationProfile || initialProfile(data.user.interests))
   const [results, setResults] = useState<ReturnType<typeof recommend> | null>(null)
+  useEventDeltas(results?.map(row => row.event.id) || [], patch => setResults(previous => previous?.map(row => ({ ...row, event: patchApiEvent(row.event, patch) })).filter(row => !['cancelled', 'closed'].includes(row.event.status.enum) && row.event.confirmedParticipantCount < row.event.maxParticipants) || null))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [partial, setPartial] = useState(false)

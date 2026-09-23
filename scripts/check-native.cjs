@@ -40,6 +40,8 @@ class Value {
 const anim = () => ({ start() {}, stop() {} })
 const storage = new Map()
 Module._load = function (id, parent, isMain) {
+  if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]) }
+  if (id === "socket.io-client") return require("./mock-socket.cjs")
   if (id === "expo-location") return {
     getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: false }),
     Accuracy: { Balanced: 3 }, geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => [],
@@ -276,6 +278,7 @@ async function tap(tree, label) {
   const routes=fs.readdirSync(path.join(__dirname,"../app"))
   for(const screen of [...names.filter(n=>n!=="Splash"&&n!=="Onboarding").map(n=>n.replace(/[A-Z]/g,(c,i)=>(i?"-":"")+c.toLowerCase())),"onboarding-1","onboarding-2","onboarding-3"]){assert(routes.includes(screen+".tsx"),`Missing route ${screen}`)}
   await act(async () => createEvent.unmount())
+  await require("./check-socket.cjs")({ storage })
   assert.equal(errors.length, 0, errors.join("\n"))
   console.log(
     "PASS: 16 screens/states render as native hosts; search, server-backed join/cancel, no local domain persistence, all 10 creation steps and route coverage.",

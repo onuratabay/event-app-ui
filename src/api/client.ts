@@ -3,7 +3,7 @@ import { Platform } from "react-native"
 import Constants from "expo-constants"
 import { resolveApiUrl } from "./config"
 
-const API_URL = resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, __DEV__ ? Constants.expoConfig?.hostUri : undefined, Platform.OS)
+export const API_URL = resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, __DEV__ ? Constants.expoConfig?.hostUri : undefined, Platform.OS)
 class ApiConnectionError extends Error {}
 const ACCESS_TOKEN_KEY = "event-app:access-token"
 const REFRESH_TOKEN_KEY = "event-app:refresh-token"
@@ -59,7 +59,11 @@ export function getApiErrorMessage(error: unknown, fallback = "Lütfen tekrar de
   }
 }
 
+export const apiRequestCounts: Record<string, number> = {}
 async function request<T>(path: string, options: RequestInit = {}, retryAuth = true): Promise<T> {
+  const started = Date.now()
+  const counterKey = `${options.method || 'GET'} ${path.split('?')[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ':id')}`
+  if (__DEV__) apiRequestCounts[counterKey] = (apiRequestCounts[counterKey] || 0) + 1
   const accessToken = await AsyncStorage.getItem(ACCESS_TOKEN_KEY)
   const controller = new AbortController()
   const cancel = () => controller.abort()
@@ -80,6 +84,7 @@ async function request<T>(path: string, options: RequestInit = {}, retryAuth = t
   })
 
   } catch {
+    if (__DEV__) console.debug('[API REQUEST]', { endpoint: counterKey, durationMs: Date.now() - started, responseBytes: 0, status: 'network_error', count: apiRequestCounts[counterKey] })
     throw new ApiConnectionError(controller.signal.aborted
       ? "Sunucu zamanında yanıt vermedi. Biraz sonra tekrar dene."
       : "Sunucuya bağlanılamadı. İnternet bağlantını kontrol et ve tekrar dene.")
@@ -93,11 +98,14 @@ async function request<T>(path: string, options: RequestInit = {}, retryAuth = t
   }
   if (!response.ok) {
     const body = await response.text()
+    if (__DEV__) console.debug('[API REQUEST]', { endpoint: counterKey, durationMs: Date.now() - started, responseBytes: unescape(encodeURIComponent(body)).length, status: response.status, count: apiRequestCounts[counterKey] })
     throw new Error(`API ${response.status}: ${body || response.statusText}`)
   }
 
   if (response.status === 204) return undefined as T
-  return (await response.json()) as T
+  const result = await response.json() as T
+  if (__DEV__) console.debug('[API REQUEST]', { endpoint: counterKey, durationMs: Date.now() - started, responseBytes: unescape(encodeURIComponent(JSON.stringify(result))).length, count: apiRequestCounts[counterKey] })
+  return result
 }
 
 let sessionVersion = 0
@@ -162,7 +170,7 @@ export async function getEvents() {
 }
 
 export async function getMapEvents(signal?: AbortSignal, filters: { dateFrom?: string; dateTo?: string; interestIds?: string[]; minLat?: number; maxLat?: number; minLng?: number; maxLng?: number } = {}) {
-  const params = new URLSearchParams()
+  const params = new URLSearchParams({ includePhotos: "false" })
   if (filters.dateFrom) params.set("dateFrom", filters.dateFrom)
   if (filters.dateTo) params.set("dateTo", filters.dateTo)
   for (const id of filters.interestIds || []) params.append("interestId", id)
@@ -173,7 +181,7 @@ export async function getMapEvents(signal?: AbortSignal, filters: { dateFrom?: s
   const query = encoded ? `&${encoded}` : ""
   const events = new Map<string, ApiEvent>()
   let total = 0
-  for (let page = 1; page <= 20; page++) {
+  for (let page = 1; page <= 5; page++) {
     const result = await request<EventListResponse>(`/events?page=${page}&limit=100${query}`, { signal })
     total = result.total
     for (const event of result.items) events.set(event.id, event)
@@ -204,7 +212,14 @@ export async function matchReferenceContacts(phones: string[]) {
   }
   return [...new Map(items.map(item => [item.id, item])).values()]
 }
-export function getReferenceRequests() { return request<{ items: ReferenceRequest[] }>("/references/requests") }
+let referenceLoad: { version: number; promise: Promise<{ items: ReferenceRequest[] }> } | undefined
+export function getReferenceRequests() {
+  if (referenceLoad?.version === sessionVersion) return referenceLoad.promise
+  const version = sessionVersion
+  const promise = request<{ items: ReferenceRequest[] }>("/references/requests").finally(() => { if (referenceLoad?.promise === promise) referenceLoad = undefined })
+  referenceLoad = { version, promise }
+  return promise
+}
 export function sendReferenceRequest(recipientId: string) {
   return request<ReferenceRequest>("/references/requests", { method: "POST", body: JSON.stringify({ recipientId }) })
 }
@@ -247,19 +262,19 @@ export const favoriteEvent = (id: string, saved: boolean) => request(`/events/${
 export const participate = (id: string, join: boolean) => request<ApiEvent>(`/events/${id}/${join ? 'join' : 'leave'}`, { method: 'POST' })
 export const getEnums = (group: string) => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`)
 export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value) })
-export interface ApiMessage { id: string; text: string; createdAt: string; user: { id: string; firstName: string; lastName: string } }
-export const getMessages = (id: string) => request<{ items: ApiMessage[] }>(`/events/${id}/messages`)
+export interface ApiMessage { kind?: 'message' | 'announcement'; id: string; text: string; createdAt: string; user: { id: string; firstName: string; lastName: string } }
+export const getMessages = (id: string, signal?: AbortSignal, cursor?: string) => request<{ items: ApiMessage[]; nextCursor?: string | null }>(`/events/${id}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}&limit=30` : '?limit=30'}`, { signal })
 export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text }) })
-export async function getMyEvents() {
-  const lists = await Promise.all(['mine', 'participating', 'favorites'].map(async kind => {
-    const items: ApiEvent[] = []
-    for (let page = 1; ; page++) {
-      const result = await request<EventListResponse>(`/events/${kind}?page=${page}&limit=100`)
-      items.push(...result.items)
-      if (!result.items.length || page * 100 >= result.total) return items
-    }
-  }))
-  return lists.flat()
+export async function getMyEvents(page = 1) {
+  const lists = await Promise.all(['mine', 'participating', 'favorites'].map(kind => request<EventListResponse>(`/events/${kind}?page=${page}&limit=30`)))
+  return { items: lists.flatMap(list => list.items), hasMore: lists.some(list => page * 30 < list.total) }
 }
 
 export const archiveLegacyData = (value: Record<string, unknown>) => request('/users/me/legacy-data', { method: 'PUT', body: JSON.stringify({ value }) })
+
+export async function getSocketToken(renew = false) {
+  if (renew && !await refreshSession()) return null
+  return AsyncStorage.getItem(ACCESS_TOKEN_KEY)
+}
+
+export const getEventActivity = (id: string) => request<{ waitlist: Array<{ userId: string }>; checkins: Array<{ userId: string }> }>(`/events/${id}/activity`)

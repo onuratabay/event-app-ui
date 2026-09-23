@@ -3,6 +3,11 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   const originalFetch = global.fetch
   const server = require('./mock-server.cjs')()
   global.fetch = server.fetch
+  const sockets = require('./mock-socket.cjs')
+  sockets.setAction(async (name, payload) => {
+    if (name === 'chat:message') return server.saveMessage(payload.text)
+    return {}
+  })
   storage.clear(); storage.set('event-app:access-token', 'valid-session')
   const legacy = { user: { id: server.user.id, recommendationProfile: { equipmentByCity: { izmir: ['racket'] }, activitiesByPlace: {}, trip: { placeId: 'izmir', datePreset: 'week', dateFrom: '', dateTo: '' } } }, events: [] }
   storage.set('event-app:v1', JSON.stringify(legacy))
@@ -33,7 +38,20 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   assert.equal(tree.root.findAllByType(HeartButton)[0].props.saved, false)
   await act(async () => tree.unmount())
   global.fetch = online
+  const nativeInterval = global.setInterval
+  let intervals = 0
+  global.setInterval = (...args) => { intervals++; return nativeInterval(...args) }
   tree = await mount('EventRoom', { eventId: server.events[0].id })
+  global.setInterval = nativeInterval
+  assert.equal(intervals, 0, 'Chat must not schedule background polling')
+  const beforeRefresh = server.requests.filter(r => r.path.endsWith('/messages') && r.method === 'GET').length
+  const refresh = tree.root.findAllByType('Pressable').find(n => n.props.accessibilityLabel === 'Mesajları yenile')
+  await act(async () => refresh.props.onPress())
+  assert.equal(server.requests.filter(r => r.path.endsWith('/messages') && r.method === 'GET').length, beforeRefresh + 1)
+  const beforePush = server.requests.length
+  await act(async () => sockets.instances.at(-1).receive('chat:message_created', { eventId: server.events[0].id, message: { id: 'push', text: 'Canlı mesaj', createdAt: new Date().toISOString(), user: server.user } }))
+  assert(text(tree.toJSON()).includes('Canlı mesaj'))
+  assert.equal(server.requests.length, beforePush, 'A socket message must not refetch REST history')
   const input = tree.root.findByType('TextInput')
   await act(async () => input.props.onChangeText('Sunucuda saklanan mesaj'))
   const send = tree.root.findAllByType('Pressable').find(n => n.props.accessibilityLabel === 'Mesaj gönder')

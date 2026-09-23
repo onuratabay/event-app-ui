@@ -1,5 +1,5 @@
+import { onSocket } from '../services/socket'
 import { useEffect, useState } from "react"
-import { AppState } from "react-native"
 import { getApiErrorMessage, getReferenceRequests, hasSession, respondToReference, type ReferenceRequest } from "../api/client"
 import { Box, Label, Touch } from "../native/UI"
 import { ui } from "../theme/styles"
@@ -17,9 +17,10 @@ export function ReferenceNotifications() {
       catch (cause) { if (active) setError(getApiErrorMessage(cause, "Referans bildirimleri yüklenemedi.")) }
     }
     void refresh()
-    const listener = AppState.addEventListener("change", state => { if (state === "active") void refresh() })
-    const timer = setInterval(() => { if (AppState.currentState === "active") void refresh() }, 15000)
-    return () => { active = false; listener.remove(); clearInterval(timer) }
+    const created = onSocket('reference:created', row => setRequests(current => [row, ...current.filter(r => r.id !== row.id)].slice(0, 100)))
+    const updated = onSocket('reference:updated', patch => setRequests(current => current.map(row => row.id === patch.id ? { ...row, status: patch.status } : row)))
+    const sync = onSocket('sync:required', () => { void refresh() })
+    return () => { active = false; created(); updated(); sync() }
   }, [])
   const respond = async (request: ReferenceRequest, decision: "approved" | "declined") => {
     if (busy) return

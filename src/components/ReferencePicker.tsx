@@ -1,5 +1,6 @@
+import { onSocket } from '../services/socket'
 import { useEffect, useState } from "react"
-import { AppState, Linking, Platform } from "react-native"
+import { Linking, Platform } from "react-native"
 import * as Contacts from "expo-contacts/legacy"
 import { getApiErrorMessage, getReferenceRequests, matchReferenceContacts, sendReferenceRequest, type ReferenceMember, type ReferenceRequest } from "../api/client"
 import { Box, Label, Touch } from "../native/UI"
@@ -19,9 +20,10 @@ export function ReferencePicker() {
     let active = true
     const refresh = async () => { try { const result = await getReferenceRequests(); if (active) setRequests(result.items.filter(r => r.direction === "outgoing")) } catch {} }
     void refresh()
-    const listener = AppState.addEventListener("change", state => { if (state === "active") void refresh() })
-    const timer = setInterval(() => { if (AppState.currentState === "active") void refresh() }, 15000)
-    return () => { active = false; listener.remove(); clearInterval(timer) }
+    const created = onSocket('reference:created', row => { if (row.direction !== 'outgoing') return; setRequests(current => [row, ...current.filter(r => r.id !== row.id)].slice(0, 100)) })
+    const updated = onSocket('reference:updated', patch => setRequests(current => current.map(row => row.id === patch.id ? { ...row, status: patch.status } : row)))
+    const sync = onSocket('sync:required', () => { void refresh() })
+    return () => { active = false; created(); updated(); sync() }
   }, [])
   const loadContacts = async (edit = false) => {
     if (busy) return

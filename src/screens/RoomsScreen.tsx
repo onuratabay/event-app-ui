@@ -14,11 +14,11 @@ export default function RoomsScreen({
   navigate
 }: Props) {
   const {
-    data: store
+    data: store, loadMoreEvents, moreEvents
   } = useStore();
   const EVENTS = store.events;
   const activeEvents = EVENTS.filter(e => e.isActive && (e.host.id === store.user.id || e.participants.some(p => p.id === store.user.id)));
-  const formingEvents = EVENTS.filter(e => !e.isActive && (e.host.id === store.user.id || e.joined || e.participants.some(p => p.id === store.user.id)));
+  const formingEvents = EVENTS.filter(e => !['closed', 'cancelled'].includes(e.status || '') && !e.isActive && (e.host.id === store.user.id || e.joined || e.participants.some(p => p.id === store.user.id)));
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground />
 
@@ -141,6 +141,7 @@ export default function RoomsScreen({
                 <Polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </Vector>} title="Etkinlik Sonrası Puanlama" subtitle="Birlikte geçirdiğin anları değerlendir, güveni birlikte inşa et." />
         </Box>
+        {moreEvents && <Touch onPress={() => void loadMoreEvents()} style={{ padding: 16 }}><Label>Daha fazla etkinlik yükle</Label></Touch>}
       </Scroll>
 
       <BottomNav active="rooms" navigate={navigate} />

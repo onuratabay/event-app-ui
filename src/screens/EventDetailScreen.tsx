@@ -1,3 +1,4 @@
+import { socketAction } from '../services/socket';
 import { participate, getApiErrorMessage, getEvent } from "../api/client";
 import { mapApiEvent } from "../native/Store";
 import { useEffect, useState } from "react";
@@ -67,7 +68,7 @@ export default function EventDetailScreen({
           {/* Status */}
           <Box style={[[ui.fixed, ui.bottom4, ui.left5]]}>
             <Box style={[[ui.px3, ui.py15, ui.roundedFull, ui.textXs, ui.fontMedium, isActive ? [ui.bgEmerald50025, ui.border, ui.borderEmerald40040, ui.textEmerald300] : [ui.bgAmber50020, ui.border, ui.borderAmber40030, ui.textAmber300]]]}>
-              {isActive ? "● Etkinlik Aktif" : "◌ Katılımcı Bekleniyor"}
+              {event.status === "cancelled" ? "Etkinlik iptal edildi" : event.status === "closed" ? "Etkinlik sona erdi" : isActive ? "● Etkinlik Aktif" : "◌ Katılımcı Bekleniyor"}
             </Box>
           </Box>
         </Box>
@@ -336,10 +337,17 @@ export default function EventDetailScreen({
             </Label>
           </Box>}
 
-        {!joined ? <Touch disabled={joining || event.currentParticipants >= event.maxParticipants} onPress={() => setJoined(true)} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase], {
+        {!joined ? <Touch disabled={joining || ['cancelled', 'closed'].includes(event.status || '')} onPress={async () => {
+          if (event.waitlisted) return setJoined(false);
+          if (event.currentParticipants < event.maxParticipants) return setJoined(true);
+          setJoining(true);
+          try { await socketAction('event:waitlist_join', { eventId: event.id }); Alert.alert('Yedek listedesin', 'Organizatör kabul ettiğinde katılımın güncellenecek.'); }
+          catch (cause) { Alert.alert('Yedek liste', cause instanceof Error ? cause.message : 'Tekrar dene.'); }
+          finally { setJoining(false); }
+        }} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase], {
         color: "#1a1200"
       }]} gradient={["#c8a44a", "#c09038"]} enter>
-            Katıl
+            {event.waitlisted ? 'Yedek listeden ayrıl' : event.currentParticipants >= event.maxParticipants ? 'Yedek listeye katıl' : 'Katıl'}
           </Touch> : <Touch disabled={joining || event.host.id === store.user.id} onPress={() => setJoined(false)} style={[[ui.wFull, ui.py35, ui.rounded2xl, ui.textSm, ui.textWhite35, ui.border, ui.borderWhite8, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.gap2]]}>
             <CheckIcon size={14} strokeWidth={2} style={[[ui.textWhite35]]} />
             {event.host.id === store.user.id ? "Bu etkinliği sen düzenliyorsun" : "Katıldın · İptal Et"}

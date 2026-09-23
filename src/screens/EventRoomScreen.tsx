@@ -1,8 +1,11 @@
+import { useScreenActive } from '../native/useScreenActive';
+import { EventActivity } from '../components/EventActivity';
+import { onSocket, retainEvent, socketAction } from '../services/socket';
 import BackButton from "../components/BackButton";
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, Alert } from "react-native";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
-import { getMessages, sendMessage, getApiErrorMessage, getEvent, type ApiMessage } from "../api/client";
+import { getMessages, getApiErrorMessage, getEvent, type ApiMessage } from "../api/client";
 import { EMPTY_USER, mapApiEvent } from "../native/Store";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
@@ -20,21 +23,48 @@ export default function EventRoomScreen({
     data: store,
     setData: setStore
   } = useStore();
+  const screenActive = useScreenActive();
   const EVENTS = store.events;
   const ME = store.user;
   const event = EVENTS.find(e => e.id === eventId);
   const [messages, setMessages] = useState<import('../types').ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const mapMessage = (message: ApiMessage) => ({ id: message.id, text: message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}` } });
+  const [reload, setReload] = useState(0);
+  const [typing, setTyping] = useState(false);
+  const typingExpiry = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTyping = useRef(0);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const mapMessage = (message: ApiMessage) => ({ id: message.id, createdAt: message.createdAt, text: message.kind === 'announcement' ? `📣 ${message.text}` : message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}` } });
   useEffect(() => {
-    if (!eventId) return;
+    if (!eventId || !ME.id || !screenActive) return;
     let active = true;
-    const load = async () => { try { const result = await getMessages(eventId); if (active) { setMessages(result.items.map(mapMessage)); setError(''); } } catch (cause) { if (active) setError(getApiErrorMessage(cause, 'Mesajlar yüklenemedi.')); } };
-    void getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(() => {});
-    void load(); const timer = setInterval(load, 10000);
-    return () => { active = false; clearInterval(timer); };
-  }, [eventId]);
+    const controller = new AbortController();
+    setLoading(true);
+    const load = async () => {
+      try { const result = await getMessages(eventId, controller.signal); if (active) { setMessages(prev => [...new Map([...result.items.map(mapMessage), ...prev].map(m => [m.id, m])).values()]); setCursor(result.nextCursor || null); setError(''); } }
+      catch (cause) { if (active) setError(getApiErrorMessage(cause, 'Mesajlar yüklenemedi.')); }
+      finally { if (active) setLoading(false); }
+    };
+    if (!event) void getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(() => {});
+    const release = retainEvent(eventId);
+    const unsubscribe = onSocket('chat:message_created', payload => {
+      if (payload.eventId !== eventId) return;
+      setMessages(prev => [...prev.filter(m => m.id !== payload.message.id), mapMessage(payload.message)]);
+      void socketAction('chat:read', { eventId, messageId: payload.message.id }).catch(() => {});
+    });
+    const announced = onSocket('event:announcement', payload => { if (payload.eventId === eventId) setMessages(prev => [...prev.filter(m => m.id !== payload.message.id), mapMessage(payload.message)]); });
+    const typingListener = onSocket('chat:typing', payload => {
+      if (payload.eventId !== eventId || payload.userId === ME.id) return;
+      setTyping(payload.typing === true);
+      if (typingExpiry.current) clearTimeout(typingExpiry.current);
+      typingExpiry.current = setTimeout(() => setTyping(false), 3000);
+    });
+    const sync = onSocket('sync:required', () => { void load(); });
+    void load();
+    return () => { active = false; controller.abort(); release(); unsubscribe(); announced(); sync(); typingListener(); if (typingExpiry.current) clearTimeout(typingExpiry.current); };
+  }, [eventId, reload, ME.id, screenActive]);
   const [input, setInput] = useState("");
   const messagesEnd = useRef<ScrollView>(null);
   useEffect(() => {
@@ -45,7 +75,7 @@ export default function EventRoomScreen({
   const send = async () => {
     if (!input.trim() || !eventId || sending) return;
     setSending(true);
-    try { const saved = await sendMessage(eventId, input.trim()); setMessages(prev => [...prev.filter(m => m.id !== saved.id), mapMessage(saved)]); setInput(''); }
+    try { const saved = await socketAction<ApiMessage>('chat:message', { eventId, text: input.trim() }); setMessages(prev => [...prev.filter(m => m.id !== saved.id), mapMessage(saved)]); setInput(''); void socketAction('chat:typing', { eventId, typing: false }).catch(() => {}); }
     catch (cause) { Alert.alert('Mesaj gönderilemedi', getApiErrorMessage(cause)); }
     finally { setSending(false); }
   };
@@ -53,6 +83,7 @@ export default function EventRoomScreen({
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
       {error && <Label>{error}</Label>}
+      <Touch accessibilityLabel="Mesajları yenile" disabled={loading || sending} onPress={() => setReload(value => value + 1)} style={{ padding: 12, marginTop: 8, backgroundColor: '#242336' }}><Label>{loading ? 'Mesajlar yükleniyor…' : 'Mesajları eşitle'}</Label></Touch>
 
       {/* Header */}
       <Box style={[[ui.relative, ui.pt14, ui.px5, ui.pb3, ui.flexShrink0]]}>
@@ -103,6 +134,7 @@ export default function EventRoomScreen({
         </Scroll>
       </Box>
 
+      <EventActivity event={event} userId={ME.id} active={screenActive} />
       {/* Participants row */}
       <Box style={[[ui.px5, ui.pb4, ui.flexShrink0]]}>
         <GlassCard style={[[ui.p3]]}>
@@ -127,11 +159,17 @@ export default function EventRoomScreen({
       backgroundColor: "rgba(255,255,255,0.06)"
     }]} />
 
+      {cursor && <Touch disabled={loading} onPress={async () => {
+        if (!eventId) return;
+        setLoading(true);
+        try { const result = await getMessages(eventId, undefined, cursor); setMessages(prev => [...new Map([...result.items.map(mapMessage), ...prev].map(m => [m.id, m])).values()]); setCursor(result.nextCursor || null); }
+        catch (cause) { setError(getApiErrorMessage(cause)); } finally { setLoading(false); }
+      }}><Label>Önceki mesajları yükle</Label></Touch>}
       {/* Chat */}
       <Scroll ref={messagesEnd} onContentSizeChange={() => messagesEnd.current?.scrollToEnd({
       animated: true
     })} style={[[ui.flex1, ui.px5, ui.py4, ui.spaceY4]]}>
-        {messages.map(msg => {
+        {messages.slice().sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || "") || a.id.localeCompare(b.id)).map(msg => {
         const isMe = msg.user.id === store.user.id;
         return <Box key={msg.id} style={[[ui.flex, ui.gap25, isMe ? [ui.flexRowReverse] : []]]}>
               {!isMe && <Picture uri={msg.user.avatar} accessibilityLabel={msg.user.name} style={[[ui.w7, ui.h7, ui.roundedFull, ui.flexShrink0, ui.mt05]]} />}
@@ -159,6 +197,7 @@ export default function EventRoomScreen({
       })}
       </Scroll>
 
+      {typing && <Label>Bir katılımcı yazıyor…</Label>}
       {/* Input */}
       <Box style={[[ui.px5, ui.pb8, ui.pt3, ui.flexShrink0]]}>
         <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.rounded2xl, ui.px3, ui.py2], {
@@ -166,7 +205,10 @@ export default function EventRoomScreen({
         borderWidth: 1,
         borderColor: "rgba(255,255,255,0.10)"
       }]} glass>
-          <Field value={input} onChangeText={e => setInput(e)} onSubmitEditing={send} placeholder="Bir mesaj yaz..." style={[[ui.flex1, ui.bgTransparent, ui.textSm, ui.textWhite, ui.py15]]} />
+          <Field value={input} onChangeText={value => {
+            setInput(value);
+            if (eventId && Date.now() - lastTyping.current > 1000) { lastTyping.current = Date.now(); void socketAction('chat:typing', { eventId, typing: Boolean(value) }).catch(() => {}); }
+          }} onSubmitEditing={send} placeholder="Bir mesaj yaz..." style={[[ui.flex1, ui.bgTransparent, ui.textSm, ui.textWhite, ui.py15]]} />
           <Touch onPress={send} accessibilityLabel="Mesaj gönder" disabled={sending || !input.trim()} style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0], {}]} gradient={["#c8a44a", "#c09038"]}>
             <Label style={[[ui.text1a1200, ui.textSm]]}>↑</Label>
           </Touch>

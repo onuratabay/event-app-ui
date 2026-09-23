@@ -1,3 +1,5 @@
+import { useScreenActive } from '../native/useScreenActive'
+import { useEventDeltas, patchApiEvent } from '../services/event-deltas'
 import BackButton from "../components/BackButton"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, AppState, StyleSheet, View } from "react-native"
@@ -17,6 +19,9 @@ import type { NavigateFn } from "../types"
 
 const MODE_LABELS = { heat: "Yoğunluk", cluster: "Etkinlik kümeleri", event: "Etkinlikler" }
 export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
+  const screenActive = useScreenActive()
+  const loadedQuery = useRef('')
+  const activeRef = useRef(screenActive); activeRef.current = screenActive
   const map = useRef<MapView>(null)
   const { setData } = useStore()
   const [events, setEvents] = useState<ApiEvent[]>([])
@@ -44,18 +49,25 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   const [ready, setReady] = useState(false)
   const [panelHeight, setPanelHeight] = useState(190)
   const [selected, setSelected] = useState<ApiEvent[]>([])
+  useEventDeltas(screenActive ? events.map(event => event.id) : [], patch => {
+    setEvents(previous => previous.map(event => patchApiEvent(event, patch)))
+    setSelected(previous => previous.map(event => patchApiEvent(event, patch)))
+  })
   const centered = useRef(false)
   useEffect(() => {
+    const signature = `${queryKey}:${retry}`
+    if (!screenActive || loadedQuery.current === signature) return
     const controller = new AbortController()
     setLoading(true); setError(null)
     getMapEvents(controller.signal, JSON.parse(queryKey)).then(result => {
       if (controller.signal.aborted) return
+      loadedQuery.current = signature
       setEvents(result.items); setTruncated(result.truncated)
     }).catch(cause => {
       if (!controller.signal.aborted) setError(getApiErrorMessage(cause, "Etkinlikler yüklenemedi. Tekrar dene."))
     }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [retry, queryKey])
+  }, [retry, queryKey, screenActive])
   useEffect(() => {
     const controller = new AbortController()
     getMapInterests(controller.signal).then(items => { if (!controller.signal.aborted && Array.isArray(items)) setInterests(items) }).catch(() => {})
@@ -68,8 +80,8 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
       if (!saved || interacted.current || !alive.current) return
       try { const value = saved; if (!filterError(value)) setFilters(value) } catch { /* Ignore obsolete preferences. */ }
     }).catch(() => { if (alive.current) setLocationError("Kayıtlı filtrelerin yüklenemedi. Bağlantını kontrol et.") })
-    const timer = setInterval(() => setNow(new Date()), 60000)
-    const subscription = AppState.addEventListener("change", state => { if (state === "active") { setNow(new Date()); void locate(false) } })
+    const timer = setInterval(() => { if (activeRef.current) setNow(new Date()) }, 60000)
+    const subscription = AppState.addEventListener("change", state => { if (state === "active" && activeRef.current) { setNow(new Date()); void locate(false) } })
     void locate(false)
     return () => { alive.current = false; clearInterval(timer); subscription.remove() }
   }, [])
@@ -214,7 +226,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
           : error ? <Touch onPress={() => setRetry(value => value + 1)}><Label style={s.error}>{error} Yenile ↻</Label></Touch>
           : !filtered.length ? <Label style={s.muted}>Bu filtrelerde konumu kayıtlı etkinlik bulunamadı.</Label>
           : <Label style={s.muted}>{mode === "heat" ? "Yakınlaşarak kümeleri keşfet. Renkler bu görünümdeki göreli yoğunluğu gösterir." : mode === "cluster" ? "Sayılar etkinlik adedidir. Kümeye dokunarak yakınlaş." : "Noktaya dokunarak etkinliği seç. Aynı konumdakiler sayılı gösterilir."}</Label>}
-        {truncated && <Label style={s.error}>İlk 2.000 etkinlik gösteriliyor; yoğunluk tüm veriyi kapsamıyor.</Label>}
+        {truncated && <Label style={s.error}>En fazla 500 etkinlik gösteriliyor; tüm sonuçlar için tarih veya bölgeyi daralt.</Label>}
         {selected.length > 0 && <Scroll style={s.selection}>{selected.map(event => <Touch key={event.id} onPress={() => openEvent(event)} style={s.eventRow}><Box style={{ flex: 1 }}><Label style={s.panelTitle}>{event.interest.name}</Label><Label style={s.muted}>{event.date} · {event.startTime}</Label></Box><Label style={s.gold}>Detay →</Label></Touch>)}</Scroll>}
       </Box>
     </Box>
