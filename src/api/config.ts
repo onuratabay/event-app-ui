@@ -7,5 +7,5 @@ export function resolveApiUrl(configured: string | undefined, hostUri: string | 
       if (host) return `http://${host}:3000`
     } catch { /* Fall back to the simulator address for malformed manifests. */ }
   }
-  return "http://localhost:3000"
+  return platform === "android" ? "http://10.0.2.2:3000" : "http://localhost:3000"
 }
