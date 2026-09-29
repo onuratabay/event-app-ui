@@ -39,9 +39,10 @@ import Svg, { type SvgProps } from "react-native-svg"
 export type NativeStyle = ViewStyle & TextStyle
 export type NativeStyleProp = StyleProp<NativeStyle>
 const Typography = createContext<TextStyle>({
-  color: "#f0ede8",
+  color: "#f8fafc",
   fontFamily: "Outfit",
-  fontSize: 14,
+  fontSize: 15,
+  lineHeight: 21,
 })
 const textKeys = [
   "color",
@@ -151,7 +152,15 @@ function Paint({
       ]}
     >
       {glass && (
-        <BlurView intensity={22} tint="dark" style={StyleSheet.absoluteFill} />
+        <>
+          <BlurView intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
+          <LinearGradient
+            colors={["rgba(255,255,255,.16)", "rgba(255,255,255,.04)", "rgba(124,112,240,.06)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </>
       )}
       {gradient && (
         <LinearGradient
@@ -233,6 +242,7 @@ export interface TouchProps extends LayoutProps {
   disabled?: boolean
   rippleColor?: string
   haptic?: boolean
+  disabledOpacity?: number
 }
 let lastHapticAt = 0
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
@@ -248,6 +258,7 @@ export function Touch({
   enter,
   rippleColor,
   haptic = true,
+  disabledOpacity = 0.35,
   ...props
 }: TouchProps) {
   const inherited = useContext(Typography),
@@ -289,14 +300,14 @@ export function Touch({
         onPressOut={() => animate(1)}
         android_ripple={rippleColor ? { color: rippleColor } : undefined}
         style={[
-          { minHeight: 24, justifyContent: "center" },
+          { minHeight: view.height ? undefined : 44, justifyContent: "center" },
           view,
           {
             transform: [
               ...(Array.isArray(view.transform) ? view.transform : []),
               { scale },
             ],
-            opacity: disabled ? 0.35 : view.opacity,
+            opacity: disabled ? disabledOpacity : view.opacity,
           },
         ]}
       >
@@ -368,6 +379,7 @@ export function Scroll({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
       >
         <Content style={view}>{children}</Content>
       </ScrollView>
@@ -524,8 +536,8 @@ export function Field({
             : props.keyboardType
       }
       autoCapitalize={mode === "email" ? "none" : props.autoCapitalize}
-      placeholderTextColor="rgba(255,255,255,.3)"
-      selectionColor="#c8a44a"
+      placeholderTextColor="rgba(226,232,240,.48)"
+      selectionColor="#e1bd65"
     />
   )
 }

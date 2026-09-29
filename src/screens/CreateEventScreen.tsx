@@ -4,18 +4,19 @@ import { createEvent, getMapInterests, getEnums, getApiErrorMessage } from "../a
 import { mapApiEvent } from "../native/Store";
 import { useEffect, useState } from "react";
 import { AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
-import { ArrowLeftIcon, CameraIcon, GlobeIcon, ImageIcon, LockIcon, SearchIcon, UserPlusIcon } from "../components/Icons";
+import { CameraIcon, GlobeIcon, ImageIcon, LockIcon, SearchIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
+import TopNavBar from "../components/TopNavBar";
 function StickyBar({
   children
 }: {
   children: React.ReactNode;
 }) {
-  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40], {}]} gradient={["#06060e", "transparent"]} gradientDirection="up">
+  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40], {}]} gradient={["#101827", "transparent"]} gradientDirection="up">
       {children}
     </Box>;
 }
@@ -28,9 +29,11 @@ function GoldBtn({
   disabled?: boolean;
   children: React.ReactNode;
 }) {
-  return <Touch onPress={onPress} disabled={disabled} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
-    color: "#1a1200"
-  }]} gradient={["#c8a44a", "#dab96e", "#c09038"]}>
+  return <Touch onPress={onPress} disabled={disabled} disabledOpacity={1} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
+    color: disabled ? "rgba(226,232,240,.62)" : "#1a1200",
+    borderWidth: 1,
+    borderColor: disabled ? "rgba(148,163,184,.22)" : "rgba(242,216,137,.5)",
+  }]} gradient={disabled ? ["#202b3d", "#182235", "#151f30"] : ["#c8a44a", "#dab96e", "#c09038"]}>
       {children}
     </Touch>;
 }
@@ -124,14 +127,11 @@ export default function CreateEventScreen({
   const suggestions = REQUIREMENTS_SUGGESTIONS[data.activity] || REQUIREMENTS_SUGGESTIONS.default;
   if (step === 9) {
     // Preview
-    return <Scroll style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.pb20]]}>
+    return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
+      <TopNavBar navigate={navigate} fallback="discover" onBack={back} title="Etkinlik Önizlemesi" />
+      <Scroll style={[[ui.flex1, ui.pb20], { paddingTop: 80 }]}>
         <AtmoBackground variant="gold" />
         <Box style={[[ui.relative, ui.pt14, ui.px5]]}>
-          <Box style={[[ui.flex, ui.itemsCenter, ui.gap3, ui.mb6]]}>
-            <Touch onPress={back} style={[[ui.textWhite40, ui.textSm]]}>
-              ← Düzenle
-            </Touch>
-          </Box>
           <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb6]]}>
             Önizleme
           </Label>
@@ -177,10 +177,12 @@ export default function CreateEventScreen({
             Etkinliği Oluştur 🚀
           </Touch>
         </Box>
-      </Scroll>;
+      </Scroll>
+    </Box>;
   }
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
+      <TopNavBar navigate={navigate} fallback="discover" onBack={back} title="Etkinlik Oluştur" subtitle={`${step + 1}/10`} />
 
       {/* Progress bar */}
       <Box style={[[ui.fixed, ui.top0, ui.left0, ui.right0, ui.h05, ui.bgWhite8]]}>
@@ -189,14 +191,8 @@ export default function CreateEventScreen({
       }]} gradient={["#c8a44a", "#dab96e"]} gradientDirection="right" />
       </Box>
 
-      <Scroll style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull, ui.pb28]]}>
+      <Scroll style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull, ui.pb28], { paddingTop: 80 }]}>
         <Box style={[[ui.pt14, ui.px5]]}>
-          <Box style={[[ui.flex, ui.itemsCenter, ui.gap3, ui.mb8]]}>
-            <Touch onPress={back} style={[[ui.w8, ui.h8, ui.glass, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite50]]} glass>
-              <ArrowLeftIcon size={16} strokeWidth={1.5} />
-            </Touch>
-            <Label style={[[ui.textXs, ui.textWhite30]]}>{step + 1}/10</Label>
-          </Box>
 
           {/* Step 0 - Activity */}
           {step === 0 && <Box style={[[]]} enter>

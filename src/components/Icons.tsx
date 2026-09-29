@@ -7,7 +7,29 @@ interface IconProps {
 }
 const defaults = {
   size: 20,
-  strokeWidth: 1.5,
+  strokeWidth: 1.75,
+}
+export function HeartIcon({
+  size = defaults.size,
+  style,
+  strokeWidth = defaults.strokeWidth,
+  filled = false,
+}: IconProps & { filled?: boolean }) {
+  return (
+    <Vector
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={[style]}
+    >
+      <Path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+    </Vector>
+  )
 }
 export function InstagramIcon({
   size = defaults.size,

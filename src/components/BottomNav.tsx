@@ -35,7 +35,7 @@ export default function BottomNav({
             }
             style={[
               s.item,
-              active === screen && { backgroundColor: "rgba(255,255,255,.1)" },
+              active === screen && { backgroundColor: "rgba(225,189,101,.12)", borderColor: "rgba(225,189,101,.20)" },
               screen === "create-event" && {
                 backgroundColor: "#c8a44a",
                 flex: 0,
@@ -45,14 +45,14 @@ export default function BottomNav({
           >
             {screen === "map" ? (
               <LocationIcon
-                size={24}
-                strokeWidth={1.8}
+                size={22}
+                strokeWidth={1.75}
                 style={{ color: active === screen ? "#c8a44a" : "#777582" }}
               />
             ) : screen === "rooms" ? (
               <MessageIcon
-                size={24}
-                strokeWidth={1.8}
+                size={22}
+                strokeWidth={1.75}
                 style={{ color: active === screen ? "#c8a44a" : "#777582" }}
               />
             ) : screen === "profile" ? (
@@ -61,13 +61,14 @@ export default function BottomNav({
                 style={{ width: 24, height: 24, borderRadius: 12 }}
               />
             ) : (
-              screen === "create-event" ? <PlusIcon size={24} strokeWidth={1.8} style={{ color: "#1a1200" }} /> : <CompassIcon size={24} strokeWidth={1.8} style={{ color: active === screen ? "#c8a44a" : "#777582" }} />
+              screen === "create-event" ? <PlusIcon size={22} strokeWidth={1.75} style={{ color: "#1a1200" }} /> : <CompassIcon size={22} strokeWidth={1.75} style={{ color: active === screen ? "#e1bd65" : "#aeb8ca" }} />
             )}
             {screen !== "create-event" && (
               <Label
                 style={{
-                  fontSize: 10,
-                  color: active === screen ? "#c8a44a" : "#777582",
+                  fontSize: 11,
+                  fontFamily: "Outfit-Medium",
+                  color: active === screen ? "#e1bd65" : "#aeb8ca",
                 }}
               >
                 {label}
@@ -95,9 +96,14 @@ const s = StyleSheet.create({
     gap: 4,
     padding: 8,
     borderRadius: 28,
-    backgroundColor: "rgba(6,6,18,.9)",
+    backgroundColor: "rgba(15,23,42,.82)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.1)",
+    borderColor: "rgba(255,255,255,.18)",
+    shadowColor: "#000",
+    shadowOpacity: 0.28,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 14,
   },
   item: {
     flex: 1,
@@ -106,5 +112,7 @@ const s = StyleSheet.create({
     gap: 4,
     borderRadius: 16,
     minHeight: 48,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
 })

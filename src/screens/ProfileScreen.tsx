@@ -1,11 +1,12 @@
-import BackButton from "../components/BackButton";
-import { Alert } from "react-native";
+import TopNavBar from "../components/TopNavBar";
+import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
 import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getReferenceRequests, getApiErrorMessage, type ReferenceRequest } from "../api/client";
 import BottomNav from "../components/BottomNav";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
+import { InstagramIcon } from "../components/Icons";
 
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
@@ -103,41 +104,36 @@ export default function ProfileScreen({
   const myEvents = EVENTS.filter(e => e.host.id === store.user.id || e.participants.some(p => p.id === store.user.id));
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
+      <TopNavBar
+        navigate={navigate}
+        fallback="discover"
+        onBack={() => navigate("discover")}
+        backLabel="Geri"
+        title="Profil"
+        right={isOwn ? <Box style={profileNavStyles.actions}>
+          <Touch
+            accessibilityLabel="Ayarları aç"
+            onPress={() => Alert.alert("Ayarlar", "Bu bölüm yakında kullanıma açılacak.")}
+            style={profileNavStyles.action}
+          >
+            <Label style={profileNavStyles.actionLabel}>Ayarlar</Label>
+          </Touch>
+          <Touch
+            onPress={() => void signOut()}
+            disabled={loggingOut}
+            accessibilityLabel="Çıkış yap"
+            style={[profileNavStyles.action, profileNavStyles.signOut]}
+          >
+            <Label style={[profileNavStyles.actionLabel, profileNavStyles.signOutLabel, loggingOut && profileNavStyles.disabled]}>
+              {loggingOut ? "Bekle" : "Çıkış"}
+            </Label>
+          </Touch>
+        </Box> : undefined}
+      />
 
-      <Scroll style={[[ui.relative, ui.hFull, ui.pb28]]}>
+      <Scroll style={[[ui.relative, ui.hFull, ui.pb28], { paddingTop: 80 }]}>
         {/* Header */}
         <Box style={[[ui.pt14, ui.px5, ui.pb5]]}>
-          <BackButton navigate={navigate} fallback="discover" onPress={() => navigate("discover")} />
-          <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb6]]}>
-            <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>
-              Profil
-            </Label>
-            {isOwn && <Box style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>
-                <Touch style={[[ui.textXs, ui.px3, ui.py15, ui.glass, ui.roundedXl, ui.textWhite25]]} glass>
-                  ⚙ Ayarlar
-                </Touch>
-                <Touch
-                  onPress={() => void signOut()}
-                  disabled={loggingOut}
-                  accessibilityLabel="Çıkış yap"
-                  style={[[ui.textXs, ui.px3, ui.py15, ui.glass, ui.roundedXl, {
-                    color: loggingOut ? "rgba(255,255,255,.25)" : "#c8a44a",
-                  }]]}
-                  glass
-                >
-                  {loggingOut ? "Çıkılıyor..." : "Çıkış"}
-                </Touch>
-                <Label style={[[ui.fixed, ui.Top2, ui.Right2, ui.px15, ui.py05, ui.roundedFull, ui.text8px, ui.fontBold, ui.trackingWide], {
-              backgroundColor: "rgba(124,112,240,0.18)",
-              borderWidth: 1,
-              borderColor: "rgba(124,112,240,0.3)",
-              color: "rgba(178,174,248,0.9)"
-            }]}>
-                  Yakında
-                </Label>
-              </Box>}
-          </Box>
-
           {/* Profile header */}
           <Box style={[[ui.flex, ui.itemsStart, ui.gap4]]}>
             <Touch style={[[ui.relative]]} onPress={async () => {
@@ -165,19 +161,21 @@ export default function ProfileScreen({
                   {user.city}
                 </Label>}
 
-              {/* Instagram */}
-              <Touch onPress={() => openExternal(`https://instagram.com/${user.instagram}`)} style={[[ui.mt15, ui.flex, ui.itemsCenter, ui.gap15, ui.textXs], {
-              color: "rgba(200,164,74,0.8)"
-            }]}>
-                <Label>📸</Label>
-                <Label>@{user.instagram}</Label>
-                <Label style={[[ui.opacity60]]}>↗</Label>
-                {isOwn && <Label style={[[ui.textWhite20, ui.text9px, ui.ml1]]}>
-                    🔒
-                  </Label>}
-              </Touch>
             </Box>
           </Box>
+
+          {/* Instagram */}
+          <Touch
+            accessibilityRole="link"
+            accessibilityLabel={`Instagram profilini aç: @${user.instagram.replace(/^@/, "")}`}
+            onPress={() => openExternal(`https://instagram.com/${user.instagram.replace(/^@/, "")}`)}
+            style={profileInstagramStyles.link}
+          >
+            <InstagramIcon size={19} strokeWidth={1.8} style={profileInstagramStyles.icon} />
+            <Label style={profileInstagramStyles.handle}>@{user.instagram.replace(/^@/, "")}</Label>
+            <Label style={profileInstagramStyles.external}>↗</Label>
+            {isOwn ? <Label style={profileInstagramStyles.private}>Özel</Label> : null}
+          </Touch>
 
           {/* Bio */}
           <Box style={[[ui.mt4]]}>
@@ -347,3 +345,57 @@ export default function ProfileScreen({
       <BottomNav active="profile" navigate={navigate} />
     </Box>;
 }
+
+const profileNavStyles = StyleSheet.create({
+  actions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  action: {
+    width: 64,
+    height: 44,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  signOut: {},
+  actionLabel: {
+    color: "#f8fafc",
+    fontFamily: "Outfit-SemiBold",
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  signOutLabel: { color: "#e4c875" },
+  disabled: { opacity: 0.45 },
+});
+
+const profileInstagramStyles = StyleSheet.create({
+  link: {
+    alignSelf: "flex-start",
+    minHeight: 44,
+    marginTop: 14,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 14,
+    backgroundColor: "rgba(200,164,74,.09)",
+    borderWidth: 1,
+    borderColor: "rgba(200,164,74,.22)",
+  },
+  icon: { color: "#e4c875" },
+  handle: {
+    color: "#f2d889",
+    fontFamily: "Outfit-SemiBold",
+    fontSize: 14,
+    lineHeight: 19,
+    textDecorationLine: "underline",
+  },
+  external: { color: "rgba(242,216,137,.72)", fontSize: 14 },
+  private: {
+    marginLeft: 2,
+    color: "rgba(226,232,240,.48)",
+    fontFamily: "Outfit-Medium",
+    fontSize: 10,
+    lineHeight: 14,
+    textTransform: "uppercase",
+    letterSpacing: .7,
+  },
+});

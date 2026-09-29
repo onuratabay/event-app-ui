@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { AccessibilityInfo, Animated, Easing, ScrollView, StyleSheet } from "react-native"
-import BackButton from "../components/BackButton"
+import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground } from "../components/GlassUI"
 import { ErrorNotice } from "../components/ErrorNotice"
 import { Field, Label, Touch, Box } from "../native/UI"
@@ -50,16 +50,17 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
 
   if (checkingSession) return null
   return (
-    <Box style={{ flex: 1, backgroundColor: "#06060e" }}>
+    <Box style={{ flex: 1, backgroundColor: "#101827" }}>
       <AtmoBackground variant="violet" />
+      <TopNavBar navigate={navigate} fallback="welcome" title="Giriş" />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.page}
-        keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-      <BackButton navigate={navigate} fallback="welcome" />
-      <Animated.View style={[styles.form, { opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
+        keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
+      <Animated.View style={[styles.form, { opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}> 
         <Box style={styles.heading}>
-        <Label style={styles.eyebrow}>VIBEUS</Label>
-        <Label style={[[ui.fontDisplay, ui.text4xl, ui.textWhite]]}>Tekrar hoş geldin.</Label>
-        <Label style={[[ui.textWhite50, ui.leadingRelaxed]]}>Vibeus hesabınla devam et.</Label>
+        <Label style={styles.eyebrow}>TOPLULUĞA GİRİŞ</Label>
+        <Label style={styles.heroTitle}>Tekrar hoş geldin.</Label>
+        <Label style={[[ui.textWhite50, ui.leadingRelaxed]]}>Hesabınla devam et.</Label>
         </Box>
         {errorMessage && (
           <ErrorNotice
@@ -123,6 +124,7 @@ const styles = StyleSheet.create({
   page: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 28, paddingTop: 88, paddingBottom: 36 },
   form: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 10 },
   heading: { gap: 12, marginBottom: 28 },
+  heroTitle: { color: "#f8fafc", fontFamily: "Fraunces", fontSize: 36, lineHeight: 45, letterSpacing: -0.7, paddingVertical: 2 },
   eyebrow: { color: "#c8a44a", fontSize: 11, letterSpacing: 4, fontFamily: "Outfit-Medium", marginBottom: 8 },
   fieldLabel: { color: "#b6b0ae", fontSize: 12, fontFamily: "Outfit-Medium", marginTop: 6, marginLeft: 4 },
   input: { minHeight: 56, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(200,164,74,0.18)", backgroundColor: "rgba(255,255,255,0.045)", color: "#f0ede8", fontSize: 15 },

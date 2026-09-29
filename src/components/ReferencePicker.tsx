@@ -59,7 +59,7 @@ export function ReferencePicker() {
   }
   const statusText = (status: ReferenceRequest["status"]) => status === "approved" ? "Referans onaylandı" : status === "declined" ? "İstek kabul edilmedi" : "Onay bekleniyor"
   return <Box style={{ gap: 12, marginTop: 14 }}>
-    <Label style={[[ui.textXs, ui.textWhite45]]}>Paylaşmayı seçtiğin kişiler arasındaki Vibeus üyelerinden referans iste. Eşleştirme için yalnızca telefon numaraları kullanılır.</Label>
+    <Label style={[[ui.textXs, ui.textWhite45]]}>Paylaşmayı seçtiğin kişiler arasındaki topluluk üyelerinden referans iste. Eşleştirme için yalnızca telefon numaraları kullanılır.</Label>
     <Touch onPress={() => void loadContacts(limited)} disabled={busy} style={[[ui.py3, ui.roundedXl, ui.textSm, ui.textWhite80], { backgroundColor: "rgba(200,164,74,0.08)", borderWidth: 1, borderColor: "rgba(200,164,74,0.2)" }]}>
       {busy ? "Üyeler aranıyor…" : loaded ? limited ? "Paylaşılan kişileri değiştir" : "Rehberi yenile" : "Rehberden üye bul"}
     </Touch>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { KeyboardAvoidingView, Platform, StyleSheet } from "react-native"
-import BackButton from "../components/BackButton"
+import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground, GlassInput } from "../components/GlassUI"
 import { forgotPassword, getApiErrorMessage, resetPassword } from "../api/client"
 import { Box, Label, Scroll, Touch } from "../native/UI"
@@ -52,8 +52,8 @@ export default function ForgotPasswordScreen({ navigate }: { navigate: NavigateF
   }
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <AtmoBackground variant="violet" />
+    <TopNavBar navigate={navigate} fallback="login" onBack={goBack} title="Şifre İşlemleri" />
     <Scroll style={s.page} keyboardShouldPersistTaps="handled">
-      <BackButton navigate={navigate} fallback="login" onPress={goBack} />
       <Label style={s.eyebrow}>HESABINA YENİDEN ULAŞ</Label>
       <Label style={s.title}>{stage === "done" ? "Şifren yenilendi." : stage === "reset" ? "Yeni şifreni belirle." : "Şifreni mi unuttun?"}</Label>
       <Label style={s.hint}>{stage === "done" ? "Artık yeni şifrenle giriş yapabilirsin." : stage === "email" ? "Hesabına bağlı e-posta adresini yaz. Şifreni yenilemen için bir sıfırlama kodu isteyelim." : requested ? "Bu adres kayıtlıysa sıfırlama e-postası gönderilir. Gelen kutunu ve spam klasörünü kontrol et. Kod 8 saat geçerlidir." : "E-postandaki kodu veya sıfırlama bağlantısını yapıştır."}</Label>
@@ -70,4 +70,4 @@ export default function ForgotPasswordScreen({ navigate }: { navigate: NavigateF
     </Scroll>
   </KeyboardAvoidingView>
 }
-const s = StyleSheet.create({ root: { flex: 1, backgroundColor: "#06060e" }, page: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 36, gap: 18 }, eyebrow: { color: "#c8a44a", fontSize: 10, letterSpacing: 2 }, title: { fontFamily: "Fraunces", fontSize: 34, color: "#f0ede8" }, hint: { color: "#c0bacd", fontSize: 14, lineHeight: 22 }, error: { color: "#f3aa91", fontSize: 14, lineHeight: 20 }, primary: { minHeight: 52, backgroundColor: "#e1bd65", borderRadius: 17, padding: 15, alignItems: "center", justifyContent: "center" }, primaryText: { color: "#241b09", fontFamily: "Outfit-SemiBold", fontSize: 15 }, link: { minHeight: 44, alignItems: "center", justifyContent: "center" }, linkText: { color: "#e1bd65", fontSize: 13 } })
+const s = StyleSheet.create({ root: { flex: 1, backgroundColor: "#101827" }, page: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 88, paddingBottom: 36, gap: 18 }, eyebrow: { color: "#e1bd65", fontSize: 11, letterSpacing: 2 }, title: { fontFamily: "Fraunces", fontSize: 34, color: "#f8fafc" }, hint: { color: "#cbd5e1", fontSize: 15, lineHeight: 22 }, error: { color: "#f3aa91", fontSize: 14, lineHeight: 20 }, primary: { minHeight: 52, backgroundColor: "#e1bd65", borderRadius: 17, padding: 15, alignItems: "center", justifyContent: "center" }, primaryText: { color: "#241b09", fontFamily: "Outfit-SemiBold", fontSize: 16 }, link: { minHeight: 44, alignItems: "center", justifyContent: "center" }, linkText: { color: "#e1bd65", fontSize: 14 } })

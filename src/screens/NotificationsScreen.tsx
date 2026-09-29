@@ -1,6 +1,7 @@
 import { ReferenceNotifications } from "../components/ReferenceNotifications";
 import { AtmoBackground } from "../components/GlassUI";
-import { ArrowLeftIcon, CheckIcon } from "../components/Icons";
+import { CheckIcon } from "../components/Icons";
+import TopNavBar from "../components/TopNavBar";
 import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
@@ -45,29 +46,10 @@ export default function NotificationsScreen({
   const unreadCount = NOTIFS.filter(n => n.unread).length;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
-
-      {/* Header */}
-      <Box style={[[ui.relative, ui.pt14, ui.px5, ui.pb4, ui.flexShrink0]]} enter>
-        <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween]]}>
-          <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-            <Touch accessibilityLabel="Geri git" onPress={() => navigate("discover", { back: true })} style={[[ui.w9, ui.h9, ui.glass, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite50]]} glass>
-              <ArrowLeftIcon size={20} strokeWidth={1.8} />
-            </Touch>
-            <Box>
-              <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>
-                Bildirimler
-              </Label>
-              {unreadCount > 0 && <Label style={[[ui.textXs, ui.textWhite35]]}>
-                  {unreadCount} yeni bildirim
-                </Label>}
-            </Box>
-          </Box>
-          <Touch style={[[ui.textXs, ui.textWhite30]]}>Tümünü oku</Touch>
-        </Box>
-      </Box>
+      <TopNavBar navigate={navigate} fallback="discover" title="Bildirimler" subtitle={unreadCount > 0 ? `${unreadCount} yeni bildirim` : undefined} right={<Touch style={[[ui.textXs, ui.textWhite50, ui.px2]]}>Tümünü oku</Touch>} />
 
       {/* List */}
-      <Scroll style={[[ui.flex1, ui.px5, ui.pb10, ui.spaceY2]]} enter>
+      <Scroll style={[[ui.flex1, ui.px5, ui.pb10, ui.spaceY2], { paddingTop: 80 }]} enter>
         <ReferenceNotifications />
         {NOTIFS.map(notif => {
         const style = TYPE_ICONS[notif.type];

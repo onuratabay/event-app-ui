@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native"
 export const ui = StyleSheet.create({
   text5xl: {
-    fontSize: 48,
+    fontSize: 44,
   },
   w28: {
     width: 112,
@@ -34,14 +34,14 @@ export const ui = StyleSheet.create({
     fontWeight: "300",
   },
   textWhite: {
-    color: "#ffffff",
+    color: "#f8fafc",
   },
   leadingTight: {},
   textSm: {
-    fontSize: 14,
+    fontSize: 15,
   },
   textWhite50: {
-    color: "rgba(255,255,255,0.5)",
+    color: "rgba(241,245,249,0.72)",
   },
   leadingRelaxed: {
     lineHeight: 22,
@@ -62,10 +62,10 @@ export const ui = StyleSheet.create({
     fontSize: 24,
   },
   textXs: {
-    fontSize: 12,
+    fontSize: 13,
   },
   textWhite40: {
-    color: "rgba(255,255,255,0.4)",
+    color: "rgba(241,245,249,0.65)",
   },
   mt05: {
     marginTop: 2,
@@ -91,7 +91,7 @@ export const ui = StyleSheet.create({
     borderRadius: 16,
   },
   textBase: {
-    fontSize: 16,
+    fontSize: 17,
   },
   fontSemibold: {
     fontWeight: "600",
@@ -115,7 +115,7 @@ export const ui = StyleSheet.create({
     right: 0,
   },
   bg06060e: {
-    backgroundColor: "#06060e",
+    backgroundColor: "#101827",
   },
   flexCol: {
     flexDirection: "column",
@@ -162,7 +162,7 @@ export const ui = StyleSheet.create({
     opacity: 0.3,
   },
   textWhite60: {
-    color: "rgba(255,255,255,0.6)",
+    color: "rgba(241,245,249,0.78)",
   },
   bottom3: {
     bottom: 12,
@@ -180,7 +180,7 @@ export const ui = StyleSheet.create({
     gap: 8,
   },
   textWhite55: {
-    color: "rgba(255,255,255,0.55)",
+    color: "rgba(241,245,249,0.75)",
   },
   mb4: {
     marginBottom: 16,
@@ -210,15 +210,15 @@ export const ui = StyleSheet.create({
     height: 32,
   },
   glass: {
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "rgba(255,255,255,0.10)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: "rgba(255,255,255,0.17)",
   },
   roundedXl: {
     borderRadius: 12,
   },
   textWhite30: {
-    color: "rgba(255,255,255,0.3)",
+    color: "rgba(226,232,240,0.55)",
   },
   mb8: {
     marginBottom: 32,
@@ -227,7 +227,7 @@ export const ui = StyleSheet.create({
     marginBottom: 8,
   },
   textWhite75: {
-    color: "rgba(255,255,255,0.75)",
+    color: "rgba(248,250,252,0.90)",
   },
   fontMedium: {
     fontWeight: "500",
@@ -251,7 +251,7 @@ export const ui = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.04)",
   },
   textWhite80: {
-    color: "rgba(255,255,255,0.8)",
+    color: "rgba(248,250,252,0.94)",
   },
   textC8a44a: {
     color: "#c8a44a",
@@ -266,7 +266,7 @@ export const ui = StyleSheet.create({
     rowGap: 20,
   },
   textWhite70: {
-    color: "rgba(255,255,255,0.7)",
+    color: "rgba(248,250,252,0.86)",
   },
   left35: {
     left: 14,
@@ -282,7 +282,7 @@ export const ui = StyleSheet.create({
     ],
   },
   textWhite25: {
-    color: "rgba(255,255,255,0.25)",
+    color: "rgba(226,232,240,0.50)",
   },
   z10: {
     zIndex: 10,
@@ -298,7 +298,7 @@ export const ui = StyleSheet.create({
     paddingBottom: 14,
   },
   textWhite65: {
-    color: "rgba(255,255,255,0.65)",
+    color: "rgba(241,245,249,0.82)",
   },
   p3: {
     padding: 12,
@@ -354,10 +354,10 @@ export const ui = StyleSheet.create({
     rowGap: 24,
   },
   textWhite20: {
-    color: "rgba(255,255,255,0.2)",
+    color: "rgba(226,232,240,0.46)",
   },
   textWhite35: {
-    color: "rgba(255,255,255,0.35)",
+    color: "rgba(226,232,240,0.60)",
   },
   h52: {
     height: 208,
@@ -515,7 +515,7 @@ export const ui = StyleSheet.create({
     color: "rgba(200,164,74,0.55)",
   },
   textWhite45: {
-    color: "rgba(255,255,255,0.45)",
+    color: "rgba(241,245,249,0.68)",
   },
   gap15: {
     gap: 6,
@@ -808,7 +808,7 @@ export const ui = StyleSheet.create({
     borderWidth: 2,
   },
   border06060e: {
-    borderColor: "#06060e",
+    borderColor: "#101827",
   },
   leadingSnug: {
     lineHeight: 20,

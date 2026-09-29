@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { TextInput } from "react-native";
 import { AtmoBackground } from "../components/GlassUI";
-import { ArrowLeftIcon, ClockIcon, SearchIcon } from "../components/Icons";
+import { ClockIcon, SearchIcon } from "../components/Icons";
+import TopNavBar from "../components/TopNavBar";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -54,17 +55,15 @@ export default function SearchScreen({
   const suggestions = query.trim() ? SUGGESTED.filter(s => s.toLowerCase().includes(query.toLowerCase())) : SUGGESTED;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
+      <TopNavBar navigate={navigate} fallback="discover" title="Ara" />
 
       {/* Search bar */}
-      <Box style={[[ui.relative, ui.pt14, ui.px5, ui.pb3, ui.flexShrink0]]} enter>
+      <Box style={[[ui.relative, ui.px5, ui.pb3, ui.flexShrink0], { paddingTop: 80 }]} enter>
         <Box style={[[ui.flex, ui.itemsCenter, ui.gap3, ui.rounded2xl, ui.px4, ui.py35], {
         backgroundColor: "rgba(255,255,255,0.07)",
         borderWidth: 1,
         borderColor: "rgba(255,255,255,0.11)"
       }]} glass>
-          <Touch accessibilityLabel="Geri git" onPress={() => navigate("discover")} style={[[ui.flexShrink0, ui.textWhite40]]}>
-            <ArrowLeftIcon size={20} strokeWidth={1.8} />
-          </Touch>
           <SearchIcon size={16} strokeWidth={1.5} style={[[ui.flexShrink0, ui.textWhite30]]} />
           <Field ref={inputRef} value={query} onChangeText={e => setQuery(e)} placeholder="Etkinlik, aktivite veya konum ara..." style={[[ui.flex1, ui.bgTransparent, ui.textSm, ui.textWhite]]} />
           {query && <Touch onPress={() => setQuery("")} style={[[ui.flexShrink0, ui.w5, ui.h5, ui.roundedFull, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite30], {

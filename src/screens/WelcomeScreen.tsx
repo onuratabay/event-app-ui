@@ -3,6 +3,7 @@ import { AtmoBackground } from "../components/GlassUI";
 import { Box, Label, Picture, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
+import EditorialQuote from "../components/EditorialQuote";
 interface Props {
   navigate: NavigateFn;
 }
@@ -108,7 +109,7 @@ export default function WelcomeScreen({
       </Box>
 
       {/* Bottom fade */}
-      <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(6,6,14,0.2)", "transparent", "rgba(6,6,14,0.75)", "rgba(6,6,14,1)"]} gradientDirection="down" />
+      <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(16,24,39,0.12)", "transparent", "rgba(16,24,39,0.72)", "rgba(16,24,39,0.98)"]} gradientDirection="down" />
 
       {/* Top logo area */}
       <Box style={[[ui.relative, ui.pt16, ui.px8]]} enter>
@@ -123,7 +124,7 @@ export default function WelcomeScreen({
             </Label>
           </Box>
           <Label style={[[ui.textSm, ui.tracking02em, ui.textWhite40, ui.uppercase, ui.fontLight]]}>
-            Event App
+            Gerçek Anlar
           </Label>
         </Box>
       </Box>
@@ -148,18 +149,11 @@ export default function WelcomeScreen({
       {/* Bottom content */}
       <Box style={[[ui.relative, ui.px8, ui.pb12, ui.spaceY8]]}>
         <Box style={[[ui.spaceY4]]} enter>
-          <Label style={[[ui.fontDisplay, ui.text5xl, ui.fontLight, ui.textWhite]]}>
-            Meet real{"\n"}
-            <Label style={[[ui.notItalic], {
-            color: "#c8a44a"
-          }]}>
-              moments.
-            </Label>
-          </Label>
-          <Label style={[[ui.textBase, ui.textWhite50, ui.leadingRelaxed, ui.fontLight, ui.maxWXs]]}>
-            Gerçek bağlantılar, ortak deneyimler ve güven üzerine kurulmuş özel
-            bir topluluk.
-          </Label>
+          <Box style={{ position: "relative", zIndex: 5 }}>
+            <Label adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={[[ui.fontDisplay, ui.text5xl, ui.textWhite], { fontStyle: "italic", lineHeight: 52, textShadowColor: "rgba(0,0,0,.45)", textShadowRadius: 12 }]}>Meet real</Label>
+            <Label adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={[[ui.fontDisplay, ui.text5xl], { color: "#e1bd65", fontStyle: "italic", lineHeight: 52, textShadowColor: "rgba(0,0,0,.5)", textShadowRadius: 12 }]}>moments.</Label>
+          </Box>
+          <EditorialQuote>Gerçek bağlantılar, ortak deneyimler ve güven üzerine kurulmuş özel bir topluluk.</EditorialQuote>
         </Box>
 
         <Box style={[[ui.spaceY3]]} enter>

@@ -1,5 +1,5 @@
 import { favoriteEvent, getApiErrorMessage } from "../api/client";
-import { Alert } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Platform } from "react-native";
 import { useState } from "react";
 import { Circle, Line, Path, Polygon, Polyline } from "react-native-svg";
 import RecommendationsSheet from "../recommendations/RecommendationsSheet";
@@ -8,7 +8,7 @@ import BottomNav from "../components/BottomNav";
 import { HeartButton, RippleButton, SpringButton } from "../components/Expressive";
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
 import { BellIcon, SearchIcon, SparklesIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
-import { copyEvent, eventLink, shareEvent as shareNativeEvent } from "../native/media";
+import { copyEvent, shareEvent as shareNativeEvent } from "../native/media";
 import { useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -16,6 +16,12 @@ import { AppEvent, NavigateFn } from "../types";
 interface Props {
   navigate: NavigateFn;
 }
+const EventList = (FlatList || ((props: any) => <Scroll style={[[ui.flex1]]}>
+  {(props.data || []).length
+    ? props.data.map((item: AppEvent, index: number) => <Box key={item.id}>{props.renderItem({ item, index, separators: {} })}</Box>)
+    : props.ListEmptyComponent}
+  {props.ListFooterComponent}
+</Scroll>)) as typeof FlatList;
 const FILTERS = [{
   label: "Sana Özel",
   emoji: "✦"
@@ -97,7 +103,6 @@ function ShareSheet({
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const mockLink = eventLink(event);
   const handleCopy = async () => {
     setCopied(await copyEvent(event));
     setTimeout(() => setCopied(false), 2000);
@@ -129,7 +134,7 @@ function ShareSheet({
         }]}>
             <Box style={[[ui.relative, ui.h28, ui.overflowHidden]]}>
               <Picture uri={event.coverImage} accessibilityLabel={event.title} style={[[ui.wFull, ui.hFull, ui.opacity80]]} />
-              <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(6,6,14,0.8)", "transparent"]} gradientDirection="up" />
+              <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(16,24,39,0.82)", "transparent"]} gradientDirection="up" />
               <Box style={[[ui.fixed, ui.bottom3, ui.left3]]}>
                 <Label style={[[ui.fontDisplay, ui.textBase, ui.fontLight, ui.textWhite]]}>
                   {event.title}
@@ -182,7 +187,7 @@ function ShareSheet({
                 {copied ? "Kopyalandı!" : "Bağlantıyı Kopyala"}
               </Label>
               <Label style={[[ui.textXs, ui.textWhite25]]} numberOfLines={1}>
-                {mockLink}
+                Paylaşılabilir etkinlik bağlantısı
               </Label>
             </Box>
           </Touch>
@@ -264,8 +269,12 @@ function EventCard({
   const setSaved = async (value: boolean) => {
     if (saving) return;
     setSaving(true);
-    try { await favoriteEvent(event.id, value); setData(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, isSaved: value } : e) })); }
-    catch (error) { Alert.alert('Favori kaydedilemedi', getApiErrorMessage(error)); }
+    setData(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, isSaved: value } : e) }));
+    try { await favoriteEvent(event.id, value); }
+    catch (error) {
+      setData(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, isSaved: saved } : e) }));
+      Alert.alert('Favori kaydedilemedi', getApiErrorMessage(error));
+    }
     finally { setSaving(false); }
   };
   const progress = event.currentParticipants / event.minParticipants;
@@ -281,7 +290,7 @@ function EventCard({
           <Picture uri={event.coverImage} accessibilityLabel={event.title} style={[[ui.wFull, ui.hFull], {
           opacity: isForming ? 0.65 : 1
         }]} />
-          <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(6,6,14,0.88)", "transparent"]} gradientDirection="up" />
+          <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(16,24,39,0.9)", "transparent"]} gradientDirection="up" />
 
           {/* Status */}
           <Box style={[[ui.fixed, ui.top3, ui.left3]]}>
@@ -303,7 +312,7 @@ function EventCard({
           }]} glass>
               <ShareIcon size={14} strokeWidth={1.6} style={[[ui.textWhite65]]} />
             </SpringButton>
-            <Box style={[[ui.roundedFull, ui.flex, ui.itemsCenter, ui.justifyCenter], {
+            <Box style={[[ui.w8, ui.h8, ui.roundedFull, ui.flex, ui.itemsCenter, ui.justifyCenter], {
             backgroundColor: "rgba(0,0,0,0.45)",
             borderWidth: 1,
             borderColor: "rgba(255,255,255,0.12)"
@@ -403,7 +412,7 @@ export default function DiscoverScreen({
   navigate
 }: Props) {
   const {
-    data: store, refreshEvents
+    data: store, refreshEvents, loadMoreFeedEvents, moreFeedEvents
   } = useStore();
   const EVENTS = store.events;
   const [recommendationsOpen, setRecommendationsOpen] = useState(false);
@@ -411,6 +420,7 @@ export default function DiscoverScreen({
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
   const [sortOpen, setSortOpen] = useState(false);
   const [shareEvent, setShareEvent] = useState<AppEvent | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const visibleEvents = EVENTS.filter(e => {
     if (activeFilter === "Padel" || activeFilter === "Konser") return e.category === activeFilter;
     if (activeFilter === "Outdoor") return ["Hiking", "Koşu", "Outdoor"].includes(e.category);
@@ -429,6 +439,12 @@ export default function DiscoverScreen({
   });
   const sortLabel = SORT_OPTIONS.find(o => o.value === sortBy)?.label ?? "Önerilen";
   const isCustomSort = sortBy !== "recommended";
+  const handleLoadMore = async () => {
+    if (loadingMore || !moreFeedEvents) return;
+    setLoadingMore(true);
+    try { await loadMoreFeedEvents(); }
+    finally { setLoadingMore(false); }
+  };
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground />
 
@@ -449,7 +465,7 @@ export default function DiscoverScreen({
               </Box>
               <Box>
                 <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite75, ui.trackingWide]]}>
-                  Event App
+                  Keşfet
                 </Label>
                 <Label style={[[ui.text10px, ui.textWhite28]]}>
                   Ankara · Çankaya
@@ -494,15 +510,25 @@ export default function DiscoverScreen({
         </Box>
 
         {/* Events */}
-        <Scroll style={[[ui.flex1, ui.pb28, ui.spaceY4]]} enter>
-          <Box style={[[ui.px5, ui.spaceY4]]}>
-            {!visibleEvents.length && <Box style={{ padding: 20, gap: 12 }}><Label>Henüz gösterilecek etkinlik yok.</Label><Touch onPress={() => { void refreshEvents().catch(() => {}); }}><Label>Yenile</Label></Touch></Box>}
-            {visibleEvents.map((event, i) => <EventCard key={event.id} event={event} index={i} onPress={() => navigate("event-detail", {
+        <EventList
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 112, flexGrow: visibleEvents.length ? 0 : 1 }}
+          data={visibleEvents}
+          keyExtractor={event => event.id}
+          renderItem={({ item: event, index }) => <Box style={{ marginBottom: 16 }}><EventCard event={event} index={index} onPress={() => navigate("event-detail", {
             eventId: event.id
-          })} onShare={() => setShareEvent(event)} />)}
-          </Box>
-
-        </Scroll>
+          })} onShare={() => setShareEvent(event)} /></Box>}
+          ListEmptyComponent={<Box style={{ padding: 20, gap: 12 }}><Label>Henüz gösterilecek etkinlik yok.</Label><Touch onPress={() => { void refreshEvents().catch(() => {}); }}><Label>Yenile</Label></Touch></Box>}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color="#c8a44a" style={{ paddingVertical: 20 }} /> : null}
+          onEndReached={() => { void handleLoadMore(); }}
+          onEndReachedThreshold={0.45}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          updateCellsBatchingPeriod={40}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === "android"}
+          showsVerticalScrollIndicator={false}
+        />
       </Box>
 
       {/* Sort sheet */}

@@ -38,7 +38,7 @@ export default function SplashScreen({
         </Box>
         <Box style={[[ui.textCenter]]}>
           <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.tracking03em, ui.textWhite90, ui.uppercase]]}>
-            Event App
+            Birlikte, gerçekten.
           </Label>
           <Box style={[[ui.mt2, ui.hPx, ui.w24, ui.mxAuto], {}]} gradient={["transparent", "rgba(200,164,74,0.6)", "transparent"]} gradientDirection="right" />
         </Box>

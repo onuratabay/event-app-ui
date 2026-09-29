@@ -1,4 +1,5 @@
-import BackButton from "../components/BackButton";
+import TopNavBar from "../components/TopNavBar";
+import EditorialQuote from "../components/EditorialQuote";
 import { useEffect, useState } from "react";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
 import { Box, Label, Touch } from "../native/UI";
@@ -41,7 +42,7 @@ export default function ApprovalScreen({
   }, []);
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.px6, ui.overflowHidden]]}>
       <AtmoBackground variant="gold" />
-      <Box style={{ position: "absolute", top: 20, left: 20, zIndex: 10 }}><BackButton navigate={navigate} fallback="onboarding-3" /></Box>
+      <TopNavBar navigate={navigate} fallback="onboarding-3" title="Başvuru Durumu" floating />
 
       {/* Particles */}
       {particles.map(p => <Box key={p.id} style={[[], {
@@ -65,18 +66,15 @@ export default function ApprovalScreen({
 
         {/* Message */}
         <Box style={[[ui.textCenter, ui.spaceY3]]} enter>
-          <Label style={[[ui.fontDisplay, ui.text4xl, ui.fontLight, ui.textWhite, ui.leadingTight]]}>
+          <Label style={[[ui.fontDisplay, ui.text4xl, ui.textWhite, ui.leadingTight], { fontStyle: "italic" }]}>
             Seni{"\n"}
-            <Label style={[[ui.notItalic], {
+            <Label style={{
             color: "#c8a44a"
-          }]}>
+          }}>
               bekliyorduk.
             </Label>
           </Label>
-          <Label style={[[ui.textSm, ui.textWhite50, ui.leadingRelaxed, ui.maxWXs, ui.mxAuto]]}>
-            Seni aramıza aldık. Artık gerçek anlar yaşamanın, yeni insanlarla
-            tanışmanın tam zamanı.
-          </Label>
+          <EditorialQuote>Seni aramıza aldık. Artık gerçek anlar yaşamanın, yeni insanlarla tanışmanın tam zamanı.</EditorialQuote>
         </Box>
 
         {/* Stats */}

@@ -3,6 +3,7 @@ import { Circle, Polyline } from "react-native-svg"
 import type { TouchProps } from "../native/UI"
 import { Box, Label, Touch, Vector } from "../native/UI"
 import { ui } from "../theme/styles"
+import { HeartIcon } from "./Icons"
 /* ── ComingSoonCard ── */
 interface ComingSoonCardProps {
   icon: ReactNode
@@ -225,17 +226,18 @@ export function HeartButton({
         onChange(!saved)
       }}
       style={{
-        width: 36,
-        height: 36,
+        width: 32,
+        height: 32,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Label
-        style={{ fontSize: size + 6, color: saved ? "#c8a44a" : "#aaaaaa" }}
-      >
-        {saved ? "♥" : "♡"}
-      </Label>
+      <HeartIcon
+        size={size + 4}
+        strokeWidth={1.8}
+        filled={saved}
+        style={{ color: saved ? "#e1bd65" : "rgba(241,245,249,.78)" }}
+      />
     </Touch>
   )
 }

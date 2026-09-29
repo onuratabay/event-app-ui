@@ -12,24 +12,24 @@ import {
 } from "../native/UI"
 const s = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.1)",
-    backgroundColor: "rgba(255,255,255,.07)",
+    borderColor: "rgba(255,255,255,.18)",
+    backgroundColor: "rgba(255,255,255,.10)",
   },
   input: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.12)",
-    backgroundColor: "rgba(255,255,255,.06)",
+    borderColor: "rgba(255,255,255,.19)",
+    backgroundColor: "rgba(15,23,42,.58)",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    color: "#fff",
-    fontSize: 14,
+    color: "#f8fafc",
+    fontSize: 16,
   },
   label: {
-    fontSize: 12,
-    color: "rgba(255,255,255,.5)",
+    fontSize: 13,
+    color: "rgba(241,245,249,.72)",
     marginBottom: 6,
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -39,9 +39,9 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.1)",
-    backgroundColor: "rgba(255,255,255,.06)",
-    color: "rgba(255,255,255,.7)",
+    borderColor: "rgba(255,255,255,.17)",
+    backgroundColor: "rgba(255,255,255,.09)",
+    color: "rgba(248,250,252,.88)",
   },
   selected: {
     backgroundColor: "rgba(200,164,74,.2)",
@@ -66,7 +66,7 @@ export function GlassCard({
       glass
       style={[
         s.card,
-        variant === "strong" && { backgroundColor: "rgba(255,255,255,.12)" },
+        variant === "strong" && { backgroundColor: "rgba(255,255,255,.16)" },
         style,
       ]}
     >
@@ -279,19 +279,26 @@ export function AtmoBackground({
 }: {
   variant?: "violet" | "gold" | "success"
 }) {
-  const color = { violet: "#4c1d95", gold: "#92400e", success: "#065f46" }[
-    variant
-  ]
+  const colors = {
+    violet: ["#7c70f0", "#0ea5a8"],
+    gold: ["#d4a72c", "#7c70f0"],
+    success: ["#10b981", "#0ea5a8"],
+  }[variant]
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Svg width="100%" height="100%">
         <Defs>
-          <RadialGradient id="atmo" cx="40%" cy="25%" rx="80%" ry="65%">
-            <Stop offset="0" stopColor={color} stopOpacity={0.32} />
-            <Stop offset="1" stopColor={color} stopOpacity={0} />
+          <RadialGradient id="atmo" cx="28%" cy="14%" rx="82%" ry="65%">
+            <Stop offset="0" stopColor={colors[0]} stopOpacity={0.34} />
+            <Stop offset="1" stopColor={colors[0]} stopOpacity={0} />
+          </RadialGradient>
+          <RadialGradient id="atmoSecondary" cx="88%" cy="78%" rx="70%" ry="62%">
+            <Stop offset="0" stopColor={colors[1]} stopOpacity={0.20} />
+            <Stop offset="1" stopColor={colors[1]} stopOpacity={0} />
           </RadialGradient>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#atmo)" />
+        <Rect width="100%" height="100%" fill="url(#atmoSecondary)" />
       </Svg>
     </View>
   )

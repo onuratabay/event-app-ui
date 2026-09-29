@@ -165,8 +165,8 @@ export async function logout() {
   await removal
 }
 
-export async function getEvents() {
-  return request<EventListResponse>("/events?page=1&limit=20")
+export async function getEvents(page = 1, limit = 20) {
+  return request<EventListResponse>(`/events?page=${page}&limit=${limit}`)
 }
 
 export async function getMapEvents(signal?: AbortSignal, filters: { dateFrom?: string; dateTo?: string; interestIds?: string[]; minLat?: number; maxLat?: number; minLng?: number; maxLng?: number } = {}) {

@@ -76,14 +76,19 @@ const Context = createContext<{
   refreshEvents: () => Promise<void>
   loadMoreEvents: () => Promise<void>
   moreEvents: boolean
+  loadMoreFeedEvents: () => Promise<void>
+  moreFeedEvents: boolean
   resetSession: () => void
 } | null>(null)
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState(initial)
   const [storageError, setStorageError] = useState<string | null>(null)
   const [moreEvents, setMoreEvents] = useState(false)
+  const [moreFeedEvents, setMoreFeedEvents] = useState(false)
   const page = useRef(1)
+  const feedPage = useRef(1)
   const loadingMore = useRef(false)
+  const loadingMoreFeed = useRef(false)
   const sessionGeneration = useRef(0)
   // A callback retained by an unmounted screen cannot write into the next account's view.
   const renderGeneration = sessionGeneration.current
@@ -117,6 +122,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const all = [...new Map([...events.items, ...mine.items].map(event => [event.id, event])).values()]
       setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), interests: interests.map(i => i.name), recommendationProfile: preferences.recommendationProfile }, events: all.map(mapApiEvent) }))
       page.current = 1; setMoreEvents(mine.hasMore)
+      feedPage.current = 1; setMoreFeedEvents(events.items.length < events.total)
       setStorageError(null)
     } catch (error) {
       if (generation === sessionGeneration.current) setStorageError('Hesap verileri sunucudan yüklenemedi. Bağlantını kontrol edip tekrar dene.')
@@ -134,6 +140,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setData(current => ({ ...current, events: [...new Map([...current.events, ...result.items.map(mapApiEvent)].map(event => [event.id, event])).values()] }))
     } catch { setStorageError('Sonraki etkinlikler yüklenemedi.') }
     finally { loadingMore.current = false }
+  }
+  const loadMoreFeedEvents = async () => {
+    if (loadingMoreFeed.current || !moreFeedEvents) return
+    loadingMoreFeed.current = true
+    const generation = sessionGeneration.current
+    try {
+      const nextPage = feedPage.current + 1
+      const result = await getEvents(nextPage)
+      if (generation !== sessionGeneration.current) return
+      feedPage.current = nextPage
+      setMoreFeedEvents(nextPage * 20 < result.total)
+      setData(current => ({
+        ...current,
+        events: [...new Map([...current.events, ...result.items.map(mapApiEvent)].map(event => [event.id, event])).values()],
+      }))
+    } catch {
+      setStorageError('Sonraki etkinlikler yüklenemedi.')
+    } finally {
+      loadingMoreFeed.current = false
+    }
   }
   useEffect(() => { void hasSession().then(active => { if (active) return refreshEvents() }).catch(() => {}) }, [])
   useLayoutEffect(() => { if (data.user.id) startSocket(data.user.id); return stopSocket }, [data.user.id])
@@ -154,7 +180,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const cleanups = ['event:waitlist_joined', 'event:summary', 'event:participant_count_changed', 'event:participant_joined', 'event:participant_left', 'event:started', 'event:cancelled', 'event:ended', 'event:updated'].map(patch)
     return () => cleanups.forEach(cleanup => cleanup())
   }, [])
-  return <Context.Provider value={{ data, loadMoreEvents, moreEvents, setData: setAccountData, refreshEvents, resetSession: () => { stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null) } }}>
+  return <Context.Provider value={{ data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, resetSession: () => { stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
     {storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}
     {children}
   </Context.Provider>

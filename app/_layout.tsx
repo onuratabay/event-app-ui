@@ -46,9 +46,9 @@ export default function RootLayout() {
               <Stack
                 screenOptions={{
                   headerShown: false,
-                  contentStyle: { backgroundColor: "#06060e" },
+                  contentStyle: { backgroundColor: "#101827" },
                   animation: "fade",
-                  animationDuration: 180,
+                  animationDuration: 100,
                 }}
               />
             </StoreProvider>
@@ -58,4 +58,4 @@ export default function RootLayout() {
     </SafeAreaProvider>
   )
 }
-const s = StyleSheet.create({ root: { flex: 1, backgroundColor: "#06060e" } })
+const s = StyleSheet.create({ root: { flex: 1, backgroundColor: "#101827" } })

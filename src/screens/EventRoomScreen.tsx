@@ -1,7 +1,7 @@
 import { useScreenActive } from '../native/useScreenActive';
 import { EventActivity } from '../components/EventActivity';
 import { onSocket, retainEvent, socketAction } from '../services/socket';
-import BackButton from "../components/BackButton";
+import TopNavBar from "../components/TopNavBar";
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, Alert } from "react-native";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
@@ -79,34 +79,12 @@ export default function EventRoomScreen({
     catch (cause) { Alert.alert('Mesaj gönderilemedi', getApiErrorMessage(cause)); }
     finally { setSending(false); }
   };
-  if (!event) return <Box><Touch onPress={() => navigate('rooms')}>Geri</Touch><Label>{error || 'Etkinlik yükleniyor…'}</Label></Box>;
+  if (!event) return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}><TopNavBar navigate={navigate} fallback="rooms" title="Etkinlik Odası" /><Box style={{ paddingTop: 96, paddingHorizontal: 20 }}><Label>{error || 'Etkinlik yükleniyor…'}</Label></Box></Box>;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
+      <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} title={event.title} subtitle={`${event.date} · ${event.time}`} />
       {error && <Label>{error}</Label>}
-      <Touch accessibilityLabel="Mesajları yenile" disabled={loading || sending} onPress={() => setReload(value => value + 1)} style={{ padding: 12, marginTop: 8, backgroundColor: '#242336' }}><Label>{loading ? 'Mesajlar yükleniyor…' : 'Mesajları eşitle'}</Label></Touch>
-
-      {/* Header */}
-      <Box style={[[ui.relative, ui.pt14, ui.px5, ui.pb3, ui.flexShrink0]]}>
-        <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-          <BackButton navigate={navigate} fallback="rooms" onPress={() => navigate("event-detail", { eventId: event.id, back: true })} />
-          <Box style={[[ui.flex1, ui.minW0]]}>
-            <Label style={[[ui.fontDisplay, ui.textLg, ui.fontLight, ui.textWhite]]} numberOfLines={1}>
-              {event.title}
-            </Label>
-            <Label style={[[ui.textXs, ui.textWhite35]]}>
-              {event.categoryEmoji} {event.date} · {event.time} ·{" "}
-              {event.location}
-            </Label>
-          </Box>
-          <Box style={[[ui.px25, ui.py1, ui.roundedFull, ui.textXs, ui.textEmerald300], {
-          backgroundColor: "rgba(52,211,153,0.12)",
-          borderWidth: 1,
-          borderColor: "rgba(52,211,153,0.2)"
-        }]}>
-            ● Aktif
-          </Box>
-        </Box>
-      </Box>
+      <Touch accessibilityLabel="Mesajları yenile" disabled={loading || sending} onPress={() => setReload(value => value + 1)} style={{ padding: 12, marginTop: 76, backgroundColor: 'rgba(255,255,255,.08)' }}><Label>{loading ? 'Mesajlar yükleniyor…' : 'Mesajları eşitle'}</Label></Touch>
 
       {/* Event info strip */}
       <Box style={[[ui.px5, ui.pb3, ui.flexShrink0]]}>

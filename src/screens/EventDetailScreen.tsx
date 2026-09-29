@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 import { Avatar, GlassCard } from "../components/GlassUI";
-import { ArrowLeftIcon, CheckIcon, ClockIcon, LocationIcon, ShareIcon, StarIcon } from "../components/Icons";
+import { CheckIcon, ClockIcon, LocationIcon, ShareIcon, StarIcon } from "../components/Icons";
+import TopNavBar from "../components/TopNavBar";
 import { copyEvent, shareEvent } from "../native/media";
 import { useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
@@ -29,7 +30,7 @@ export default function EventDetailScreen({
   const [joining, setJoining] = useState(false);
   const [loadError, setLoadError] = useState('');
   useEffect(() => { let active = true; if (eventId) getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(error => { if (active) setLoadError(getApiErrorMessage(error, 'Etkinlik yüklenemedi.')); }); return () => { active = false; }; }, [eventId]);
-  if (!event) return <Box><Touch onPress={() => navigate('discover')}>Geri</Touch><Label>{loadError || 'Etkinlik yükleniyor…'}</Label></Box>;
+  if (!event) return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}><TopNavBar navigate={navigate} fallback="discover" title="Etkinlik" /><Box style={{ paddingTop: 96, paddingHorizontal: 20 }}><Label>{loadError || 'Etkinlik yükleniyor…'}</Label></Box></Box>;
   const joined = event.host.id === store.user.id || event.joined || event.participants.some(p => p.id === store.user.id);
   const setJoined = async (join: boolean) => {
     if (joining) return;
@@ -41,29 +42,12 @@ export default function EventDetailScreen({
   const isForming = !event.isActive;
   const isActive = event.isActive;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
+      <TopNavBar navigate={navigate} fallback="discover" title={event.title} subtitle={`${event.date} · ${event.time}`} floating right={<Touch accessibilityLabel="Paylaş" onPress={() => setShareOpen(true)} style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite80]]}><ShareIcon size={18} /></Touch>} />
       <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol, ui.pb20]]}>
         {/* Cover image header */}
         <Box style={[[ui.relative, ui.h72, ui.flexShrink0, ui.bgGray900]]}>
           <Picture uri={event.coverImage} accessibilityLabel={event.title} style={[[ui.wFull, ui.hFull]]} />
-          <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["#06060e", "transparent"]} gradientDirection="up" />
-
-          {/* Back + Share */}
-          <Box style={[[ui.fixed, ui.top14, ui.left5, ui.right5, ui.flex, ui.itemsCenter, ui.justifyBetween]]}>
-            <Touch accessibilityLabel="Geri git" onPress={() => navigate("discover", { back: true })} style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-            backgroundColor: "rgba(0,0,0,0.5)",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.1)"
-          }]}>
-              <ArrowLeftIcon size={20} strokeWidth={1.8} style={[[ui.textWhite80]]} />
-            </Touch>
-            <Touch onPress={() => setShareOpen(true)} style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-            backgroundColor: "rgba(0,0,0,0.5)",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.1)"
-          }]}>
-              <ShareIcon size={16} strokeWidth={1.5} style={[[ui.textWhite80]]} />
-            </Touch>
-          </Box>
+          <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["#101827", "transparent"]} gradientDirection="up" />
 
           {/* Status */}
           <Box style={[[ui.fixed, ui.bottom4, ui.left5]]}>
@@ -288,7 +272,7 @@ export default function EventDetailScreen({
                     Bağlantıyı Kopyala
                   </Label>
                   <Label style={[[ui.textXs, ui.textWhite25]]}>
-                    eventapp.co/e/{event.id}
+                    Paylaşılabilir etkinlik bağlantısı
                   </Label>
                 </Box>
               </Touch>
@@ -297,7 +281,7 @@ export default function EventDetailScreen({
         </Sheet>}
 
       {/* Sticky CTA */}
-      <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40, ui.spaceY25], {}]} gradient={["#06060e", "transparent"]} gradientDirection="up">
+      <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40, ui.spaceY25], {}]} gradient={["#101827", "transparent"]} gradientDirection="up">
         {/* Room entry — only when event is active AND user has joined */}
         {isActive && joined ? <Touch onPress={() => navigate("event-room", {
         eventId: event.id

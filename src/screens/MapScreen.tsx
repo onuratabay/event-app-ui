@@ -1,6 +1,6 @@
 import { useScreenActive } from '../native/useScreenActive'
 import { useEventDeltas, patchApiEvent } from '../services/event-deltas'
-import BackButton from "../components/BackButton"
+import TopNavBar from "../components/TopNavBar"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, AppState, StyleSheet, View } from "react-native"
 import { getPreferences, putPreference } from "../api/client"
@@ -198,8 +198,8 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
         <Svg width={size.width} height={size.height}>{density.filter(path => path.d).map((path, i) => <Path key={i} d={path.d} fill={path.color} opacity={path.opacity} />)}</Svg>
       </View>}
     </View>
-    <Box pointerEvents="box-none" style={s.top}>
-      <Box style={s.heading}><BackButton navigate={navigate} fallback="discover" onPress={() => navigate("discover")} /><Label style={s.title}>Harita</Label><Label style={s.badge}>{visible.length} etkinlik görünümde</Label></Box>
+    <TopNavBar navigate={navigate} fallback="discover" onBack={() => navigate("discover")} title="Harita" subtitle={`${visible.length} etkinlik görünümde`} floating />
+    <Box pointerEvents="box-none" style={[s.top, { paddingTop: 66 }]}>
       <Scroll horizontal style={s.filters}>
         <FilterChip solid label="✦ Sana göre" selected={filterOpen || !!filters.place || !!filters.timeFrom || !!filters.interestIds.length || filters.datePreset !== "all"} onPress={() => { interacted.current = true; setFilterOpen(true) }} />
         {([["today", "Bugün"], ["tomorrow", "Yarın"], ["week", "Haftaya"]] as const).map(([id, label]) => <FilterChip solid key={id} label={label} selected={filters.datePreset === id} onPress={() => applyFilters({ ...filters, datePreset: id })} />)}
@@ -235,7 +235,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   </Box>
 }
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#06060e" },
+  root: { flex: 1, backgroundColor: "#101827" },
   top: { position: "absolute", top: 16, left: 16, right: 16, gap: 8 },
   heading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   title: { fontFamily: "Fraunces", color: "#fff", fontSize: 32 },

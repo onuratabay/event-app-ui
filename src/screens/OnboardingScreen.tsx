@@ -1,5 +1,6 @@
 import { updateProfile } from "../api/client";
-import BackButton from "../components/BackButton";
+import TopNavBar from "../components/TopNavBar";
+import EditorialQuote from "../components/EditorialQuote";
 import { useEffect, useRef, useState } from "react";
 import { AccordionItem, AtmoBackground, Avatar, GlassCard, GlassInput, ProgressStepper } from "../components/GlassUI";
 import { ErrorNotice } from "../components/ErrorNotice";
@@ -16,7 +17,7 @@ interface Props {
 }
 const PRINCIPLES = [{
   title: "Saygılı ve nazik ol",
-  desc: "Event App gerçek hayatta bağlantılar kuran bir topluluktur. Diğer üyelerle iletişiminde saygılı, kapsayıcı ve nazik ol. Farklı görüşlere, yaşam tarzlarına ve kişisel sınırlara saygı göster."
+  desc: "Bu topluluk gerçek hayatta bağlantılar kurar. Diğer üyelerle iletişiminde saygılı, kapsayıcı ve nazik ol. Farklı görüşlere, yaşam tarzlarına ve kişisel sınırlara saygı göster."
 }, {
   title: "Katıldığın etkinliklere git",
   desc: "Bir etkinliğe katılacağını söylediğinde diğer üyeler sana güvenerek plan yapar. Gelemeyeceksen mümkün olduğunca erken haber ver. Tekrarlanan habersiz katılmama davranışları güven skorunu etkileyebilir."
@@ -45,7 +46,7 @@ function StickyBar({
 }: {
   children: React.ReactNode;
 }) {
-  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40], {}]} gradient={["#06060e", "transparent"]} gradientDirection="up">
+  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40], {}]} gradient={["#101827", "transparent"]} gradientDirection="up">
       {children}
     </Box>;
 }
@@ -127,11 +128,11 @@ function Step1({
   return <Box style={{
     flex: 1
   }}>
-      <Scroll style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pt14, ui.pb40, ui.px5]]}>
+      <TopNavBar navigate={navigate} fallback="welcome" onBack={() => { setStore(current => ({ ...current, onboarding: { ...current.onboarding, ...form, sifre: "" } })); navigate("welcome", { back: true }); }} title="Üyelik Başvurusu" subtitle="Adım 1/3" />
+      <Scroll style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
         <AtmoBackground />
 
         <Box style={[[ui.relative, ui.spaceY8]]}>
-          <BackButton navigate={navigate} fallback="welcome" onPress={() => { setStore(current => ({ ...current, onboarding: { ...current.onboarding, ...form, sifre: "" } })); navigate("welcome", { back: true }); }} />
           {/* Header */}
           <Box style={[[ui.gapY1]]} enter>
             <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb4]]}>
@@ -217,9 +218,11 @@ function Step1({
       </Scroll>
       <StickyBar>
         {createError && <ErrorNotice title="Kayıt tamamlanamadı" message={createError} onDismiss={() => setCreateError(null)} />}
-        <Touch onPress={() => void continueRegistration()} disabled={!canContinue || creating} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
-        color: canContinue ? "#1a1200" : "rgba(255,255,255,0.25)"
-      }]} gradient={canContinue ? ["#c8a44a", "#dab96e", "#c09038"] : ["rgba(255,255,255,0.08)", "rgba(255,255,255,0.08)"]}>
+        <Touch onPress={() => void continueRegistration()} disabled={!canContinue || creating} disabledOpacity={1} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
+        color: canContinue ? "#1a1200" : "rgba(226,232,240,.62)",
+        borderWidth: 1,
+        borderColor: canContinue ? "rgba(242,216,137,.5)" : "rgba(148,163,184,.22)",
+      }]} gradient={canContinue ? ["#c8a44a", "#dab96e", "#c09038"] : ["#202b3d", "#182235", "#151f30"]}>
           {creating ? "Hesap oluşturuluyor…" : "Devam Et"}
         </Touch>
       </StickyBar>
@@ -259,7 +262,8 @@ function Step2({
   return <Box style={{
     flex: 1
   }}>
-      <Scroll style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pt14, ui.pb40, ui.px5]]}>
+      <TopNavBar navigate={navigate} fallback="onboarding-1" title="Üyelik Başvurusu" subtitle="Adım 2/3" />
+      <Scroll style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
         <AtmoBackground />
 
         <Box style={[[ui.relative, ui.spaceY8]]}>
@@ -268,7 +272,6 @@ function Step2({
               <ProgressStepper current={1} total={3} />
               <Label style={[[ui.textXs, ui.textWhite30]]}>Adım 2/3</Label>
             </Box>
-            <BackButton navigate={navigate} fallback="onboarding-1" />
             <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite]]}>
               Seni biraz daha{"\n"}tanıyalım.
             </Label>
@@ -399,11 +402,12 @@ function Step3({
     label: "Onay",
     state: "future"
   }];
-  return <Scroll style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.px6]]}>
+  return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
+    <TopNavBar navigate={navigate} fallback="onboarding-2" onBack={() => { if (timer.current) clearTimeout(timer.current); navigate("onboarding-2", { back: true }); }} title="Üyelik Başvurusu" subtitle="Adım 3/3" />
+    <Scroll style={[[ui.flex1, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.px6], { paddingTop: 84 }]}>
       <AtmoBackground variant="violet" />
 
       <Box style={[[ui.relative, ui.wFull, ui.spaceY10]]}>
-        <BackButton navigate={navigate} fallback="onboarding-2" onPress={() => { if (timer.current) clearTimeout(timer.current); navigate("onboarding-2", { back: true }); }} />
         {/* Hourglass */}
         <Box style={[[ui.flex, ui.justifyCenter]]} enter>
           <Box style={[[ui.relative]]}>
@@ -423,13 +427,10 @@ function Step3({
 
         {/* Text */}
         <Box style={[[ui.textCenter, ui.spaceY3]]} enter>
-          <Label style={[[ui.fontDisplay, ui.text4xl, ui.fontLight, ui.textWhite]]}>
+          <Label style={[[ui.fontDisplay, ui.text4xl, ui.textWhite], { fontStyle: "italic" }]}>
             Başvurunu{"\n"}inceliyoruz.
           </Label>
-          <Label style={[[ui.textSm, ui.textWhite50, ui.leadingRelaxed, ui.maxWXs, ui.mxAuto]]}>
-            Topluluğun güvenli kalması bizim için çok önemli. Bu yüzden her
-            başvuruyu dikkatle değerlendiriyoruz.
-          </Label>
+          <EditorialQuote>Topluluğun güvenli kalması bizim için çok önemli. Bu yüzden her başvuruyu dikkatle değerlendiriyoruz.</EditorialQuote>
           <Label style={[[ui.textSm, ui.textWhite35]]}>
             Yakında sana döneceğiz.
           </Label>
@@ -464,7 +465,8 @@ function Step3({
           </Touch>
         </Box>
       </Box>
-    </Scroll>;
+    </Scroll>
+  </Box>;
 }
 export default function OnboardingScreen({
   step,

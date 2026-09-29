@@ -1,4 +1,4 @@
-import BackButton from "../components/BackButton";
+import TopNavBar from "../components/TopNavBar";
 import { useEffect, useState } from "react";
 import { AtmoBackground, InterestChip } from "../components/GlassUI";
 import { CameraIcon, ImageIcon } from "../components/Icons";
@@ -50,11 +50,11 @@ export default function InterestsScreen({
   };
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
+      <TopNavBar navigate={navigate} fallback="approval" onBack={() => navigate("approval", { back: true })} title="Profilini Tamamla" />
 
       <Box style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull]]}>
-        <Box style={{ paddingHorizontal: 24, paddingTop: 16 }}><BackButton navigate={navigate} fallback="approval" onPress={() => navigate("approval", { back: true })} /></Box>
         {/* Header */}
-        <Box style={[[ui.pt4, ui.px6, ui.pb5, ui.flexShrink0]]} enter>
+        <Box style={[[ui.px6, ui.pb5, ui.flexShrink0], { paddingTop: 84 }]} enter>
           <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite]]}>
             Neler seni{"\n"}heyecanlandırır?
           </Label>
@@ -142,7 +142,7 @@ export default function InterestsScreen({
         </Scroll>
 
         {/* Sticky CTA */}
-        <Box style={[[ui.flexShrink0, ui.px6, ui.pb10, ui.pt4], {}]} gradient={["#06060e", "transparent"]} gradientDirection="up">
+        <Box style={[[ui.flexShrink0, ui.px6, ui.pb10, ui.pt4], {}]} gradient={["#101827", "transparent"]} gradientDirection="up">
           <Touch onPress={save} disabled={saving || selected.size === 0 || !catalog.length} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.textBase, ui.fontSemibold, ui.trackingWide], {
           color: selected.size > 0 ? "#1a1200" : "rgba(255,255,255,0.25)"
         }]} gradient={selected.size > 0 ? ["#c8a44a", "#dab96e", "#c09038"] : ["rgba(255,255,255,0.08)", "rgba(255,255,255,0.08)"]}>
