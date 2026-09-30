@@ -18,9 +18,9 @@ export default function SplashScreen({
     let timer: ReturnType<typeof setTimeout> | undefined;
     const startedAt = Date.now();
     hasSession().then(session => {
-      const wait = Math.max(0, 1850 - (Date.now() - startedAt));
+      const wait = Math.max(0, 2850 - (Date.now() - startedAt));
       timer = setTimeout(() => { if (active) navigate(session ? "discover" : "welcome"); }, wait);
-    }).catch(() => { timer = setTimeout(() => { if (active) navigate("welcome"); }, 1850); });
+    }).catch(() => { timer = setTimeout(() => { if (active) navigate("welcome"); }, 2850); });
     return () => { active = false; if (timer) clearTimeout(timer); };
   }, [navigate]);
   useEffect(() => {
