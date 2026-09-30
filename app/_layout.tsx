@@ -13,6 +13,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context"
 import { StoreProvider } from "../src/native/Store"
 import { ErrorNoticeProvider } from "../src/components/ErrorNotice"
+import ApiLoadingOverlay from "../src/components/ApiLoadingOverlay"
 void SplashScreen.preventAutoHideAsync()
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -53,6 +54,7 @@ export default function RootLayout() {
               />
             </StoreProvider>
           </KeyboardAvoidingView>
+          <ApiLoadingOverlay />
         </ErrorNoticeProvider>
       </SafeAreaView>
     </SafeAreaProvider>

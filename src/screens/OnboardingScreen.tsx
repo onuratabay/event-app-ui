@@ -39,6 +39,17 @@ function formatBirthDate(value: string) {
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
+function phoneDigits(value: string) {
+  const raw = value.replace(/\D/g, "")
+  const local = raw.startsWith("90") ? raw.slice(2) : raw.startsWith("0") ? raw.slice(1) : raw
+  return local.slice(0, 10)
+}
+function formatPhone(value: string) {
+  const digits = phoneDigits(value)
+  if (!digits) return ""
+  const parts = [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6, 8), digits.slice(8, 10)].filter(Boolean)
+  return `+90 ${parts.join(" ")}`
+}
 
 /* ---------- Sticky CTA bar ---------- */
 function StickyBar({
@@ -116,19 +127,19 @@ function Step1({
     setCreating(true); setCreateError(null);
     try {
       if (store.onboarding.accountId) { navigate("onboarding-2"); return; }
-      const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: form.telefon.replace(/\s/g, ""), password: form.sifre, birthDate: form.dogum });
+      const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: `+90${phoneDigits(form.telefon)}`, password: form.sifre, birthDate: form.dogum });
       const id = String((response.user as { id: string }).id);
       setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}` } }));
       if (mounted.current) navigate("onboarding-2");
     } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
     finally { if (mounted.current) setCreating(false); }
   };
-  const allFilled = Object.values(form).every(v => v.trim().length > 0);
+  const allFilled = Object.values(form).every(v => v.trim().length > 0) && phoneDigits(form.telefon).length === 10;
   const canContinue = Boolean(store.onboarding.accountId) || (allFilled && accepted);
   return <Box style={{
     flex: 1
   }}>
-      <TopNavBar navigate={navigate} fallback="welcome" onBack={() => { setStore(current => ({ ...current, onboarding: { ...current.onboarding, ...form, sifre: "" } })); navigate("welcome", { back: true }); }} title="Üyelik Başvurusu" subtitle="Adım 1/3" />
+      <TopNavBar navigate={navigate} fallback="welcome" onBack={() => { setStore(current => ({ ...current, onboarding: { ...current.onboarding, ...form, sifre: "" } })); navigate("welcome", { back: true }); }} title="Üyelik Başvurusu" floating />
       <Scroll style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
         <AtmoBackground />
 
@@ -165,8 +176,8 @@ function Step1({
           }))} mode="email" />
             <GlassInput label="Telefon" placeholder="+90 5XX XXX XX XX" value={form.telefon} onChangeText={e => setForm(p => ({
             ...p,
-            telefon: e
-          }))} mode="tel" />
+            telefon: formatPhone(e)
+          }))} mode="tel" keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel" maxLength={17} />
             <GlassInput label="Doğum Tarihi" placeholder="GG/AA/YYYY" value={form.dogum} onChangeText={e => setForm(p => ({
             ...p,
             dogum: formatBirthDate(e)
@@ -262,7 +273,7 @@ function Step2({
   return <Box style={{
     flex: 1
   }}>
-      <TopNavBar navigate={navigate} fallback="onboarding-1" title="Üyelik Başvurusu" subtitle="Adım 2/3" />
+      <TopNavBar navigate={navigate} fallback="onboarding-1" title="Üyelik Başvurusu" floating />
       <Scroll style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
         <AtmoBackground />
 
@@ -403,7 +414,7 @@ function Step3({
     state: "future"
   }];
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
-    <TopNavBar navigate={navigate} fallback="onboarding-2" onBack={() => { if (timer.current) clearTimeout(timer.current); navigate("onboarding-2", { back: true }); }} title="Üyelik Başvurusu" subtitle="Adım 3/3" />
+    <TopNavBar navigate={navigate} fallback="onboarding-2" onBack={() => { if (timer.current) clearTimeout(timer.current); navigate("onboarding-2", { back: true }); }} title="Üyelik Başvurusu" floating />
     <Scroll style={[[ui.flex1, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.px6], { paddingTop: 84 }]}>
       <AtmoBackground variant="violet" />
 

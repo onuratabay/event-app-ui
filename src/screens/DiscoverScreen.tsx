@@ -279,11 +279,18 @@ function EventCard({
   };
   const progress = event.currentParticipants / event.minParticipants;
   const isForming = !event.isActive;
+  const fillRate = event.maxParticipants ? event.currentParticipants / event.maxParticipants : 0;
+  const excitement = event.isActive && fillRate >= .7 ? "high" : event.isActive || fillRate >= .45 ? "medium" : "low";
+  const energy = excitement === "high"
+    ? { label: "Yüksek enerji", color: "#f9cf65", border: "rgba(249,207,101,.36)", background: "rgba(200,164,74,.17)" }
+    : excitement === "medium"
+      ? { label: "Canlanıyor", color: "#a9a5ff", border: "rgba(160,156,245,.28)", background: "rgba(124,112,240,.13)" }
+      : { label: "Sakin akış", color: "rgba(226,232,240,.68)", border: "rgba(226,232,240,.16)", background: "rgba(255,255,255,.06)" };
   return <Box style={[[], {}]} enter>
       <RippleButton onPress={onPress} rippleColor="rgba(255,255,255,0.06)" style={[[ui.wFull, ui.textLeft, ui.rounded2xl, ui.overflowHidden], {
       backgroundColor: "rgba(255,255,255,0.06)",
       borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.09)"
+      borderColor: energy.border
     }]} glass>
         {/* Cover */}
         <Box style={[[ui.relative, ui.h44, ui.overflowHidden, ui.bgGray900]]}>
@@ -362,12 +369,12 @@ function EventCard({
               </Label>
             </Box>
             <Label style={[[ui.text10px, ui.px2, ui.py05, ui.roundedFull, ui.fontMedium], {
-            backgroundColor: "rgba(124,112,240,0.12)",
-            color: "rgba(160,156,245,0.9)",
+            backgroundColor: energy.background,
+            color: energy.color,
             borderWidth: 1,
-            borderColor: "rgba(124,112,240,0.18)"
+            borderColor: energy.border
           }]}>
-              {event.level}
+              {energy.label} · {event.level}
             </Label>
           </Box>
 

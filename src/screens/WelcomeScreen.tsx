@@ -4,8 +4,54 @@ import { Box, Label, Picture, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import EditorialQuote from "../components/EditorialQuote";
+import { Animated } from "react-native";
+import { useEffect, useRef } from "react";
 interface Props {
   navigate: NavigateFn;
+}
+function MotionSquares() {
+  const x = useRef(new Animated.Value(0)).current;
+  const y = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    let subscription: { remove: () => void } | undefined;
+    let mounted = true;
+    // Expo Go'da sensörü kullan; test/önizleme ortamında eksik native modül
+    // olduğunda açılış ekranı yine statik arka planla çalışmaya devam eder.
+    let motion: typeof import("expo-sensors").DeviceMotion | undefined;
+    try { motion = require("expo-sensors").DeviceMotion; } catch { return; }
+    if (!motion) return;
+    const deviceMotion = motion;
+    void deviceMotion.isAvailableAsync().then(available => {
+      if (!available || !mounted) return;
+      deviceMotion.setUpdateInterval(50);
+      subscription = deviceMotion.addListener(({ rotation }) => {
+        x.setValue(Math.max(-1, Math.min(1, (rotation?.gamma || 0) / 0.45)));
+        y.setValue(Math.max(-1, Math.min(1, (rotation?.beta || 0) / 0.45)));
+      });
+    }).catch(() => {});
+    return () => { mounted = false; subscription?.remove(); };
+  }, [x, y]);
+  const squares = [
+    { size: 172, top: "13%", left: "-20%", depth: 26, color: "rgba(124,112,240,.16)", angle: "-16deg" },
+    { size: 128, top: "27%", left: "62%", depth: -20, color: "rgba(225,189,101,.14)", angle: "14deg" },
+    { size: 102, top: "48%", left: "9%", depth: 16, color: "rgba(248,250,252,.10)", angle: "22deg" },
+    { size: 154, top: "57%", left: "66%", depth: -28, color: "rgba(124,112,240,.12)", angle: "-9deg" },
+    { size: 78, top: "72%", left: "37%", depth: 12, color: "rgba(225,189,101,.13)", angle: "18deg" },
+  ];
+  return <Box pointerEvents="none" style={[[ui.fixed, ui.inset0, ui.overflowHidden]]}>
+    {squares.map((square, index) => <Animated.View key={index} style={{
+      position: "absolute", top: square.top as `${number}%`, left: square.left as `${number}%`, width: square.size, height: square.size,
+      borderRadius: 28, borderWidth: 1, borderColor: "rgba(255,255,255,.18)", backgroundColor: square.color,
+      transform: [
+        { perspective: 900 },
+        { translateX: x.interpolate({ inputRange: [-1, 1], outputRange: [-square.depth, square.depth] }) },
+        { translateY: y.interpolate({ inputRange: [-1, 1], outputRange: [-square.depth, square.depth] }) },
+        { rotate: square.angle },
+        { rotateX: y.interpolate({ inputRange: [-1, 1], outputRange: ["-7deg", "7deg"] }) },
+        { rotateY: x.interpolate({ inputRange: [-1, 1], outputRange: ["7deg", "-7deg"] }) },
+      ],
+    }} />)}
+  </Box>;
 }
 export default function WelcomeScreen({
   navigate
@@ -14,6 +60,7 @@ export default function WelcomeScreen({
   if (checkingSession) return null;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
+      <MotionSquares />
 
       {/* Premium animated background */}
       <Box style={[[ui.fixed, ui.inset0, ui.overflowHidden]]}>
@@ -110,24 +157,6 @@ export default function WelcomeScreen({
 
       {/* Bottom fade */}
       <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(16,24,39,0.12)", "transparent", "rgba(16,24,39,0.72)", "rgba(16,24,39,0.98)"]} gradientDirection="down" />
-
-      {/* Top logo area */}
-      <Box style={[[ui.relative, ui.pt16, ui.px8]]} enter>
-        <Box style={[[ui.flex, ui.itemsCenter, ui.gap25]]}>
-          <Box style={[[ui.w8, ui.h8, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-          backgroundColor: "rgba(255,255,255,0.08)",
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.12)"
-        }]}>
-            <Label style={[[ui.fontDisplay, ui.textSm, ui.fontLight, ui.textWhite80]]}>
-              E
-            </Label>
-          </Box>
-          <Label style={[[ui.textSm, ui.tracking02em, ui.textWhite40, ui.uppercase, ui.fontLight]]}>
-            Gerçek Anlar
-          </Label>
-        </Box>
-      </Box>
 
       {/* Middle decorative element */}
       <Box style={[[ui.relative, ui.flex1, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.px8]]}>

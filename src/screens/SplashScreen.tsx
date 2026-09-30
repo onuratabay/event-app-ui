@@ -12,8 +12,13 @@ export default function SplashScreen({
 }: Props) {
   useEffect(() => {
     let active = true;
-    hasSession().then(session => { if (active) navigate(session ? "discover" : "welcome"); }).catch(() => { if (active) navigate("welcome"); });
-    return () => { active = false; };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const startedAt = Date.now();
+    hasSession().then(session => {
+      const wait = Math.max(0, 850 - (Date.now() - startedAt));
+      timer = setTimeout(() => { if (active) navigate(session ? "discover" : "welcome"); }, wait);
+    }).catch(() => { timer = setTimeout(() => { if (active) navigate("welcome"); }, 850); });
+    return () => { active = false; if (timer) clearTimeout(timer); };
   }, [navigate]);
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />

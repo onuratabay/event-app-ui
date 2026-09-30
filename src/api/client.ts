@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import { Platform } from "react-native"
 import Constants from "expo-constants"
 import { resolveApiUrl } from "./config"
+import { apiLoading } from "./loading"
 
 export const API_URL = resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, __DEV__ ? Constants.expoConfig?.hostUri : undefined, Platform.OS)
 class ApiConnectionError extends Error {}
@@ -61,9 +62,11 @@ export function getApiErrorMessage(error: unknown, fallback = "Lütfen tekrar de
 
 export const apiRequestCounts: Record<string, number> = {}
 async function request<T>(path: string, options: RequestInit = {}, retryAuth = true): Promise<T> {
+  apiLoading.begin()
   const started = Date.now()
   const counterKey = `${options.method || 'GET'} ${path.split('?')[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ':id')}`
   if (__DEV__) apiRequestCounts[counterKey] = (apiRequestCounts[counterKey] || 0) + 1
+  try {
   const accessToken = await AsyncStorage.getItem(ACCESS_TOKEN_KEY)
   const controller = new AbortController()
   const cancel = () => controller.abort()
@@ -106,6 +109,9 @@ async function request<T>(path: string, options: RequestInit = {}, retryAuth = t
   const result = await response.json() as T
   if (__DEV__) console.debug('[API REQUEST]', { endpoint: counterKey, durationMs: Date.now() - started, responseBytes: unescape(encodeURIComponent(JSON.stringify(result))).length, count: apiRequestCounts[counterKey] })
   return result
+  } finally {
+    apiLoading.end()
+  }
 }
 
 let sessionVersion = 0

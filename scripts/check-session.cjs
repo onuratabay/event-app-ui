@@ -1,5 +1,6 @@
 module.exports = async function ({ mount, tap, act, text, storage }) {
   const assert = require("node:assert/strict")
+  const waitForSplash = () => new Promise(resolve => setTimeout(resolve, 900))
   const api = require("../src/api/client.ts")
   const oldFetch = global.fetch
   const ok = body => ({ ok: true, status: 200, json: async () => body })
@@ -8,11 +9,13 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   global.fetch = oldFetch
   let route
   let tree = await mount("Splash", { navigate: next => { route = next } })
+  await act(waitForSplash)
   assert.equal(route, "welcome")
   await act(async () => tree.unmount())
   storage.set("event-app:access-token", "old-access")
   storage.set("event-app:refresh-token", "refresh")
   tree = await mount("Splash", { navigate: next => { route = next } })
+  await act(waitForSplash)
   assert.equal(route, "discover")
   await act(async () => tree.unmount())
   for (const name of ["Login", "Welcome"]) {
@@ -52,6 +55,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   assert.equal(await api.hasSession(), false)
   global.fetch = oldFetch
   tree = await mount("Splash", { navigate: next => { route = next } })
+  await act(waitForSplash)
   assert.equal(route, "welcome")
   await act(async () => tree.unmount())
   tree = await mount("Discover", { navigate: next => { route = next } })

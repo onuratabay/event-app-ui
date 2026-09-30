@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { StyleSheet } from "react-native"
+import { BlurView } from "expo-blur"
 import type { NavigateFn, Screen } from "../types"
 import { Box, Label, Touch } from "../native/UI"
 import { ArrowLeftIcon } from "./Icons"
@@ -26,8 +27,9 @@ export default function TopNavBar({
   backLabel?: string
 }) {
   return (
-    <Box pointerEvents="box-none" style={s.frame}>
-      <Box style={s.bar}>
+    <Box pointerEvents="box-none" style={[s.frame, floating && s.floatingFrame]}>
+      {floating ? <BlurView intensity={34} tint="dark" style={s.backdrop} /> : null}
+      <Box style={[s.bar, floating && s.floatingBar]}>
         <Touch
           accessibilityLabel="Geri git"
           onPress={onBack || (() => navigate(fallback, { back: true }))}
@@ -57,14 +59,24 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 8,
   },
+  floatingFrame: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(6, 6, 14, .42)",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,.10)",
+  },
   bar: {
     width: "100%",
-    maxWidth: 680,
     minHeight: 52,
     paddingHorizontal: 8,
     flexDirection: "row",
     alignItems: "center",
   },
+  floatingBar: { paddingHorizontal: 20, minHeight: TOP_NAV_HEIGHT },
   back: {
     width: 44,
     height: 44,
