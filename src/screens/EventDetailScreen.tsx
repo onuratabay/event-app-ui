@@ -306,10 +306,10 @@ export default function EventDetailScreen({
           </Box> : !joined /* Forming event: not joined yet */ ? null : null}
 
         {/* Forming event hint (not active + not joined) */}
-        {!event.isActive && !joined && <Box style={[[ui.rounded2xl, ui.px4, ui.py3, ui.flex, ui.itemsCenter, ui.gap25], {
-        backgroundColor: "rgba(251,191,36,0.06)",
+        {!event.isActive && !joined && <Box glass style={[[ui.rounded2xl, ui.px4, ui.py3, ui.flex, ui.itemsCenter, ui.gap25], {
+        backgroundColor: "rgba(251,191,36,0.11)",
         borderWidth: 1,
-        borderColor: "rgba(251,191,36,0.12)"
+        borderColor: "rgba(251,191,36,0.22)"
       }]}>
             <Vector width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(251,191,36,0.6)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <Circle cx="12" cy="12" r="10" />
@@ -328,9 +328,11 @@ export default function EventDetailScreen({
           try { await socketAction('event:waitlist_join', { eventId: event.id }); Alert.alert('Yedek listedesin', 'Organizatör kabul ettiğinde katılımın güncellenecek.'); }
           catch (cause) { Alert.alert('Yedek liste', cause instanceof Error ? cause.message : 'Tekrar dene.'); }
           finally { setJoining(false); }
-        }} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase], {
-        color: "#1a1200"
-      }]} gradient={["#c8a44a", "#c09038"]} enter>
+        }} glass style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase], {
+        color: "#1a1200",
+        borderWidth: 1,
+        borderColor: "rgba(255,232,157,.58)"
+      }]} gradient={["rgba(225,189,101,.88)", "rgba(200,164,74,.84)", "rgba(192,144,56,.86)"]} enter>
             {event.waitlisted ? 'Yedek listeden ayrıl' : event.currentParticipants >= event.maxParticipants ? 'Yedek listeye katıl' : 'Katıl'}
           </Touch> : <Touch disabled={joining || event.host.id === store.user.id} onPress={() => setJoined(false)} style={[[ui.wFull, ui.py35, ui.rounded2xl, ui.textSm, ui.textWhite35, ui.border, ui.borderWhite8, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.gap2]]}>
             <CheckIcon size={14} strokeWidth={2} style={[[ui.textWhite35]]} />

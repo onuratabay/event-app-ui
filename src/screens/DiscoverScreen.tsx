@@ -1,7 +1,7 @@
 import { favoriteEvent, getApiErrorMessage } from "../api/client";
 import { ActivityIndicator, Alert, FlatList, Platform } from "react-native";
 import { useState } from "react";
-import { Circle, Line, Path, Polygon, Polyline } from "react-native-svg";
+import { Line, Path, Polyline } from "react-native-svg";
 import RecommendationsSheet from "../recommendations/RecommendationsSheet";
 import HeaderIconButton from "../components/HeaderIconButton";
 import BottomNav from "../components/BottomNav";
@@ -456,35 +456,37 @@ export default function DiscoverScreen({
       <AtmoBackground />
 
       <Box style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol, ui.overflowHidden]]}>
-        {/* Header */}
-        <Box style={[[ui.pt14, ui.px5, ui.pb3]]} enter>
-          <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween]]}>
-            <Box style={[[ui.flex, ui.itemsCenter, ui.gap25]]}>
-              <Box style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.glass], {
-              backgroundColor: "rgba(255,255,255,0.07)",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.11)"
-            }]} glass>
-                <Vector width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(200,164,74,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <Circle cx="12" cy="12" r="10" />
-                  <Polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-                </Vector>
-              </Box>
-              <Box>
-                <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite75, ui.trackingWide]]}>
-                  Keşfet
-                </Label>
-                <Label style={[[ui.text10px, ui.textWhite28]]}>
-                  Ankara · Çankaya
-                </Label>
-              </Box>
-            </Box>
-
-            <Box style={{ flexDirection: "row", gap: 8 }}>
+        {/* Floating controls: the feed now continues underneath this liquid-glass layer. */}
+        <Box glass style={[[ui.fixed, ui.top0, ui.left0, ui.right0, ui.z40], {
+          backgroundColor: "rgba(10, 19, 41, .45)",
+          borderBottomWidth: 1,
+          borderBottomColor: "rgba(202,216,255,.16)",
+        }]} enter>
+        <Box style={[[ui.pt14, ui.px5, ui.pb3]]}>
+          <Box style={{ alignItems: "flex-end", gap: 6 }}>
+              {isCustomSort && <Box glass style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.px3, ui.roundedXl], {
+                width: 132,
+                height: 44,
+                backgroundColor: "rgba(200,164,74,.13)",
+                borderWidth: 1,
+                borderColor: "rgba(225,189,101,.32)",
+              }]}>
+                <Label style={[[ui.text10px, ui.fontMedium, ui.textC8a44a70]]} numberOfLines={1}>{sortLabel}</Label>
+                <Touch accessibilityLabel="Sıralamayı temizle" onPress={() => setSortBy("recommended")} style={[[ui.text10px, ui.textWhite55], { paddingLeft: 8 }]}>Temizle</Touch>
+              </Box>}
+              <Box style={{ flexDirection: "row", gap: 8 }}>
               <HeaderIconButton label="Ara" onPress={() => navigate("search")}><SearchIcon size={20} strokeWidth={1.8} style={{ color: "#f0ede8" }} /></HeaderIconButton>
               <HeaderIconButton label="Sana özel öneriler" highlighted onPress={() => setRecommendationsOpen(true)}><SparklesIcon size={20} strokeWidth={1.8} style={{ color: "#e1bd65" }} /></HeaderIconButton>
               <HeaderIconButton label="Bildirimler" onPress={() => navigate("notifications")}><BellIcon size={20} strokeWidth={1.8} style={{ color: "#f0ede8" }} /></HeaderIconButton>
-            </Box>
+              <Touch accessibilityLabel="Sıralama ve filtre" onPress={() => setSortOpen(true)} style={[[ui.flexShrink0, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.w10, ui.h10, ui.roundedXl], {
+                backgroundColor: isCustomSort ? "rgba(200,164,74,0.12)" : "rgba(255,255,255,0.07)",
+                borderWidth: 1,
+                borderColor: isCustomSort ? "rgba(200,164,74,0.3)" : "rgba(255,255,255,0.10)",
+                color: isCustomSort ? "#c8a44a" : "rgba(255,255,255,0.45)"
+              }]} glass>
+                <SortIcon active={isCustomSort} />
+              </Touch>
+              </Box>
           </Box>
         </Box>
 
@@ -495,31 +497,15 @@ export default function DiscoverScreen({
             <Scroll style={[[ui.flex, ui.gap2, ui.pb05, ui.flex1, ui.minW0]]} horizontal>
               {FILTERS.map(f => <FilterChip key={f.label} label={f.label} emoji={f.emoji} selected={activeFilter === f.label} onPress={() => setActiveFilter(f.label)} />)}
             </Scroll>
-
-            {/* Sort button */}
-            <Touch onPress={() => setSortOpen(true)} style={[[ui.flexShrink0, ui.flex, ui.itemsCenter, ui.gap15, ui.px3, ui.py2, ui.roundedFull], {
-            backgroundColor: isCustomSort ? "rgba(200,164,74,0.12)" : "rgba(255,255,255,0.07)",
-            borderWidth: 1,
-            borderColor: isCustomSort ? "rgba(200,164,74,0.3)" : "rgba(255,255,255,0.10)",
-            color: isCustomSort ? "#c8a44a" : "rgba(255,255,255,0.45)"
-          }]} glass>
-              <SortIcon active={isCustomSort} />
-            </Touch>
           </Box>
 
-          {/* Active sort label */}
-          {isCustomSort && <Box style={[[ui.mt2, ui.flex, ui.itemsCenter, ui.gap15]]} enter>
-              <Label style={[[ui.textXs, ui.textC8a44a70]]}>{sortLabel}</Label>
-              <Touch onPress={() => setSortBy("recommended")} style={[[ui.text10px, ui.textWhite25]]}>
-                · Temizle
-              </Touch>
-            </Box>}
+        </Box>
         </Box>
 
         {/* Events */}
         <EventList
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 112, flexGrow: visibleEvents.length ? 0 : 1 }}
+          contentContainerStyle={{ paddingTop: 104, paddingHorizontal: 20, paddingBottom: 112, flexGrow: visibleEvents.length ? 0 : 1 }}
           data={visibleEvents}
           keyExtractor={event => event.id}
           renderItem={({ item: event, index }) => <Box style={{ marginBottom: 16 }}><EventCard event={event} index={index} onPress={() => navigate("event-detail", {

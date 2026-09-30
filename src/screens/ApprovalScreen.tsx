@@ -78,8 +78,8 @@ export default function ApprovalScreen({
         </Box>
 
         {/* Stats */}
-        <Box style={[[ui.grid, ui.gap3]]} columns={3} enter>
-          {STATS.map((s, i) => <GlassCard key={i} style={[[ui.p4, ui.textCenter]]}>
+        <Box style={[[ui.flex, ui.wFull, ui.gap2], { flexWrap: "nowrap" }]} enter>
+          {STATS.map((s, i) => <GlassCard key={i} style={[[ui.flex1, ui.p3, ui.textCenter], { minWidth: 0 }]}>
               <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight], {
             color: "#c8a44a"
           }]}>

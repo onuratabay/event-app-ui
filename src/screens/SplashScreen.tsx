@@ -1,4 +1,4 @@
-import { hasSession } from "../api/client";
+import { getCurrentUser, hasSession, logout } from "../api/client";
 import { useEffect, useRef } from "react";
 import { Animated, Easing } from "react-native";
 import { AtmoBackground } from "../components/GlassUI";
@@ -17,10 +17,22 @@ export default function SplashScreen({
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const startedAt = Date.now();
-    hasSession().then(session => {
+    const resolveDestination = async () => {
+      let destination: "discover" | "login" | "welcome" = "welcome";
+      try {
+        if (await hasSession()) {
+          await getCurrentUser();
+          destination = "discover";
+        }
+      } catch {
+        // A stale local token must never open an empty authenticated feed.
+        await logout().catch(() => {});
+        destination = "login";
+      }
       const wait = Math.max(0, 2850 - (Date.now() - startedAt));
-      timer = setTimeout(() => { if (active) navigate(session ? "discover" : "welcome"); }, wait);
-    }).catch(() => { timer = setTimeout(() => { if (active) navigate("welcome"); }, 2850); });
+      timer = setTimeout(() => { if (active) navigate(destination); }, wait);
+    };
+    void resolveDestination();
     return () => { active = false; if (timer) clearTimeout(timer); };
   }, [navigate]);
   useEffect(() => {
