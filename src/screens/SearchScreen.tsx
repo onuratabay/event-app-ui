@@ -82,7 +82,7 @@ export default function SearchScreen({
               <Label style={[[ui.textXs, ui.textWhite25, ui.uppercase, ui.trackingWider, ui.mb3]]}>
                 Son aramalar
               </Label>
-              <Box style={[[ui.gapY1, ui.itemsStart]]}>
+              <Box style={[[ui.gapY1, ui.wFull]]}>
                 {RECENT.map(r => <Touch key={r} onPress={() => setQuery(r)} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.gap3, ui.py25, ui.textLeft, ui.roundedXl, ui.px2]]}>
                     <Box style={[[ui.w7, ui.h7, ui.roundedLg, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0], {
                 backgroundColor: "rgba(255,255,255,0.05)",
@@ -91,7 +91,7 @@ export default function SearchScreen({
               }]}>
                       <ClockIcon size={13} strokeWidth={1.5} style={[[ui.textWhite25]]} />
                     </Box>
-                    <Label style={[[ui.textSm, ui.textWhite55, ui.textLeft]]}>{r}</Label>
+                    <Label style={[[ui.flex1, ui.textSm, ui.textWhite55, ui.textLeft]]}>{r}</Label>
                   </Touch>)}
               </Box>
             </Box>
