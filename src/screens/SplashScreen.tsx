@@ -1,5 +1,6 @@
 import { hasSession } from "../api/client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { Animated, Easing } from "react-native";
 import { AtmoBackground } from "../components/GlassUI";
 import { Box, Label } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -10,41 +11,59 @@ interface Props {
 export default function SplashScreen({
   navigate
 }: Props) {
+  const orbit = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const startedAt = Date.now();
     hasSession().then(session => {
-      const wait = Math.max(0, 850 - (Date.now() - startedAt));
+      const wait = Math.max(0, 1850 - (Date.now() - startedAt));
       timer = setTimeout(() => { if (active) navigate(session ? "discover" : "welcome"); }, wait);
-    }).catch(() => { timer = setTimeout(() => { if (active) navigate("welcome"); }, 850); });
+    }).catch(() => { timer = setTimeout(() => { if (active) navigate("welcome"); }, 1850); });
     return () => { active = false; if (timer) clearTimeout(timer); };
   }, [navigate]);
+  useEffect(() => {
+    // The lightweight native-host test shim does not implement animation loops.
+    if (typeof Animated.loop !== "function") return;
+    const orbitAnimation = Animated.loop(Animated.timing(orbit, { toValue: 1, duration: 4200, easing: Easing.linear, useNativeDriver: true }));
+    const pulseAnimation = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 850, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0, duration: 850, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]));
+    orbitAnimation.start();
+    pulseAnimation.start();
+    return () => { orbitAnimation.stop(); pulseAnimation.stop(); };
+  }, [orbit, pulse]);
+  const spin = orbit.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  const coreScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [.96, 1.06] });
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
 
-      {/* Rotating glass ring */}
-      <Box style={[[ui.fixed, ui.w72, ui.h72, ui.roundedFull, ui.border, ui.borderWhite5]]} enter />
-      <Box style={[[ui.fixed, ui.w52, ui.h52, ui.roundedFull, ui.border, ui.borderWhite8]]} enter />
-
-      {/* Refraction circle */}
-      <Box style={[[ui.fixed, ui.w40, ui.h40, ui.roundedFull], {}]} gradient={["rgba(200,164,74,0.15)", "rgba(124,112,240,0.08)", "transparent"]} enter />
-
-      {/* Logo */}
-      <Box style={[[ui.relative, ui.flex, ui.flexCol, ui.itemsCenter, ui.gap3]]} enter>
-        <Box style={[[ui.w20, ui.h20, ui.rounded28px, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-        backgroundColor: "rgba(255,255,255,0.07)",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.12)"
-      }]} glass>
-          <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite90]]}>
-            E
-          </Label>
-        </Box>
+      <Box style={[[ui.relative, ui.flex, ui.flexCol, ui.itemsCenter, ui.gap4]]} enter>
+        <Animated.View style={{ width: 184, height: 184, alignItems: "center", justifyContent: "center", transform: [{ rotate: spin }] }}>
+          {[["🏃", -64, -52], ["🎨", 64, -45], ["☕", 54, 66], ["🎵", -66, 52]].map(([icon, x, y]) => <Box key={String(icon)} style={[[ui.fixed, ui.w11, ui.h11, ui.roundedFull, ui.flex, ui.itemsCenter, ui.justifyCenter], {
+            transform: [{ translateX: x as number }, { translateY: y as number }],
+            backgroundColor: "rgba(255,255,255,.10)",
+            borderWidth: 1,
+            borderColor: "rgba(226, 200, 117, .32)",
+          }]} glass>
+              <Label style={{ fontSize: 21, lineHeight: 28 }}>{icon}</Label>
+            </Box>)}
+          <Box style={[[ui.fixed, ui.roundedFull, ui.border, ui.borderWhite8], { width: 128, height: 128 }]} />
+        </Animated.View>
+        <Animated.View style={{ position: "absolute", top: 58, transform: [{ scale: coreScale }] }}>
+          <Box style={[[ui.w20, ui.h20, ui.rounded28px, ui.flex, ui.itemsCenter, ui.justifyCenter], {
+            backgroundColor: "rgba(200,164,74,.16)", borderWidth: 1, borderColor: "rgba(242,216,137,.42)",
+          }]} glass>
+            <Label style={[[ui.fontDisplay, ui.text2xl, ui.textWhite90]]}>✦</Label>
+          </Box>
+        </Animated.View>
         <Box style={[[ui.textCenter]]}>
-          <Label style={[[ui.fontDisplay, ui.textXl, ui.fontLight, ui.textWhite90, ui.uppercase], { letterSpacing: 1.5, lineHeight: 30, paddingVertical: 2 }]}>
-            Birlikte, gerçekten.
+          <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite90], { lineHeight: 34, paddingVertical: 2 }]}>
+            Yeni anlar yaklaşıyor.
           </Label>
+          <Label style={[[ui.textSm, ui.textWhite45, ui.mt1]]}>Etkinlikler, insanlar ve iyi bir başlangıç.</Label>
           <Box style={[[ui.mt2, ui.hPx, ui.w24, ui.mxAuto], {}]} gradient={["transparent", "rgba(200,164,74,0.6)", "transparent"]} gradientDirection="right" />
         </Box>
       </Box>

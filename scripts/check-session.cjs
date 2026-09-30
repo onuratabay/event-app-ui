@@ -1,6 +1,6 @@
 module.exports = async function ({ mount, tap, act, text, storage }) {
   const assert = require("node:assert/strict")
-  const waitForSplash = () => new Promise(resolve => setTimeout(resolve, 900))
+  const waitForSplash = () => new Promise(resolve => setTimeout(resolve, 1900))
   const api = require("../src/api/client.ts")
   const oldFetch = global.fetch
   const ok = body => ({ ok: true, status: 200, json: async () => body })
