@@ -14,7 +14,7 @@ export default function TopNavBar({
   title,
   subtitle,
   right,
-  floating = false,
+  floating = true,
   backLabel,
 }: {
   navigate: NavigateFn
