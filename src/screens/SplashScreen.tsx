@@ -42,7 +42,7 @@ export default function SplashScreen({
           </Label>
         </Box>
         <Box style={[[ui.textCenter]]}>
-          <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.tracking03em, ui.textWhite90, ui.uppercase]]}>
+          <Label style={[[ui.fontDisplay, ui.textXl, ui.fontLight, ui.textWhite90, ui.uppercase], { letterSpacing: 1.5, lineHeight: 30, paddingVertical: 2 }]}>
             Birlikte, gerçekten.
           </Label>
           <Box style={[[ui.mt2, ui.hPx, ui.w24, ui.mxAuto], {}]} gradient={["transparent", "rgba(200,164,74,0.6)", "transparent"]} gradientDirection="right" />

@@ -64,10 +64,15 @@ const s = StyleSheet.create({
     paddingTop: 0,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(6, 6, 14, .42)",
+    ...StyleSheet.absoluteFill,
+    // A tinted liquid-glass band keeps the application title legible over scrolling copy.
+    backgroundColor: "rgba(11, 21, 44, .76)",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,.10)",
+    borderBottomColor: "rgba(195, 211, 255, .22)",
+    shadowColor: "#020617",
+    shadowOpacity: .3,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 9 },
   },
   bar: {
     width: "100%",
@@ -76,7 +81,11 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  floatingBar: { paddingHorizontal: 20, minHeight: TOP_NAV_HEIGHT },
+  floatingBar: {
+    paddingHorizontal: 20,
+    minHeight: TOP_NAV_HEIGHT,
+    backgroundColor: "rgba(36, 48, 86, .16)",
+  },
   back: {
     width: 44,
     height: 44,

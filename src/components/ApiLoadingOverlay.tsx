@@ -52,7 +52,7 @@ export default function ApiLoadingOverlay() {
 }
 
 const styles = StyleSheet.create({
-  layer: { ...StyleSheet.absoluteFillObject, zIndex: 900, elevation: 900, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(7,12,25,.45)" },
+  layer: { ...StyleSheet.absoluteFill, zIndex: 900, elevation: 900, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(7,12,25,.45)" },
   card: { width: 220, alignItems: "center", paddingVertical: 22, paddingHorizontal: 18, borderRadius: 28, borderWidth: 1, borderColor: "rgba(255,255,255,.18)", backgroundColor: "rgba(16,24,39,.94)", shadowColor: "#000", shadowOpacity: .35, shadowRadius: 22, shadowOffset: { width: 0, height: 12 } },
   image: { width: 112, height: 112, marginBottom: 4 },
   title: { color: "#f8fafc", fontFamily: "Outfit-SemiBold", fontSize: 16, lineHeight: 22 },

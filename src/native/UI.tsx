@@ -233,7 +233,13 @@ export function Label({
 }) {
   const inherited = useContext(Typography)
   const flat = StyleSheet.flatten(style) || {}
-  const typography = {...inherited, ...split(style).text}
+  const ownTypography = split(style).text
+  const typography = { ...inherited, ...ownTypography }
+  // A larger font must not inherit the 15px body line height. That caused
+  // display headings to be vertically clipped on smaller devices.
+  if (ownTypography.fontSize !== undefined && ownTypography.lineHeight === undefined) {
+    typography.lineHeight = Math.ceil(Number(ownTypography.fontSize) * 1.28)
+  }
   return <Typography.Provider value={typography}><Text {...props} style={[flat, font(typography)]}>{children}</Text></Typography.Provider>
 }
 
