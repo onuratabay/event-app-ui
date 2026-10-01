@@ -8,13 +8,13 @@ import * as Location from "expo-location"
 import DiscoveryFilterSheet from "../map/DiscoveryFilterSheet"
 import { apiDate, applyDiscoveryFilters, categoryVisual, dateRange, placeBounds, DEFAULT_FILTERS, filterError, type DiscoveryFilters, type MapPlace } from "../map/filters"
 import MapView, { Marker, type Region } from "react-native-maps"
-import Svg, { Path } from "react-native-svg"
+import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg"
 import BottomNav from "../components/BottomNav"
 import { FilterChip } from "../components/GlassUI"
 import { getApiErrorMessage, getMapEvents, getMapInterests, type ApiEvent } from "../api/client"
 import { mapApiEvent, useStore } from "../native/Store"
 import { Box, Label, Scroll, Touch } from "../native/UI"
-import { COLORS, createIndex, densityPaths, INITIAL_REGION, isVisible, modeForZoom, zoomForRegion } from "../map/model"
+import { COLORS, createIndex, densitySpots, INITIAL_REGION, isVisible, modeForZoom, zoomForRegion } from "../map/model"
 import type { NavigateFn } from "../types"
 
 const MODE_LABELS = { heat: "Yoğunluk", cluster: "Etkinlik kümeleri", event: "Etkinlikler" }
@@ -47,7 +47,6 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   const [truncated, setTruncated] = useState(false)
   const [retry, setRetry] = useState(0)
   const [ready, setReady] = useState(false)
-  const [panelHeight, setPanelHeight] = useState(190)
   const [selected, setSelected] = useState<ApiEvent[]>([])
   useEventDeltas(screenActive ? events.map(event => event.id) : [], patch => {
     setEvents(previous => previous.map(event => patchApiEvent(event, patch)))
@@ -131,7 +130,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     region.longitude - region.longitudeDelta / 2, Math.max(-85, region.latitude - region.latitudeDelta / 2),
     region.longitude + region.longitudeDelta / 2, Math.min(85, region.latitude + region.latitudeDelta / 2),
   ], Math.floor(zoom)), [index, region, zoom])
-  const density = useMemo(() => mode === "heat" ? densityPaths(filtered, region, size.width, size.height) : [], [filtered, region, size, mode])
+  const density = useMemo(() => mode === "heat" ? densitySpots(filtered, region, size.width, size.height) : [], [filtered, region, size, mode])
   const visible = useMemo(() => filtered.filter(event => isVisible(event, region)), [filtered, region])
   const heatOpacity = Math.max(0, Math.min(1, (11 - zoom) / 0.65))
   const markerOpacity = Math.max(0, Math.min(1, (zoom - 10.35) / 0.65))
@@ -158,8 +157,9 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     navigate("event-detail", { eventId: event.id })
   }
   return <Box style={s.root}>
-    <View style={[StyleSheet.absoluteFill, { bottom: panelHeight + 96 }]} onLayout={event => setSize(event.nativeEvent.layout)}>
-      <MapView ref={map} testID="event-map" style={StyleSheet.absoluteFill} initialRegion={INITIAL_REGION}
+    {/* The map owns the entire canvas. Every control below is an overlay layer. */}
+    <View style={StyleSheet.absoluteFill} onLayout={event => setSize(event.nativeEvent.layout)}>
+      <MapView ref={map} testID="event-map" style={StyleSheet.absoluteFill} initialRegion={INITIAL_REGION} mapType="satellite"
         userInterfaceStyle="dark" rotateEnabled={false} pitchEnabled={false} showsCompass={false}
         showsPointsOfInterests={false} showsBuildings={false} toolbarEnabled={false}
         onMapReady={() => setReady(true)} onRegionChange={setRegion} onRegionChangeComplete={setRegion}
@@ -195,7 +195,18 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
         })}
       </MapView>
       {mode === "heat" && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: heatOpacity }]}>
-        <Svg width={size.width} height={size.height}>{density.filter(path => path.d).map((path, i) => <Path key={i} d={path.d} fill={path.color} opacity={path.opacity} />)}</Svg>
+        <Svg width={size.width} height={size.height}>
+          <Defs>
+            <RadialGradient id="heat-bloom" cx="50%" cy="50%" rx="50%" ry="50%">
+              <Stop offset="0%" stopColor="#9bf000" stopOpacity=".78" />
+              <Stop offset="30%" stopColor="#46e600" stopOpacity=".58" />
+              <Stop offset="56%" stopColor="#00eadf" stopOpacity=".38" />
+              <Stop offset="78%" stopColor="#3376ff" stopOpacity=".18" />
+              <Stop offset="100%" stopColor="#8f6cff" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          {density.map((spot, i) => <Circle key={`${i}-${spot.x}-${spot.y}`} cx={spot.x} cy={spot.y} r={spot.radius} fill="url(#heat-bloom)" />)}
+        </Svg>
       </View>}
     </View>
     <TopNavBar navigate={navigate} fallback="discover" onBack={() => navigate("discover")} title="Harita" subtitle={`${visible.length} etkinlik görünümde`} floating />
@@ -214,7 +225,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
       <Touch accessibilityLabel="Tüm etkinlikleri göster" disabled={!filtered.length} onPress={() => map.current?.fitToCoordinates(filtered.map(event => ({ latitude: event.latitude, longitude: event.longitude })), { edgePadding: { top: 150, right: 50, bottom: 30, left: 50 }, animated: true })} style={s.control}><Label style={s.controlText}>◎</Label></Touch>
     </Box>
     <Box style={s.bottom}>
-      <Box style={s.panel} onLayout={event => setPanelHeight(event.nativeEvent.layout.height)}>
+      <Box glass style={s.panel}>
         <Box style={s.heading}><Label style={s.panelTitle}>{MODE_LABELS[mode]}</Label><Label style={s.muted}>Otomatik görünüm</Label></Box>
         <Box style={s.legend}>
           {mode === "heat" ? ["Seyrek", "Orta", "Yoğun", "Çok yoğun"].map((label, i) => <Box key={label} style={s.legendItem}><View style={[s.dot, { backgroundColor: COLORS[i] }]} /><Label style={s.muted}>{label}</Label></Box>) : <Scroll horizontal style={s.filters}>{categories.filter(item => filtered.some(event => event.interest.id === item.id)).map(item => <Box key={item.id} style={s.legendItem}><Label>{categoryVisual(item.name).icon}</Label><Label style={s.muted}>{item.name}</Label></Box>)}</Scroll>}
@@ -250,7 +261,7 @@ const s = StyleSheet.create({
   cluster: { minWidth: 44, height: 44, borderRadius: 22, borderColor: "#181823", borderWidth: 3 },
   pinText: { fontFamily: "Outfit-SemiBold", fontSize: 19, color: "#151320" },
   bottom: { position: "absolute", bottom: 88, left: 16, right: 16 },
-  panel: { borderRadius: 22, padding: 16, gap: 12, backgroundColor: "#11111f", borderWidth: 1, borderColor: "#ffffff1a" },
+  panel: { borderRadius: 22, padding: 16, gap: 12, backgroundColor: "rgba(13, 18, 36, .76)", borderWidth: 1, borderColor: "rgba(226, 232, 240, .22)", shadowColor: "#020617", shadowOpacity: .28, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
   panelTitle: { fontFamily: "Outfit-SemiBold", color: "#f0ede8", fontSize: 15 },
   muted: { color: "#ddd9e8", fontSize: 11, lineHeight: 16 },
   legend: { flexDirection: "row", gap: 14, flexWrap: "wrap" },

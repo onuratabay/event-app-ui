@@ -65,3 +65,15 @@ export function densityPaths(events: ApiEvent[], region: Region, width: number, 
   }
   return paths.map((d, level) => ({ d, color: COLORS[Math.min(3, Math.floor(level / 6))], opacity: 0.12 + level / 23 * 0.65 }))
 }
+
+// Smooth radial blooms are layered in SVG rather than painted as visible grid cells.
+// Overlapping blooms naturally become brighter, preserving the density signal.
+export function densitySpots(events: ApiEvent[], region: Region, width: number, height: number) {
+  // At city-level zoom a compact bloom reads as a density field, not a set of rings.
+  const radius = Math.max(36, Math.min(68, Math.min(width, height) * 0.11))
+  return events
+    .map(event => project(event, region, width, height))
+    .filter(({ x, y }) => x > -radius && y > -radius && x < width + radius && y < height + radius)
+    .slice(0, 240)
+    .map(({ x, y }) => ({ x, y, radius }))
+}

@@ -456,18 +456,11 @@ export default function DiscoverScreen({
       <AtmoBackground />
 
       <Box style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol, ui.overflowHidden]]}>
-        {/* Floating controls: the feed now continues underneath this liquid-glass layer. */}
-        <Box glass style={[[ui.fixed, ui.top0, ui.left0, ui.right0, ui.z40], {
-          backgroundColor: "rgba(10, 19, 41, .45)",
-          borderBottomWidth: 1,
-          borderBottomColor: "rgba(202,216,255,.16)",
-        }]} enter>
+        {/* Only the action row is glass; the feed remains visually open beneath filters. */}
+        <Box style={[[ui.fixed, ui.top0, ui.left0, ui.right0, ui.z40]]}>
+        <Box glass style={{ height: 68, backgroundColor: "rgba(10, 19, 41, .45)", borderBottomWidth: 1, borderBottomColor: "rgba(202,216,255,.16)" }} enter>
         <Box style={[[ui.px5], { height: 68, justifyContent: "center" }]}>
-          <Box style={{ alignItems: "flex-end" }}>
-              <Box style={{ flexDirection: "row", gap: 8 }}>
-              <HeaderIconButton label="Ara" onPress={() => navigate("search")}><SearchIcon size={20} strokeWidth={1.8} style={{ color: "#f0ede8" }} /></HeaderIconButton>
-              <HeaderIconButton label="Sana özel öneriler" highlighted onPress={() => setRecommendationsOpen(true)}><SparklesIcon size={20} strokeWidth={1.8} style={{ color: "#e1bd65" }} /></HeaderIconButton>
-              <HeaderIconButton label="Bildirimler" onPress={() => navigate("notifications")}><BellIcon size={20} strokeWidth={1.8} style={{ color: "#f0ede8" }} /></HeaderIconButton>
+          <Box style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Touch accessibilityLabel="Sıralama ve filtre" onPress={() => setSortOpen(true)} style={[[ui.flexShrink0, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.w10, ui.h10, ui.roundedXl], {
                 backgroundColor: isCustomSort ? "rgba(200,164,74,0.12)" : "rgba(255,255,255,0.07)",
                 borderWidth: 1,
@@ -476,8 +469,13 @@ export default function DiscoverScreen({
               }]} glass>
                 <SortIcon active={isCustomSort} />
               </Touch>
+              <Box style={{ flexDirection: "row", gap: 8 }}>
+              <HeaderIconButton label="Ara" onPress={() => navigate("search")}><SearchIcon size={20} strokeWidth={1.8} style={{ color: "#f0ede8" }} /></HeaderIconButton>
+              <HeaderIconButton label="Sana özel öneriler" highlighted onPress={() => setRecommendationsOpen(true)}><SparklesIcon size={20} strokeWidth={1.8} style={{ color: "#e1bd65" }} /></HeaderIconButton>
+              <HeaderIconButton label="Bildirimler" onPress={() => navigate("notifications")}><BellIcon size={20} strokeWidth={1.8} style={{ color: "#f0ede8" }} /></HeaderIconButton>
               </Box>
           </Box>
+        </Box>
         </Box>
 
         {/* Filter row + sort */}
