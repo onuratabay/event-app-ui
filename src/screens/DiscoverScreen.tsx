@@ -462,18 +462,8 @@ export default function DiscoverScreen({
           borderBottomWidth: 1,
           borderBottomColor: "rgba(202,216,255,.16)",
         }]} enter>
-        <Box style={[[ui.pt14, ui.px5, ui.pb3]]}>
-          <Box style={{ alignItems: "flex-end", gap: 6 }}>
-              {isCustomSort && <Box glass style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.px3, ui.roundedXl], {
-                width: 132,
-                height: 44,
-                backgroundColor: "rgba(200,164,74,.13)",
-                borderWidth: 1,
-                borderColor: "rgba(225,189,101,.32)",
-              }]}>
-                <Label style={[[ui.text10px, ui.fontMedium, ui.textC8a44a70]]} numberOfLines={1}>{sortLabel}</Label>
-                <Touch accessibilityLabel="Sıralamayı temizle" onPress={() => setSortBy("recommended")} style={[[ui.text10px, ui.textWhite55], { paddingLeft: 8 }]}>Temizle</Touch>
-              </Box>}
+        <Box style={[[ui.px5], { height: 68, justifyContent: "center" }]}>
+          <Box style={{ alignItems: "flex-end" }}>
               <Box style={{ flexDirection: "row", gap: 8 }}>
               <HeaderIconButton label="Ara" onPress={() => navigate("search")}><SearchIcon size={20} strokeWidth={1.8} style={{ color: "#f0ede8" }} /></HeaderIconButton>
               <HeaderIconButton label="Sana özel öneriler" highlighted onPress={() => setRecommendationsOpen(true)}><SparklesIcon size={20} strokeWidth={1.8} style={{ color: "#e1bd65" }} /></HeaderIconButton>
@@ -492,6 +482,16 @@ export default function DiscoverScreen({
 
         {/* Filter row + sort */}
         <Box style={[[ui.px5, ui.pb3]]} enter>
+          {isCustomSort && <Box glass style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.px3, ui.roundedXl, ui.mb2], {
+            width: 156,
+            height: 44,
+            backgroundColor: "rgba(200,164,74,.13)",
+            borderWidth: 1,
+            borderColor: "rgba(225,189,101,.32)",
+          }]}>
+            <Label style={[[ui.text10px, ui.fontMedium, ui.textC8a44a70]]} numberOfLines={1}>{sortLabel}</Label>
+            <Touch accessibilityLabel="Sıralamayı temizle" onPress={() => setSortBy("recommended")} style={[[ui.text10px, ui.textWhite55], { paddingLeft: 8 }]}>Temizle</Touch>
+          </Box>}
           <Box style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>
             {/* Scrollable filters */}
             <Scroll style={[[ui.flex, ui.gap2, ui.pb05, ui.flex1, ui.minW0]]} horizontal>
@@ -505,7 +505,7 @@ export default function DiscoverScreen({
         {/* Events */}
         <EventList
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingTop: 104, paddingHorizontal: 20, paddingBottom: 112, flexGrow: visibleEvents.length ? 0 : 1 }}
+          contentContainerStyle={{ paddingTop: isCustomSort ? 160 : 112, paddingHorizontal: 20, paddingBottom: 112, flexGrow: visibleEvents.length ? 0 : 1 }}
           data={visibleEvents}
           keyExtractor={event => event.id}
           renderItem={({ item: event, index }) => <Box style={{ marginBottom: 16 }}><EventCard event={event} index={index} onPress={() => navigate("event-detail", {

@@ -59,7 +59,8 @@ export default function ApiLoadingOverlay() {
   return <View pointerEvents="none" style={styles.layer} accessibilityRole="progressbar" accessibilityLabel="Etkinlikler hazırlanıyor">
     <BlurView intensity={9} tint="dark" style={StyleSheet.absoluteFill} />
     <Animated.View style={[styles.orbit, { transform: [{ rotate: spin }] }]}>
-      {[["🏃", -42, -31], ["🎨", 42, -29], ["☕", 38, 35], ["🎵", -40, 35]].map(([icon, x, y]) => <Animated.View key={String(icon)} style={[styles.event, { transform: [{ translateX: x as number }, { translateY: y as number }, { rotate: counterSpin }] }]}><Label style={styles.eventIcon}>{icon}</Label></Animated.View>)}
+      {[["🏃", -64, -52], ["🎨", 64, -45], ["☕", 54, 66], ["🎵", -66, 52]].map(([icon, x, y]) => <Animated.View key={String(icon)} style={[styles.event, { transform: [{ translateX: x as number }, { translateY: y as number }, { rotate: counterSpin }] }]}><Label style={styles.eventIcon}>{icon}</Label></Animated.View>)}
+      <View style={styles.orbitRing} />
     </Animated.View>
     <Animated.View style={[styles.core, { transform: [{ scale }] }]}>
       <Label style={styles.spark}>✦</Label>
@@ -71,11 +72,12 @@ export default function ApiLoadingOverlay() {
 
 const styles = StyleSheet.create({
   layer: { ...StyleSheet.absoluteFill, zIndex: 900, elevation: 900, alignItems: "center", justifyContent: "center" },
-  orbit: { width: 112, height: 112, alignItems: "center", justifyContent: "center" },
-  event: { position: "absolute", width: 30, height: 30, alignItems: "center", justifyContent: "center" },
-  eventIcon: { fontSize: 22, lineHeight: 28, textShadowColor: "rgba(0,0,0,.55)", textShadowRadius: 8 },
-  core: { position: "absolute", marginTop: -43, width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
-  spark: { color: "#f4d47d", fontSize: 26, lineHeight: 32, textShadowColor: "rgba(200,164,74,.75)", textShadowRadius: 14 },
-  title: { color: "#f8fafc", fontFamily: "Outfit-SemiBold", fontSize: 13, lineHeight: 19, marginTop: 6, textShadowColor: "rgba(0,0,0,.75)", textShadowRadius: 7 },
+  orbit: { width: 184, height: 184, alignItems: "center", justifyContent: "center" },
+  event: { position: "absolute", width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,.10)", borderWidth: 1, borderColor: "rgba(226,200,117,.32)" },
+  eventIcon: { fontSize: 21, lineHeight: 28, textShadowColor: "rgba(0,0,0,.55)", textShadowRadius: 8 },
+  orbitRing: { position: "absolute", width: 128, height: 128, borderRadius: 64, borderWidth: 1, borderColor: "rgba(255,255,255,.08)" },
+  core: { position: "absolute", marginTop: -71, width: 80, height: 80, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(200,164,74,.16)", borderWidth: 1, borderColor: "rgba(242,216,137,.42)" },
+  spark: { color: "#f4d47d", fontSize: 32, lineHeight: 38, textShadowColor: "rgba(200,164,74,.75)", textShadowRadius: 14 },
+  title: { color: "#f8fafc", fontFamily: "Outfit-SemiBold", fontSize: 13, lineHeight: 19, marginTop: 4, textShadowColor: "rgba(0,0,0,.75)", textShadowRadius: 7 },
   spinner: { marginTop: 7 },
 })
