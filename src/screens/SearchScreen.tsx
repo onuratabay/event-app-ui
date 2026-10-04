@@ -1,3 +1,5 @@
+import { palette } from "../theme/palette";
+import { CloseIcon } from "../components/Icons";
 import { useEffect, useRef, useState } from "react";
 import { TextInput } from "react-native";
 import { AtmoBackground } from "../components/GlassUI";
@@ -28,7 +30,7 @@ function EventRow({
           {event.title}
         </Label>
         <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.mt05]]}>
-          <ClockIcon size={11} strokeWidth={1.5} style={[[ui.textWhite25]]} />
+          <ClockIcon size={11} strokeWidth={1.75} style={[[ui.textWhite25]]} />
           <Label style={[[ui.textXs, ui.textWhite35]]} numberOfLines={1}>
             {event.date} · {event.location}
           </Label>
@@ -64,12 +66,12 @@ export default function SearchScreen({
         borderWidth: 1,
         borderColor: "rgba(255,255,255,0.11)"
       }]} glass>
-          <SearchIcon size={16} strokeWidth={1.5} style={[[ui.flexShrink0, ui.textWhite30]]} />
+          <SearchIcon size={16} strokeWidth={1.75} style={[[ui.flexShrink0, ui.textWhite30]]} />
           <Field ref={inputRef} value={query} onChangeText={e => setQuery(e)} placeholder="Etkinlik, aktivite veya konum ara..." style={[[ui.flex1, ui.bgTransparent, ui.textSm, ui.textWhite]]} />
           {query && <Touch onPress={() => setQuery("")} style={[[ui.flexShrink0, ui.w5, ui.h5, ui.roundedFull, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite30], {
           backgroundColor: "rgba(255,255,255,0.08)"
         }]}>
-              <Label style={[[ui.textXs, ui.leadingNone]]}>×</Label>
+              <CloseIcon size={16} style={{ color: palette.muted }} />
             </Touch>}
         </Box>
       </Box>
@@ -89,7 +91,7 @@ export default function SearchScreen({
                 borderWidth: 1,
                 borderColor: "rgba(255,255,255,0.07)"
               }]}>
-                      <ClockIcon size={13} strokeWidth={1.5} style={[[ui.textWhite25]]} />
+                      <ClockIcon size={13} strokeWidth={1.75} style={[[ui.textWhite25]]} />
                     </Box>
                     <Label style={[[ui.flex1, ui.textSm, ui.textWhite55, ui.textLeft]]}>{r}</Label>
                   </Touch>)}
@@ -121,11 +123,11 @@ export default function SearchScreen({
                 {[{
               label: "Spor & Aktivite",
               count: "84 etkinlik",
-              color: "rgba(124,112,240,0.10)"
+              color: "rgba(146,125,255,0.10)"
             }, {
               label: "Müzik & Sanat",
               count: "52 etkinlik",
-              color: "rgba(200,164,74,0.10)"
+              color: "rgba(105,120,255,0.10)"
             }, {
               label: "Yemek & Kahve",
               count: "38 etkinlik",
@@ -169,7 +171,7 @@ export default function SearchScreen({
                     </Label>
                     <Box style={[[ui.gapY1]]}>
                       {suggestions.map(s => <Touch key={s} onPress={() => setQuery(s)} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.gap3, ui.py25, ui.textLeft, ui.roundedXl, ui.px2, ui.Mx2]]}>
-                          <SearchIcon size={13} strokeWidth={1.5} style={[[ui.textWhite20, ui.flexShrink0]]} />
+                          <SearchIcon size={13} strokeWidth={1.75} style={[[ui.textWhite20, ui.flexShrink0]]} />
                           <Label style={[[ui.textSm, ui.textWhite50]]}>
                             {s}
                           </Label>

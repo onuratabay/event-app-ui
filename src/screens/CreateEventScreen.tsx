@@ -1,3 +1,5 @@
+import { palette } from "../theme/palette";
+import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
 import { Alert, Platform } from "react-native";
 import * as Location from "expo-location";
 import { createEvent, getMapInterests, getEnums, getApiErrorMessage } from "../api/client";
@@ -16,11 +18,11 @@ function StickyBar({
 }: {
   children: React.ReactNode;
 }) {
-  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40], {}]} gradient={["#101827", "transparent"]} gradientDirection="up">
+  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up">
       {children}
     </Box>;
 }
-function GoldBtn({
+function PrimaryButton({
   onPress,
   disabled,
   children
@@ -30,10 +32,10 @@ function GoldBtn({
   children: React.ReactNode;
 }) {
   return <Touch onPress={onPress} disabled={disabled} disabledOpacity={1} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
-    color: disabled ? "rgba(226,232,240,.62)" : "#1a1200",
+    color: disabled ? "rgba(226,232,240,.62)" : palette.text,
     borderWidth: 1,
-    borderColor: disabled ? "rgba(148,163,184,.22)" : "rgba(242,216,137,.5)",
-  }]} gradient={disabled ? ["#202b3d", "#182235", "#151f30"] : ["#c8a44a", "#dab96e", "#c09038"]}>
+    borderColor: disabled ? "rgba(148,163,184,.22)" : "rgba(183,197,255,.24)",
+  }]} gradient={disabled ? ["#202b3d", "#182235", "#151f30"] : palette.actionGradient}>
       {children}
     </Touch>;
 }
@@ -131,17 +133,15 @@ export default function CreateEventScreen({
       <TopNavBar navigate={navigate} fallback="discover" onBack={back} title="Etkinlik Önizlemesi" />
       <Scroll style={[[ui.flex1, ui.pb20], { paddingTop: 80 }]}>
         <AtmoBackground variant="gold" />
-        <Box style={[[ui.relative, ui.pt14, ui.px5]]}>
+        <Box style={[[ui.relative, ui.pt4, ui.px5]]}>
           <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb6]]}>
             Önizleme
           </Label>
 
           <GlassCard style={[[ui.overflowHidden, ui.mb4]]}>
-            <Box style={[[ui.h48, ui.relative], {}]} gradient={["rgba(200,164,74,0.2)", "rgba(124,112,240,0.15)"]}>
+            <Box style={[[ui.h48, ui.relative], {}]} gradient={["rgba(105,120,255,0.2)", "rgba(146,125,255,0.15)"]}>
               <Box style={[[ui.fixed, ui.inset0, ui.flex, ui.itemsCenter, ui.justifyCenter]]}>
-                <Label style={[[ui.text7xl, ui.opacity30]]}>
-                  {ACTIVITIES.find(a => a.label === data.activity)?.icon || "✦"}
-                </Label>
+                {data.coverImage ? <Picture uri={data.coverImage} style={{ width: "100%", height: "100%" }} /> : <CategoryIcon name={data.activity} size={64} style={{ color: palette.accent, opacity: .5 }} />}
               </Box>
               <Box style={[[ui.fixed, ui.bottom3, ui.left4]]}>
                 <Label style={[[ui.textXs, ui.textWhite60]]}>
@@ -154,16 +154,13 @@ export default function CreateEventScreen({
                 {data.activity || "Etkinlik Adı"}
               </Label>
               <Box style={[[ui.grid, ui.gap2, ui.textXs, ui.textWhite50]]} columns={2}>
-                <Label>
-                  ◷ {data.date || "Tarih"} · {data.time || "Saat"}
-                </Label>
-                <Label>⌛ {data.duration || "Süre"}</Label>
-                <Label>◎ {data.location || "Konum"}</Label>
-                <Label>◈ {data.level || "Seviye"}</Label>
-                <Label>
-                  👥 {data.minParticipants}-{data.maxParticipants} kişi
-                </Label>
-                <Label>🌍 {data.privacy || "Gizlilik"}</Label>
+                {[{ icon: <ClockIcon size={16} />, text: `${data.date || "Tarih"} · ${data.time || "Saat"}` },
+                  { icon: <ClockIcon size={16} />, text: data.duration || "Süre" },
+                  { icon: <LocationIcon size={16} />, text: data.location || "Konum" },
+                  { icon: <StarIcon size={16} />, text: data.level || "Seviye" },
+                  { icon: <UsersIcon size={16} />, text: `${data.minParticipants}-${data.maxParticipants} kişi` },
+                  { icon: <LockIcon size={16} />, text: data.privacy || "Gizlilik" }
+                ].map((item, index) => <Box key={index} style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>{item.icon}<Label style={{ flexShrink: 1 }}>{item.text}</Label></Box>)}
               </Box>
               {data.description && <Label style={[[ui.textSm, ui.textWhite55]]}>
                   {data.description}
@@ -172,9 +169,9 @@ export default function CreateEventScreen({
           </GlassCard>
 
           <Touch onPress={publish} disabled={creating} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.mb4], {
-          color: "#1a1200"
-        }]} gradient={["#c8a44a", "#c09038"]}>
-            Etkinliği Oluştur 🚀
+          color: palette.text
+        }]} gradient={["#4d5bcb", "#6651c9"]}>
+            Etkinliği Oluştur
           </Touch>
         </Box>
       </Scroll>
@@ -188,11 +185,11 @@ export default function CreateEventScreen({
       <Box style={[[ui.fixed, ui.top0, ui.left0, ui.right0, ui.h05, ui.bgWhite8]]}>
         <Box style={[[ui.hFull], {
         width: `${progressPct}%`
-      }]} gradient={["#c8a44a", "#dab96e"]} gradientDirection="right" />
+      }]} gradient={["#4d5bcb", "#6651c9"]} gradientDirection="right" />
       </Box>
 
       <Scroll style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull, ui.pb28], { paddingTop: 80 }]}>
-        <Box style={[[ui.pt14, ui.px5]]}>
+        <Box style={[[ui.pt4, ui.px5]]}>
 
           {/* Step 0 - Activity */}
           {step === 0 && <Box style={[[]]} enter>
@@ -205,7 +202,7 @@ export default function CreateEventScreen({
               <Box style={[[ui.grid, ui.gap3]]} columns={2}>
                 {!activities.length && <Touch onPress={loadCatalog}>Seçenekleri yeniden yükle</Touch>}
               {ACTIVITIES.map(a => <Touch key={a.label} onPress={() => selectAndNext("activity", a.label)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, data.activity === a.label ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
-                    <Label style={[[ui.text3xl, ui.mb2]]}>{a.icon}</Label>
+                    <CategoryIcon name={a.label} size={28} style={{ color: palette.accent, marginBottom: 12 }} />
                     <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>
                       {a.label}
                     </Label>
@@ -268,13 +265,13 @@ export default function CreateEventScreen({
                 Nerede{"\n"}buluşacaksınız?
               </Label>
               <Box style={[[ui.relative]]}>
-                <SearchIcon size={15} strokeWidth={1.5} style={[[ui.fixed, ui.left35, ui.top12, ui.TranslateY12, ui.textWhite25, ui.z10]]} />
+                <SearchIcon size={15} strokeWidth={1.75} style={[[ui.fixed, ui.left35, ui.top12, ui.TranslateY12, ui.textWhite25, ui.z10]]} />
                 <Field placeholder="Adres veya mekan adı..." value={data.location} onChangeText={e => { setCoordinate(null); setPlaces([]); setData(p => ({ ...p, location: e })); }} style={[[ui.glass, ui.wFull, ui.roundedXl, ui.pl9, ui.pr4, ui.py35, ui.textWhite, ui.textSm]]} glass />
               </Box>
 
               <Box style={[[ui.h4]]} />
               <Touch onPress={findPlace} disabled={findingPlace}><Label>{findingPlace ? 'Konum aranıyor…' : 'Adresi bul'}</Label></Touch>
-              {places.map((place, index) => <Touch key={index} onPress={() => setCoordinate(place)} style={{ padding: 12, backgroundColor: '#242336', borderRadius: 12 }}><Label>{coordinate === place ? '✓ ' : ''}{data.location} · {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}</Label></Touch>)}
+              {places.map((place, index) => <Touch key={index} onPress={() => setCoordinate(place)} style={{ padding: 12, backgroundColor: '#11162a', borderRadius: 12 }}><Label>{coordinate === place ? '✓ ' : ''}{data.location} · {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}</Label></Touch>)}
             </Box>}
 
           {/* Step 5 - Participants */}
@@ -354,7 +351,7 @@ export default function CreateEventScreen({
               height: 130,
               borderRadius: 16
             }} />}
-                <CameraIcon size={28} strokeWidth={1.2} style={[[ui.textWhite20]]} />
+                <CameraIcon size={28} strokeWidth={1.75} style={[[ui.textWhite20]]} />
                 <Label style={[[ui.textSm, ui.textWhite35]]}>
                   Fotoğraf yükle
                 </Label>
@@ -413,11 +410,11 @@ export default function CreateEventScreen({
               const Icon = PRIVACY_ICONS[i % PRIVACY_ICONS.length];
               return <Touch key={p.label} onPress={() => selectAndNext("privacy", p.label)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.textLeft, ui.flex, ui.itemsCenter, ui.gap4, ui.border, data.privacy === p.label ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
                       <Box style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0, data.privacy === p.label ? [ui.textC8a44a] : [ui.textWhite35]], {
-                  backgroundColor: data.privacy === p.label ? "rgba(200,164,74,0.10)" : "rgba(255,255,255,0.05)",
+                  backgroundColor: data.privacy === p.label ? "rgba(105,120,255,0.10)" : "rgba(255,255,255,0.05)",
                   borderWidth: 1,
                   borderColor: "rgba(255,255,255,0.07)"
                 }]}>
-                        <Icon size={18} strokeWidth={1.4} />
+                        <Icon size={18} strokeWidth={1.75} />
                       </Box>
                       <Box>
                         <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>
@@ -436,9 +433,9 @@ export default function CreateEventScreen({
 
       {/* Sticky CTA for steps that need explicit continue */}
       {(step === 2 || step === 4 || step === 5 || step === 6 || step === 7) && <StickyBar>
-          <GoldBtn onPress={next} disabled={step === 2 && (!data.date || !data.time) || step === 4 && !coordinate}>
+          <PrimaryButton onPress={next} disabled={step === 2 && (!data.date || !data.time) || step === 4 && !coordinate}>
             Devam Et
-          </GoldBtn>
+          </PrimaryButton>
         </StickyBar>}
     </Box>;
 }

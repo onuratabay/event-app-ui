@@ -67,13 +67,13 @@ export function applyDiscoveryFilters(events: ApiEvent[], filters: DiscoveryFilt
 }
 export function categoryVisual(name: string) {
   const normalized = name.toLocaleLowerCase("tr-TR")
-  if (/padel|tenis|tennis/.test(normalized)) return { icon: "🎾", color: "#c5e67d" }
-  if (/bisiklet|cycl|bike/.test(normalized)) return { icon: "🚲", color: "#7dd9d0" }
-  if (/koş|run|hiking|doğa|yürüy|outdoor/.test(normalized)) return { icon: "🥾", color: "#a8d991" }
-  if (/kahve|coffee|yemek|food/.test(normalized)) return { icon: "☕", color: "#e8bb88" }
-  if (/müzik|konser|music/.test(normalized)) return { icon: "🎵", color: "#bb9ee9" }
-  if (/sanat|foto|art/.test(normalized)) return { icon: "🎨", color: "#efa3ba" }
-  return { icon: "✨", color: "#dcb95d" }
+  if (/padel|tenis|tennis/.test(normalized)) return { icon: "🎾", color: "#6978ff" }
+  if (/bisiklet|cycl|bike/.test(normalized)) return { icon: "🚲", color: "#429aaf" }
+  if (/koş|run|hiking|doğa|yürüy|outdoor/.test(normalized)) return { icon: "🥾", color: "#6376bd" }
+  if (/kahve|coffee|yemek|food/.test(normalized)) return { icon: "☕", color: "#8b7bb8" }
+  if (/müzik|konser|music/.test(normalized)) return { icon: "🎵", color: "#927dff" }
+  if (/sanat|foto|art/.test(normalized)) return { icon: "🎨", color: "#a881cc" }
+  return { icon: "✨", color: "#6978ff" }
 }
 
 export function placeBounds(place: MapPlace | null, radiusKm: number) {

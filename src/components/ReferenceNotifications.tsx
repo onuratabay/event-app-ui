@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette";
 import { onSocket } from '../services/socket'
 import { useEffect, useState } from "react"
 import { getApiErrorMessage, getReferenceRequests, hasSession, respondToReference, type ReferenceRequest } from "../api/client"
@@ -32,12 +33,12 @@ export function ReferenceNotifications() {
     finally { setBusy(null) }
   }
   return <Box style={{ gap: 10 }}>
-    {requests.map(request => <Box key={request.id} style={{ padding: 16, borderRadius: 16, gap: 8, backgroundColor: "rgba(200,164,74,0.08)", borderColor: "rgba(200,164,74,0.2)", borderWidth: 1 }}>
+    {requests.map(request => <Box key={request.id} style={{ padding: 16, borderRadius: 16, gap: 8, backgroundColor: "rgba(105,120,255,0.08)", borderColor: "rgba(105,120,255,0.2)", borderWidth: 1 }}>
       <Label style={[[ui.textSm, ui.textWhite85, ui.fontMedium]]}>{request.direction === "incoming" ? `${request.requester.name} senden referans istiyor` : `${request.recipient.name} için referans isteğin`}</Label>
       {request.status === "pending" && request.direction === "incoming" ? <>
         <Label style={[[ui.textXs, ui.textWhite50]]}>Bu kişinin topluluğa katılması için referans olmak ister misin?</Label>
         <Box style={{ flexDirection: "row", gap: 10 }}>
-          <Touch disabled={busy !== null} onPress={() => void respond(request, "approved")} style={[[ui.py3, ui.roundedXl, ui.textSm], { flex: 1, color: "#1a1200" }]} gradient={["#c8a44a", "#dab96e"]}>{busy === request.id ? "Kaydediliyor…" : "Onayla"}</Touch>
+          <Touch disabled={busy !== null} onPress={() => void respond(request, "approved")} style={[[ui.py3, ui.roundedXl, ui.textSm], { flex: 1, color: palette.text }]} gradient={["#4d5bcb", "#6651c9"]}>{busy === request.id ? "Kaydediliyor…" : "Onayla"}</Touch>
           <Touch disabled={busy !== null} onPress={() => void respond(request, "declined")} style={[[ui.py3, ui.roundedXl, ui.textSm, ui.textWhite60], { flex: 1, backgroundColor: "rgba(255,255,255,0.05)" }]}>Reddet</Touch>
         </Box>
       </> : <Label style={[[ui.textXs, ui.textWhite50]]}>{request.status === "approved" ? "Referans onaylandı" : request.status === "declined" ? "Referans isteği reddedildi" : "Onay bekleniyor"}</Label>}

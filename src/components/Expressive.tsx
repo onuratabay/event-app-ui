@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette";
 import { ReactNode } from "react"
 import { Circle, Polyline } from "react-native-svg"
 import type { TouchProps } from "../native/UI"
@@ -13,22 +14,22 @@ interface ComingSoonCardProps {
 }
 const ACCENT_STYLES = {
   gold: {
-    bg: "rgba(200,164,74,0.07)",
-    border: "rgba(200,164,74,0.18)",
-    badgeBg: "rgba(200,164,74,0.12)",
-    badgeBorder: "rgba(200,164,74,0.25)",
-    badgeText: "#c8a44a",
-    iconBg: "rgba(200,164,74,0.10)",
-    iconBorder: "rgba(200,164,74,0.18)",
+    bg: "rgba(105,120,255,0.07)",
+    border: "rgba(105,120,255,0.18)",
+    badgeBg: "rgba(105,120,255,0.12)",
+    badgeBorder: "rgba(105,120,255,0.25)",
+    badgeText: palette.accent,
+    iconBg: "rgba(105,120,255,0.10)",
+    iconBorder: "rgba(105,120,255,0.18)",
   },
   violet: {
-    bg: "rgba(124,112,240,0.07)",
-    border: "rgba(124,112,240,0.18)",
-    badgeBg: "rgba(124,112,240,0.12)",
-    badgeBorder: "rgba(124,112,240,0.25)",
+    bg: "rgba(146,125,255,0.07)",
+    border: "rgba(146,125,255,0.18)",
+    badgeBg: "rgba(146,125,255,0.12)",
+    badgeBorder: "rgba(146,125,255,0.25)",
     badgeText: "rgba(178,174,248,0.95)",
-    iconBg: "rgba(124,112,240,0.10)",
-    iconBorder: "rgba(124,112,240,0.18)",
+    iconBg: "rgba(146,125,255,0.10)",
+    iconBorder: "rgba(146,125,255,0.18)",
   },
   emerald: {
     bg: "rgba(52,211,153,0.06)",
@@ -134,7 +135,7 @@ export function ComingSoonBanner({
           borderColor: "rgba(255,255,255,0.07)",
         },
       ]}
-      gradient={["rgba(124,112,240,0.08)", "rgba(200,164,74,0.06)"]}
+      gradient={["rgba(146,125,255,0.08)", "rgba(105,120,255,0.06)"]}
     >
       <Box
         style={[
@@ -148,9 +149,9 @@ export function ComingSoonBanner({
             ui.flexShrink0,
           ],
           {
-            backgroundColor: "rgba(124,112,240,0.12)",
+            backgroundColor: "rgba(146,125,255,0.12)",
             borderWidth: 1,
-            borderColor: "rgba(124,112,240,0.2)",
+            borderColor: "rgba(146,125,255,0.2)",
           },
         ]}
       >
@@ -190,9 +191,9 @@ export function ComingSoonBanner({
             ui.flexShrink0,
           ],
           {
-            backgroundColor: "rgba(124,112,240,0.15)",
+            backgroundColor: "rgba(146,125,255,0.15)",
             borderWidth: 1,
-            borderColor: "rgba(124,112,240,0.28)",
+            borderColor: "rgba(146,125,255,0.28)",
             color: "rgba(178,174,248,0.9)",
           },
         ]}
@@ -226,8 +227,8 @@ export function HeartButton({
         onChange(!saved)
       }}
       style={{
-        width: 32,
-        height: 32,
+        width: 44,
+        height: 44,
         alignItems: "center",
         justifyContent: "center",
       }}
@@ -236,7 +237,7 @@ export function HeartButton({
         size={size + 4}
         strokeWidth={1.8}
         filled={saved}
-        style={{ color: saved ? "#e1bd65" : "rgba(241,245,249,.78)" }}
+        style={{ color: saved ? "#c7ceff" : "rgba(241,245,249,.78)" }}
       />
     </Touch>
   )

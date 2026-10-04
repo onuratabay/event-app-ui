@@ -24,6 +24,8 @@ for (const extension of [".ts", ".tsx"])
       filename,
     )
   }
+// Metro resolves bundled image assets; the Node host renderer uses filenames.
+require.extensions[".png"] = (module, filename) => { module.exports = filename }
 const originalLoad = Module._load
 const flatten = (s) =>
   Array.isArray(s) ? Object.assign({}, ...s.map(flatten)) : s || {}

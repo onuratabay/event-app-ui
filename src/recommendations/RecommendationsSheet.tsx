@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette";
 import { useEventDeltas, patchApiEvent } from '../services/event-deltas'
 import { useEffect, useRef, useState } from "react"
 import { ActivityIndicator, type ScrollView, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native"
@@ -74,7 +75,7 @@ export default function RecommendationsSheet({ onClose, navigate }: { onClose: (
     <View style={s.backdrop}><Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Önerileri kapat" onPress={onClose} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.keyboard}>
         <Box style={s.panel}>
-          <Box style={s.row}><SparklesIcon size={24} style={{ color: "#e1bd65" }} /><Box style={{ flex: 1 }}><Label style={s.title}>Sana özel</Label><Label style={s.hint}>Planına, tercihlerine ve ekipmanına göre</Label></Box><HeaderIconButton label="Önerileri kapat" onPress={onClose}><Label style={s.text}>✕</Label></HeaderIconButton></Box>
+          <Box style={s.row}><SparklesIcon size={24} style={{ color: "#c7ceff" }} /><Box style={{ flex: 1 }}><Label style={s.title}>Sana özel</Label><Label style={s.hint}>Planına, tercihlerine ve ekipmanına göre</Label></Box><HeaderIconButton label="Önerileri kapat" onPress={onClose}><Label style={s.text}>✕</Label></HeaderIconButton></Box>
           <Scroll ref={scroll} style={s.scroll} keyboardShouldPersistTaps="handled">
             <Label style={s.section}>Nerede olacaksın?</Label>
             <Box style={s.wrap}>{PLACES.map(place => <FilterChip solid key={place.id} label={place.name} selected={profile.trip.placeId === place.id} onPress={() => update(previous => ({ ...previous, trip: { ...previous.trip, placeId: place.id } }))} />)}</Box>
@@ -85,7 +86,7 @@ export default function RecommendationsSheet({ onClose, navigate }: { onClose: (
             <Label style={s.hint}>Ekipmanını bulunduğu şehir için kaydet. Her şehir ayrı hatırlanır.</Label>
             <Box style={s.wrap}>{EQUIPMENT.map(item => <FilterChip solid key={item.id} label={item.label} selected={(profile.equipmentByCity[location.city] || []).includes(item.id)} onPress={() => update(previous => ({ ...previous, equipmentByCity: { ...previous.equipmentByCity, [location.city]: toggle(previous.equipmentByCity[location.city] || [], item.id) } }))} />)}</Box>
             <Label style={s.section}>{location.name} için ne yapmak istersin?</Label>
-            <Box style={s.wrap}>{ACTIVITIES.map(item => <FilterChip solid key={item.id} label={`${item.icon} ${item.label}`} selected={(profile.activitiesByPlace[location.id] || []).includes(item.id)} onPress={() => update(previous => ({ ...previous, activitiesByPlace: { ...previous.activitiesByPlace, [location.id]: toggle(previous.activitiesByPlace[location.id] || [], item.id) } }))} />)}</Box>
+            <Box style={s.wrap}>{ACTIVITIES.map(item => <FilterChip solid key={item.id} label={item.label} selected={(profile.activitiesByPlace[location.id] || []).includes(item.id)} onPress={() => update(previous => ({ ...previous, activitiesByPlace: { ...previous.activitiesByPlace, [location.id]: toggle(previous.activitiesByPlace[location.id] || [], item.id) } }))} />)}</Box>
             <Label style={s.hint}>Tür seçmezsen kaydettiğin ekipmana uygun etkinlikleri ararım. Tercihlerin hesabına kaydedilir; diğer cihazlarında da kullanılır.</Label>
             {results && <Box style={s.results} onLayout={event => scroll.current?.scrollTo({ y: event.nativeEvent.layout.y, animated: true })}>
               <Label style={s.resultTitle}>{results.length ? `${period} ${location.name} için sana özel ${results.length}${activities.length === 1 ? ` ${activities[0].label.toLocaleLowerCase("tr-TR")}` : ""} etkinlik buldum.` : "Bu planla eşleşen etkinlik henüz yok."}</Label>
@@ -98,14 +99,14 @@ export default function RecommendationsSheet({ onClose, navigate }: { onClose: (
             </Box>}
           </Scroll>
           {error && <Label style={s.error}>{error}</Label>}
-          <Touch disabled={busy} onPress={() => void find()} style={s.submit}>{busy ? <ActivityIndicator color="#211906" /> : <Label style={s.submitText}>Kaydet ve önerileri bul</Label>}</Touch>
+          <Touch disabled={busy} onPress={() => void find()} style={s.submit}>{busy ? <ActivityIndicator color="#f4f5ff" /> : <Label style={s.submitText}>Kaydet ve önerileri bul</Label>}</Touch>
         </Box>
       </KeyboardAvoidingView>
     </View>
   </Modal>
 }
 const s = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", paddingTop: 48, backgroundColor: "#00000088" }, keyboard: { maxHeight: "94%" }, panel: { backgroundColor: "#11111f", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 34, gap: 14, maxHeight: "100%" },
-  row: { flexDirection: "row", gap: 12, alignItems: "center" }, title: { color: "#f0ede8", fontFamily: "Fraunces", fontSize: 28 }, hint: { color: "#c0bacd", fontSize: 12, lineHeight: 18 }, section: { color: "#f0ede8", fontFamily: "Outfit-SemiBold", fontSize: 17, marginTop: 18, marginBottom: 8 },
-  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 6 }, scroll: { flexShrink: 1 }, text: { color: "#f0ede8", fontFamily: "Outfit-SemiBold", fontSize: 15 }, results: { marginTop: 20, gap: 10 }, resultTitle: { color: "#e1bd65", fontFamily: "Outfit-SemiBold", fontSize: 20, lineHeight: 27 }, card: { backgroundColor: "#242336", borderRadius: 16, padding: 14, gap: 6 }, reason: { color: "#d8cfad", fontSize: 12, lineHeight: 18 }, error: { color: "#f3aa91", fontSize: 12 }, submit: { minHeight: 50, padding: 15, backgroundColor: "#e1bd65", borderRadius: 17, alignItems: "center", justifyContent: "center" }, submitText: { color: "#241b09", fontFamily: "Outfit-SemiBold", fontSize: 15 },
+  backdrop: { flex: 1, justifyContent: "flex-end", paddingTop: 48, backgroundColor: "#00000088" }, keyboard: { maxHeight: "94%" }, panel: { backgroundColor: palette.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 34, gap: 14, maxHeight: "100%" },
+  row: { flexDirection: "row", gap: 12, alignItems: "center" }, title: { color: "#f4f5ff", fontFamily: "Fraunces", fontSize: 28 }, hint: { color: "#c0bacd", fontSize: 12, lineHeight: 18 }, section: { color: "#f4f5ff", fontFamily: "Outfit-SemiBold", fontSize: 17, marginTop: 18, marginBottom: 8 },
+  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 6 }, scroll: { flexShrink: 1 }, text: { color: "#f4f5ff", fontFamily: "Outfit-SemiBold", fontSize: 15 }, results: { marginTop: 20, gap: 10 }, resultTitle: { color: "#c7ceff", fontFamily: "Outfit-SemiBold", fontSize: 20, lineHeight: 27 }, card: { backgroundColor: palette.surface, borderRadius: 16, padding: 14, gap: 6 }, reason: { color: "#b9c3ff", fontSize: 12, lineHeight: 18 }, error: { color: "#f3aa91", fontSize: 12 }, submit: { minHeight: 50, padding: 15, backgroundColor: "#4d5bcb", borderRadius: 17, alignItems: "center", justifyContent: "center" }, submitText: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15 },
 })

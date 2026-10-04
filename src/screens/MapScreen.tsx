@@ -1,3 +1,5 @@
+import { palette } from "../theme/palette";
+import { CategoryIcon } from "../components/Icons";
 import { useScreenActive } from '../native/useScreenActive'
 import { useEventDeltas, patchApiEvent } from '../services/event-deltas'
 import TopNavBar from "../components/TopNavBar"
@@ -187,7 +189,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
               } else if (event) setSelected([event])
             }}>
             <View style={{ alignItems: "center" }}><View style={[s.pin, isCluster && s.cluster, { backgroundColor: isCluster ? "#e9ac60" : categoryVisual(event?.interest.name || "").color }]}>
-              <Label style={s.pinText}>{isCluster ? String(count) : categoryVisual(event?.interest.name || "").icon}</Label>
+              {isCluster ? <Label style={s.pinText}>{String(count)}</Label> : <CategoryIcon name={event?.interest.name} size={19} style={{ color: palette.text }} />}
             </View>
             {!isCluster && zoom >= 14 && <View style={s.pinLabel}><Label style={s.pinLabelText}>{event?.interest.name} · {event?.startTime}</Label></View>}
             </View>
@@ -212,12 +214,12 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     <TopNavBar navigate={navigate} fallback="discover" onBack={() => navigate("discover")} title="Harita" subtitle={`${visible.length} etkinlik görünümde`} floating />
     <Box pointerEvents="box-none" style={[s.top, { paddingTop: 66 }]}>
       <Scroll horizontal style={s.filters}>
-        <FilterChip solid label="✦ Sana göre" selected={filterOpen || !!filters.place || !!filters.timeFrom || !!filters.interestIds.length || filters.datePreset !== "all"} onPress={() => { interacted.current = true; setFilterOpen(true) }} />
+        <FilterChip solid label="Sana göre" selected={filterOpen || !!filters.place || !!filters.timeFrom || !!filters.interestIds.length || filters.datePreset !== "all"} onPress={() => { interacted.current = true; setFilterOpen(true) }} />
         {([["today", "Bugün"], ["tomorrow", "Yarın"], ["week", "Haftaya"]] as const).map(([id, label]) => <FilterChip solid key={id} label={label} selected={filters.datePreset === id} onPress={() => applyFilters({ ...filters, datePreset: id })} />)}
         <FilterChip solid label={locating ? "Konum alınıyor…" : nearby ? `${nearby.name} yakınında` : "⌖ Yakınımda"} selected={!!nearby && filters.place?.latitude === nearby.latitude && filters.place?.longitude === nearby.longitude} onPress={() => void locate(true)} />
         <FilterChip solid label={now.getHours() < 22 ? "Bu akşam" : "Yarın sabah"} selected={false} onPress={() => applyFilters({ ...filters, datePreset: now.getHours() < 22 ? "today" : "tomorrow", timeFrom: now.getHours() < 22 ? "18:00" : "08:00", timeTo: now.getHours() < 22 ? "23:59" : "12:00" })} />
       </Scroll>
-      <Scroll horizontal style={s.filters}><FilterChip solid label="Tüm türler" selected={!filters.interestIds.length} onPress={() => applyFilters({ ...filters, interestIds: [] })} />{categories.map(item => <FilterChip solid key={item.id} label={`${categoryVisual(item.name).icon} ${item.name}`} selected={filters.interestIds.includes(item.id)} onPress={() => applyFilters({ ...filters, interestIds: filters.interestIds.includes(item.id) ? filters.interestIds.filter(id => id !== item.id) : [...filters.interestIds, item.id] })} />)}</Scroll>
+      <Scroll horizontal style={s.filters}><FilterChip solid label="Tüm türler" selected={!filters.interestIds.length} onPress={() => applyFilters({ ...filters, interestIds: [] })} />{categories.map(item => <FilterChip solid key={item.id} label={item.name} selected={filters.interestIds.includes(item.id)} onPress={() => applyFilters({ ...filters, interestIds: filters.interestIds.includes(item.id) ? filters.interestIds.filter(id => id !== item.id) : [...filters.interestIds, item.id] })} />)}</Scroll>
     </Box>
     <Box style={s.controls}>
       <Touch accessibilityLabel="Yakınlaştır" onPress={() => zoomBy(0.5)} style={s.control}><Label style={s.controlText}>+</Label></Touch>
@@ -228,12 +230,12 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
       <Box glass style={s.panel}>
         <Box style={s.heading}><Label style={s.panelTitle}>{MODE_LABELS[mode]}</Label><Label style={s.muted}>Otomatik görünüm</Label></Box>
         <Box style={s.legend}>
-          {mode === "heat" ? ["Seyrek", "Orta", "Yoğun", "Çok yoğun"].map((label, i) => <Box key={label} style={s.legendItem}><View style={[s.dot, { backgroundColor: COLORS[i] }]} /><Label style={s.muted}>{label}</Label></Box>) : <Scroll horizontal style={s.filters}>{categories.filter(item => filtered.some(event => event.interest.id === item.id)).map(item => <Box key={item.id} style={s.legendItem}><Label>{categoryVisual(item.name).icon}</Label><Label style={s.muted}>{item.name}</Label></Box>)}</Scroll>}
+          {mode === "heat" ? ["Seyrek", "Orta", "Yoğun", "Çok yoğun"].map((label, i) => <Box key={label} style={s.legendItem}><View style={[s.dot, { backgroundColor: COLORS[i] }]} /><Label style={s.muted}>{label}</Label></Box>) : <Scroll horizontal style={s.filters}>{categories.filter(item => filtered.some(event => event.interest.id === item.id)).map(item => <Box key={item.id} style={s.legendItem}><CategoryIcon name={item.name} size={15} style={{ color: palette.muted }} /><Label style={s.muted}>{item.name}</Label></Box>)}</Scroll>}
 
         </Box>
         <Touch onPress={() => setFilterOpen(true)}><Label style={s.gold}>{filters.place ? `${filters.place.name} · ${filters.radiusKm} km` : "Her yerde"} · {filters.datePreset === "all" ? "Yaklaşan" : `${range.from}${range.to && range.to !== range.from ? ` → ${range.to}` : ""}`}{filters.timeFrom ? ` · ${filters.timeFrom}–${filters.timeTo}` : ""}  Düzenle</Label></Touch>
         {locationError && <Touch onPress={() => { setLocationError(null); setFilterOpen(true) }}><Label style={s.error}>{locationError}</Label></Touch>}
-        {loading ? <Box style={s.legendItem}><ActivityIndicator color="#dcb95d" /><Label style={s.muted}>Etkinlikler yükleniyor…</Label></Box>
+        {loading ? <Box style={s.legendItem}><ActivityIndicator color="#b9c3ff" /><Label style={s.muted}>Etkinlikler yükleniyor…</Label></Box>
           : error ? <Touch onPress={() => setRetry(value => value + 1)}><Label style={s.error}>{error} Yenile ↻</Label></Touch>
           : !filtered.length ? <Label style={s.muted}>Bu filtrelerde konumu kayıtlı etkinlik bulunamadı.</Label>
           : <Label style={s.muted}>{mode === "heat" ? "Yakınlaşarak kümeleri keşfet. Renkler bu görünümdeki göreli yoğunluğu gösterir." : mode === "cluster" ? "Sayılar etkinlik adedidir. Kümeye dokunarak yakınlaş." : "Noktaya dokunarak etkinliği seç. Aynı konumdakiler sayılı gösterilir."}</Label>}
@@ -246,23 +248,23 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   </Box>
 }
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#101827" },
+  root: { flex: 1, backgroundColor: palette.background },
   top: { position: "absolute", top: 16, left: 16, right: 16, gap: 8 },
   heading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   title: { fontFamily: "Fraunces", color: "#fff", fontSize: 32 },
   badge: { color: "#ddd", backgroundColor: "#10101eed", borderRadius: 20, padding: 10, fontSize: 11 },
   filters: { flexGrow: 0, flexDirection: "row", gap: 6 },
   controls: { position: "absolute", right: 16, top: "32%", gap: 8 },
-  control: { width: 44, height: 44, borderRadius: 16, backgroundColor: "#242336", borderWidth: 1.5, borderColor: "#68647b", alignItems: "center", justifyContent: "center" },
-  controlText: { fontSize: 25, color: "#dcb95d" },
+  control: { width: 44, height: 44, borderRadius: 16, backgroundColor: palette.surface, borderWidth: 1.5, borderColor: "#35405d", alignItems: "center", justifyContent: "center" },
+  controlText: { fontSize: 25, color: "#b9c3ff" },
   pinLabel: { marginTop: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9, backgroundColor: "#171523ee" },
-  pinLabelText: { fontFamily: "Outfit-Medium", fontSize: 10, color: "#f0ede8" },
+  pinLabelText: { fontFamily: "Outfit-Medium", fontSize: 10, color: "#f4f5ff" },
   pin: { minWidth: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: "#fff", alignItems: "center", justifyContent: "center", paddingHorizontal: 7 },
   cluster: { minWidth: 44, height: 44, borderRadius: 22, borderColor: "#181823", borderWidth: 3 },
   pinText: { fontFamily: "Outfit-SemiBold", fontSize: 19, color: "#151320" },
   bottom: { position: "absolute", bottom: 88, left: 16, right: 16 },
   panel: { borderRadius: 22, padding: 16, gap: 12, backgroundColor: "rgba(13, 18, 36, .76)", borderWidth: 1, borderColor: "rgba(226, 232, 240, .22)", shadowColor: "#020617", shadowOpacity: .28, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  panelTitle: { fontFamily: "Outfit-SemiBold", color: "#f0ede8", fontSize: 15 },
+  panelTitle: { fontFamily: "Outfit-SemiBold", color: "#f4f5ff", fontSize: 15 },
   muted: { color: "#ddd9e8", fontSize: 11, lineHeight: 16 },
   legend: { flexDirection: "row", gap: 14, flexWrap: "wrap" },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -270,5 +272,5 @@ const s = StyleSheet.create({
   error: { color: "#f3aa91", fontSize: 12 },
   selection: { maxHeight: 128 },
   eventRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderTopWidth: 1, borderColor: "#ffffff1a" },
-  gold: { color: "#dcb95d", fontSize: 12 },
+  gold: { color: "#b9c3ff", fontSize: 12 },
 })

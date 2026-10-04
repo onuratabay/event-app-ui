@@ -1,3 +1,4 @@
+import { palette } from "./palette";
 import { StyleSheet } from "react-native"
 export const ui = StyleSheet.create({
   text5xl: {
@@ -34,7 +35,7 @@ export const ui = StyleSheet.create({
     fontWeight: "300",
   },
   textWhite: {
-    color: "#f8fafc",
+    color: palette.text,
   },
   leadingTight: {},
   textSm: {
@@ -115,7 +116,7 @@ export const ui = StyleSheet.create({
     right: 0,
   },
   bg06060e: {
-    backgroundColor: "#101827",
+    backgroundColor: palette.background,
   },
   flexCol: {
     flexDirection: "column",
@@ -201,7 +202,7 @@ export const ui = StyleSheet.create({
     height: 2,
   },
   bgWhite8: {
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(183,197,255,.045)",
   },
   w8: {
     width: 32,
@@ -218,7 +219,7 @@ export const ui = StyleSheet.create({
     borderRadius: 12,
   },
   textWhite30: {
-    color: "rgba(226,232,240,0.55)",
+    color: "rgba(210,219,241,.62)",
   },
   mb8: {
     marginBottom: 32,
@@ -239,10 +240,10 @@ export const ui = StyleSheet.create({
     borderWidth: 1,
   },
   borderC8a44a50: {
-    borderColor: "rgba(200,164,74,0.5)",
+    borderColor: "rgba(105,120,255,0.5)",
   },
   bgC8a44a10: {
-    backgroundColor: "rgba(200,164,74,0.1)",
+    backgroundColor: "rgba(105,120,255,0.1)",
   },
   borderWhite8: {
     borderColor: "rgba(255,255,255,0.08)",
@@ -254,7 +255,7 @@ export const ui = StyleSheet.create({
     color: "rgba(248,250,252,0.94)",
   },
   textC8a44a: {
-    color: "#c8a44a",
+    color: palette.accent,
   },
   justifyBetween: {
     justifyContent: "space-between",
@@ -282,7 +283,7 @@ export const ui = StyleSheet.create({
     ],
   },
   textWhite25: {
-    color: "rgba(226,232,240,0.50)",
+    color: "rgba(210,219,241,.62)",
   },
   z10: {
     zIndex: 10,
@@ -333,7 +334,7 @@ export const ui = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.1)",
   },
   bgC8a44a: {
-    backgroundColor: "#c8a44a",
+    backgroundColor: "#4d5bcb",
   },
   roundedFull: {
     borderRadius: 9999,
@@ -345,7 +346,7 @@ export const ui = StyleSheet.create({
     height: 6,
   },
   bgWhite10: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(183,197,255,.055)",
   },
   p5: {
     padding: 20,
@@ -354,10 +355,10 @@ export const ui = StyleSheet.create({
     rowGap: 24,
   },
   textWhite20: {
-    color: "rgba(226,232,240,0.46)",
+    color: "rgba(210,219,241,.62)",
   },
   textWhite35: {
-    color: "rgba(226,232,240,0.60)",
+    color: "rgba(210,219,241,.62)",
   },
   h52: {
     height: 208,
@@ -512,7 +513,7 @@ export const ui = StyleSheet.create({
     fontSize: 18,
   },
   textC8a44a55: {
-    color: "rgba(200,164,74,0.55)",
+    color: "rgba(105,120,255,0.55)",
   },
   textWhite45: {
     color: "rgba(241,245,249,0.68)",
@@ -594,7 +595,7 @@ export const ui = StyleSheet.create({
     paddingBottom: 8,
   },
   textC8a44a70: {
-    color: "rgba(200,164,74,0.7)",
+    color: "rgba(105,120,255,0.7)",
   },
   spaceY4: {
     rowGap: 16,
@@ -642,10 +643,10 @@ export const ui = StyleSheet.create({
     gap: 4,
   },
   bgC8a44a20: {
-    backgroundColor: "rgba(200,164,74,0.2)",
+    backgroundColor: "rgba(105,120,255,0.2)",
   },
   borderC8a44a30: {
-    borderColor: "rgba(200,164,74,0.3)",
+    borderColor: "rgba(105,120,255,0.3)",
   },
   borderDashed: {
     borderStyle: "dashed",
@@ -660,7 +661,7 @@ export const ui = StyleSheet.create({
     width: 6,
   },
   bgC8a44a60: {
-    backgroundColor: "rgba(200,164,74,0.6)",
+    backgroundColor: "rgba(105,120,255,0.6)",
   },
   pb36: {
     paddingBottom: 144,
@@ -718,7 +719,7 @@ export const ui = StyleSheet.create({
     borderTopRightRadius: 2,
   },
   text1a1200: {
-    color: "#1a1200",
+    color: palette.text,
   },
   roundedTlSm: {
     borderTopLeftRadius: 2,
@@ -778,10 +779,10 @@ export const ui = StyleSheet.create({
     width: 16,
   },
   bg7c70f0: {
-    backgroundColor: "#7c70f0",
+    backgroundColor: "#927dff",
   },
   bg7c70f030: {
-    backgroundColor: "rgba(124,112,240,0.3)",
+    backgroundColor: "rgba(146,125,255,0.3)",
   },
   top40: {
     top: 160,
@@ -808,7 +809,7 @@ export const ui = StyleSheet.create({
     borderWidth: 2,
   },
   border06060e: {
-    borderColor: "#101827",
+    borderColor: palette.background,
   },
   leadingSnug: {
     lineHeight: 20,
@@ -830,7 +831,7 @@ export const ui = StyleSheet.create({
     borderRadius: 6,
   },
   borderC8a44a: {
-    borderColor: "#c8a44a",
+    borderColor: palette.accent,
   },
   borderWhite25: {
     borderColor: "rgba(255,255,255,0.25)",
@@ -842,7 +843,7 @@ export const ui = StyleSheet.create({
     paddingBottom: 160,
   },
   borderC8a44a35: {
-    borderColor: "rgba(200,164,74,0.35)",
+    borderColor: "rgba(105,120,255,0.35)",
   },
   textRed400: {
     color: "#f87171",
@@ -863,7 +864,7 @@ export const ui = StyleSheet.create({
     height: 96,
   },
   borderC8a44a10: {
-    borderColor: "rgba(200,164,74,0.1)",
+    borderColor: "rgba(105,120,255,0.1)",
   },
   inset2: {
     top: 8,
@@ -879,7 +880,7 @@ export const ui = StyleSheet.create({
     marginBottom: 4,
   },
   bgC8a44a40: {
-    backgroundColor: "rgba(200,164,74,0.4)",
+    backgroundColor: "rgba(105,120,255,0.4)",
   },
   pt05: {
     paddingTop: 2,
@@ -888,7 +889,7 @@ export const ui = StyleSheet.create({
     rowGap: 40,
   },
   borderC8a44a40: {
-    borderColor: "rgba(200,164,74,0.4)",
+    borderColor: "rgba(105,120,255,0.4)",
   },
   ml2: {
     marginLeft: 8,

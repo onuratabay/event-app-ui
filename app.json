@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Topluluk",
+    "name": "ewent.app",
     "slug": "event-app",
     "version": "1.0.0",
     "scheme": "eventapp",
@@ -46,6 +46,7 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "icon": "./assets/brand/ewent-icon.png"
   }
 }

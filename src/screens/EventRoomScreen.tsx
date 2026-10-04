@@ -1,3 +1,5 @@
+import { palette } from "../theme/palette";
+import { UsersIcon, LocationIcon, ClockIcon, StarIcon, SendIcon } from "../components/Icons";
 import { useScreenActive } from '../native/useScreenActive';
 import { EventActivity } from '../components/EventActivity';
 import { onSocket, retainEvent, socketAction } from '../services/socket';
@@ -90,23 +92,23 @@ export default function EventRoomScreen({
       <Box style={[[ui.px5, ui.pb3, ui.flexShrink0]]}>
         <Scroll style={[[ui.flex, ui.gap2]]} horizontal>
           {[{
-          icon: "👥",
+          icon: <UsersIcon size={16} />,
           text: `${event.currentParticipants}/${event.maxParticipants} kişi`
         }, {
-          icon: "◎",
+          icon: <LocationIcon size={16} />,
           text: event.location
         }, {
-          icon: "◷",
+          icon: <ClockIcon size={16} />,
           text: event.time
         }, {
-          icon: "◈",
+          icon: <StarIcon size={16} />,
           text: event.level
         }].map((item, i) => <Box key={i} style={[[ui.flexShrink0, ui.flex, ui.itemsCenter, ui.gap15, ui.px3, ui.py15, ui.roundedFull, ui.textXs, ui.textWhite50], {
           backgroundColor: "rgba(255,255,255,0.05)",
           borderWidth: 1,
           borderColor: "rgba(255,255,255,0.07)"
         }]}>
-              <Label>{item.icon}</Label>
+              <Box style={{ color: palette.muted }}>{item.icon}</Box>
               <Label>{item.text}</Label>
             </Box>)}
         </Scroll>
@@ -155,7 +157,7 @@ export default function EventRoomScreen({
                 {!isMe && <Box style={[[ui.textXs, ui.textWhite30, ui.ml1, ui.flex, ui.itemsCenter, ui.gap15]]}>
                     {msg.user.name.split(" ")[0]}
                     {msg.isHost && <Label style={[[ui.textC8a44a, ui.text9px, ui.px1, ui.py05, ui.rounded], {
-                backgroundColor: "rgba(200,164,74,0.1)"
+                backgroundColor: "rgba(105,120,255,0.1)"
               }]}>
                         Organizatör
                       </Label>}
@@ -187,8 +189,8 @@ export default function EventRoomScreen({
             setInput(value);
             if (eventId && Date.now() - lastTyping.current > 1000) { lastTyping.current = Date.now(); void socketAction('chat:typing', { eventId, typing: Boolean(value) }).catch(() => {}); }
           }} onSubmitEditing={send} placeholder="Bir mesaj yaz..." style={[[ui.flex1, ui.bgTransparent, ui.textSm, ui.textWhite, ui.py15]]} />
-          <Touch onPress={send} accessibilityLabel="Mesaj gönder" disabled={sending || !input.trim()} style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0], {}]} gradient={["#c8a44a", "#c09038"]}>
-            <Label style={[[ui.text1a1200, ui.textSm]]}>↑</Label>
+          <Touch onPress={send} accessibilityLabel="Mesaj gönder" disabled={sending || !input.trim()} style={[[ui.w11, ui.h11, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0], {}]} gradient={["#4d5bcb", "#6651c9"]}>
+            <SendIcon size={20} style={{ color: palette.text }} />
           </Touch>
         </Box>
       </Box>

@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette";
 import { useEffect, useRef, useState } from "react"
 import { KeyboardAvoidingView, Platform, StyleSheet } from "react-native"
 import TopNavBar from "../components/TopNavBar"
@@ -70,4 +71,4 @@ export default function ForgotPasswordScreen({ navigate }: { navigate: NavigateF
     </Scroll>
   </KeyboardAvoidingView>
 }
-const s = StyleSheet.create({ root: { flex: 1, backgroundColor: "#101827" }, page: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 88, paddingBottom: 36, gap: 18 }, eyebrow: { color: "#e1bd65", fontSize: 11, letterSpacing: 2 }, title: { fontFamily: "Fraunces", fontSize: 34, color: "#f8fafc" }, hint: { color: "#cbd5e1", fontSize: 15, lineHeight: 22 }, error: { color: "#f3aa91", fontSize: 14, lineHeight: 20 }, primary: { minHeight: 52, backgroundColor: "#e1bd65", borderRadius: 17, padding: 15, alignItems: "center", justifyContent: "center" }, primaryText: { color: "#241b09", fontFamily: "Outfit-SemiBold", fontSize: 16 }, link: { minHeight: 44, alignItems: "center", justifyContent: "center" }, linkText: { color: "#e1bd65", fontSize: 14 } })
+const s = StyleSheet.create({ root: { flex: 1, backgroundColor: palette.background }, page: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 88, paddingBottom: 36, gap: 18 }, eyebrow: { color: "#c7ceff", fontSize: 11, letterSpacing: 2 }, title: { fontFamily: "Fraunces", fontSize: 34, color: palette.text }, hint: { color: "#cbd5e1", fontSize: 15, lineHeight: 22 }, error: { color: "#f3aa91", fontSize: 14, lineHeight: 20 }, primary: { minHeight: 52, backgroundColor: "#4d5bcb", borderRadius: 17, padding: 15, alignItems: "center", justifyContent: "center" }, primaryText: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 16 }, link: { minHeight: 44, alignItems: "center", justifyContent: "center" }, linkText: { color: "#c7ceff", fontSize: 14 } })

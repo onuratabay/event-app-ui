@@ -3,7 +3,7 @@ import type { Region } from "react-native-maps"
 import type { ApiEvent } from "../api/client"
 
 export const INITIAL_REGION: Region = { latitude: 39.92, longitude: 32.85, latitudeDelta: 0.8, longitudeDelta: 0.8 }
-export const COLORS = ["#62cbd5", "#a99af5", "#dcb95d", "#f07b54"]
+export const COLORS = ["#436b9e", "#628dcd", "#927dff", "#d2c3ff"]
 export type MapMode = "heat" | "cluster" | "event"
 export const modeForZoom = (zoom: number): MapMode => zoom < 11 ? "heat" : zoom < 15 ? "cluster" : "event"
 export const zoomForRegion = (region: Region, width: number) => Math.max(0, Math.min(20, Math.log2(360 * Math.max(1, width) / (256 * Math.max(0.00001, region.longitudeDelta)))))

@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette";
 import { useEffect, useRef, useState } from "react"
 import { AccessibilityInfo, Animated, Easing, ScrollView, StyleSheet } from "react-native"
 import TopNavBar from "../components/TopNavBar"
@@ -50,7 +51,7 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
 
   if (checkingSession) return null
   return (
-    <Box style={{ flex: 1, backgroundColor: "#101827" }}>
+    <Box style={{ flex: 1, backgroundColor: palette.background }}>
       <AtmoBackground variant="violet" />
       <TopNavBar navigate={navigate} fallback="welcome" title="Giriş" />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.page}
@@ -92,12 +93,12 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
           secureTextEntry
           style={styles.input}
         />
-        <Touch accessibilityLabel="Şifremi unuttum" onPress={() => navigate("forgot-password")} style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}><Label style={{ color: "#e1bd65", fontFamily: "Outfit-Medium", fontSize: 14 }}>Şifremi unuttum</Label></Touch>
+        <Touch accessibilityLabel="Şifremi unuttum" onPress={() => navigate("forgot-password")} style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}><Label style={{ color: "#c7ceff", fontFamily: "Outfit-Medium", fontSize: 14 }}>Şifremi unuttum</Label></Touch>
         <Touch
           onPress={submit}
           disabled={busy}
-          style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.fontSemibold, { color: "#1a1200", marginTop: 16, minHeight: 54, justifyContent: "center" }]]}
-          gradient={["#c8a44a", "#dab96e", "#c09038"]}
+          style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.fontSemibold, { color: palette.text, marginTop: 16, minHeight: 54, justifyContent: "center" }]]}
+          gradient={palette.actionGradient}
         >
           {busy ? "Bağlanıyor..." : "Giriş Yap"}
         </Touch>
@@ -119,13 +120,13 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
   )
 }
 const styles = StyleSheet.create({
-  demoButton: { minHeight: 50, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: "rgba(200,164,74,0.25)", backgroundColor: "rgba(200,164,74,0.05)", color: "#dab96e", textAlign: "center", justifyContent: "center", fontFamily: "Outfit-Medium" },
+  demoButton: { minHeight: 50, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: "rgba(105,120,255,0.25)", backgroundColor: "rgba(105,120,255,0.05)", color: "#927dff", textAlign: "center", justifyContent: "center", fontFamily: "Outfit-Medium" },
   demoHint: { color: "#89838a", fontSize: 11, textAlign: "center" },
   page: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 28, paddingTop: 88, paddingBottom: 36 },
   form: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 10 },
   heading: { gap: 12, marginBottom: 28 },
-  heroTitle: { color: "#f8fafc", fontFamily: "Fraunces", fontSize: 36, lineHeight: 45, letterSpacing: -0.7, paddingVertical: 2 },
-  eyebrow: { color: "#c8a44a", fontSize: 11, letterSpacing: 4, fontFamily: "Outfit-Medium", marginBottom: 8 },
+  heroTitle: { color: palette.text, fontFamily: "Fraunces", fontSize: 36, lineHeight: 45, letterSpacing: -0.7, paddingVertical: 2 },
+  eyebrow: { color: palette.accent, fontSize: 11, letterSpacing: 4, fontFamily: "Outfit-Medium", marginBottom: 8 },
   fieldLabel: { color: "#b6b0ae", fontSize: 12, fontFamily: "Outfit-Medium", marginTop: 6, marginLeft: 4 },
-  input: { minHeight: 56, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(200,164,74,0.18)", backgroundColor: "rgba(255,255,255,0.045)", color: "#f0ede8", fontSize: 15 },
+  input: { minHeight: 56, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(105,120,255,0.18)", backgroundColor: "rgba(255,255,255,0.045)", color: "#f4f5ff", fontSize: 15 },
 })

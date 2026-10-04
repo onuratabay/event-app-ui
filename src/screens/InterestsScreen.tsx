@@ -1,3 +1,5 @@
+import { palette } from "../theme/palette";
+import { CloseIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { useEffect, useState } from "react";
 import { AtmoBackground, InterestChip } from "../components/GlassUI";
@@ -95,10 +97,10 @@ export default function InterestsScreen({
 
               {!photo && <Box style={[[ui.flex, ui.gap2, ui.mt25]]}>
                   <Touch onPress={() => pickPhoto(false)} style={[[ui.flex, ui.itemsCenter, ui.gap15, ui.px3, ui.py15, ui.roundedLg, ui.textXs, ui.fontMedium], {
-                backgroundColor: "rgba(200,164,74,0.12)",
+                backgroundColor: "rgba(105,120,255,0.12)",
                 borderWidth: 1,
-                borderColor: "rgba(200,164,74,0.2)",
-                color: "#c8a44a"
+                borderColor: "rgba(105,120,255,0.2)",
+                color: palette.accent
               }]}>
                     <ImageIcon size={12} />
                     Galeriden
@@ -142,10 +144,10 @@ export default function InterestsScreen({
         </Scroll>
 
         {/* Sticky CTA */}
-        <Box style={[[ui.flexShrink0, ui.px6, ui.pb10, ui.pt4], {}]} gradient={["#101827", "transparent"]} gradientDirection="up">
+        <Box style={[[ui.flexShrink0, ui.px6, ui.pb10, ui.pt4], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up">
           <Touch onPress={save} disabled={saving || selected.size === 0 || !catalog.length} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.textBase, ui.fontSemibold, ui.trackingWide], {
-          color: selected.size > 0 ? "#1a1200" : "rgba(255,255,255,0.25)"
-        }]} gradient={selected.size > 0 ? ["#c8a44a", "#dab96e", "#c09038"] : ["rgba(255,255,255,0.08)", "rgba(255,255,255,0.08)"]}>
+          color: selected.size > 0 ? palette.text : "rgba(255,255,255,0.25)"
+        }]} gradient={selected.size > 0 ? palette.actionGradient : ["rgba(255,255,255,0.08)", "rgba(255,255,255,0.08)"]}>
             Kurulumu Tamamla
           </Touch>
         </Box>

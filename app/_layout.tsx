@@ -1,3 +1,4 @@
+import { palette } from "../src/theme/palette";
 import { useFonts } from "expo-font"
 import { Stack } from "expo-router"
 import * as SplashScreen from "expo-splash-screen"
@@ -47,7 +48,7 @@ export default function RootLayout() {
               <Stack
                 screenOptions={{
                   headerShown: false,
-                  contentStyle: { backgroundColor: "#101827" },
+                  contentStyle: { backgroundColor: palette.background },
                   animation: "fade",
                   animationDuration: 100,
                 }}
@@ -60,4 +61,4 @@ export default function RootLayout() {
     </SafeAreaProvider>
   )
 }
-const s = StyleSheet.create({ root: { flex: 1, backgroundColor: "#101827" } })
+const s = StyleSheet.create({ root: { flex: 1, backgroundColor: palette.background } })

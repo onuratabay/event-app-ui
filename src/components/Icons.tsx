@@ -470,3 +470,22 @@ export function CompassIcon({ size = 24, style, strokeWidth = 1.8 }: IconProps) 
 export function PlusIcon({ size = 24, style, strokeWidth = 1.8 }: IconProps) {
   return <Vector width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" style={style}><Path d="M12 5v14M5 12h14" /></Vector>
 }
+
+function LineSymbol({ path, size = 20, style, strokeWidth = 1.75 }: IconProps & { path: string }) {
+  return <Vector width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}><Path d={path} /></Vector>
+}
+export function CloseIcon(props: IconProps) { return <LineSymbol {...props} path="M6 6l12 12M18 6 6 18" /> }
+export function EditIcon(props: IconProps) { return <LineSymbol {...props} path="m15 5 4 4M4 20l5-1L20 8a2.8 2.8 0 0 0-4-4L5 15l-1 5Z" /> }
+export function SendIcon(props: IconProps) { return <LineSymbol {...props} path="M12 19V5m-6 6 6-6 6 6" /> }
+export function CategoryIcon({ name = "", ...props }: IconProps & { name?: string }) {
+  const key = name.toLocaleLowerCase("tr-TR");
+  const path = /kahve|coffee|yemek/.test(key) ? "M4 8h12v6a5 5 0 0 1-10 0V8m10 1h2a3 3 0 0 1 0 6h-2M5 21h14M8 3v2m4-2v2"
+    : /bisiklet/.test(key) ? "M8 16a4 4 0 1 1-8 0 4 4 0 0 1 8 0Zm16 0a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 16l5-9 5 9H4m5-9h8l3 9M7 4h4m5 0h3l1 3"
+    : /müzik|konser|dans/.test(key) ? "M9 18V5l11-2v13M9 18a3 3 0 1 1-3-3c2 0 3 1 3 3Zm11-2a3 3 0 1 1-3-3c2 0 3 1 3 3Z"
+    : /sanat|resim|seramik/.test(key) ? "M12 3a9 9 0 1 0 0 18h2a2 2 0 0 0 0-4h-1a2 2 0 0 1 0-4h4a4 4 0 0 0 4-4c0-3-4-6-9-6Zm-5 7h.01M10 6h.01m5 1h.01"
+    : /yürüyüş|doğa|kamp|tırman/.test(key) ? "m2 20 7-15 5 10 3-6 5 11H2Zm4-9 3 3 3-3"
+    : /tenis|padel|raket/.test(key) ? "M19 3c3 3 2 7-1 10s-7 4-10 1-2-7 1-10 7-4 10-1ZM8 14l-5 7m3-5 2 2M10 5l8 8m-6-10 9 8"
+    : /yüzme|deniz/.test(key) ? "M2 16c3-3 4 3 7 0s4 3 7 0 4 3 6 0M2 21c3-3 4 3 7 0s4 3 7 0 4 3 6 0M7 12l5-5 5 5m-5-5L8 3m8 1a2 2 0 1 0 0 .01"
+    : "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm4 5-3 5-5 3 3-5 5-3Z";
+  return <LineSymbol {...props} path={path} />;
+}

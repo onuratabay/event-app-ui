@@ -1,6 +1,7 @@
+import { palette } from "../theme/palette";
+import { CheckIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import EditorialQuote from "../components/EditorialQuote";
-import { useEffect, useState } from "react";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
 import { Box, Label, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -8,59 +9,22 @@ import { NavigateFn } from "../types";
 interface Props {
   navigate: NavigateFn;
 }
-const STATS = [{
-  value: "240+",
-  label: "Etkinlik"
-}, {
-  value: "30+",
-  label: "Kategori"
-}, {
-  value: "∞",
-  label: "Bağlantı"
-}];
+const STATS = [{ value: "Güven", label: "Referansla başlayan" }, { value: "İlgi", label: "Ortak tutkular" }, { value: "Deneyim", label: "Gerçek bağlantılar" }];
 export default function ApprovalScreen({
   navigate
 }: Props) {
-  const [particles, setParticles] = useState<Array<{
-    id: number;
-    x: number;
-    size: number;
-    delay: number;
-    color: string;
-  }>>([]);
-  useEffect(() => {
-    const p = Array.from({
-      length: 18
-    }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      size: Math.random() * 6 + 3,
-      delay: Math.random() * 2,
-      color: Math.random() > 0.5 ? "rgba(200,164,74,0.7)" : "rgba(255,255,255,0.3)"
-    }));
-    setParticles(p);
-  }, []);
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.px6, ui.overflowHidden]]}>
       <AtmoBackground variant="gold" />
       <TopNavBar navigate={navigate} fallback="onboarding-3" title="Başvuru Durumu" floating />
-
-      {/* Particles */}
-      {particles.map(p => <Box key={p.id} style={[[], {
-      left: `${p.x}%`,
-      bottom: "10%",
-      width: p.size,
-      height: p.size,
-      backgroundColor: p.color
-    }]} />)}
 
       <Box style={[[ui.relative, ui.wFull, ui.spaceY8]]}>
         {/* Success icon */}
         <Box style={[[ui.flex, ui.justifyCenter]]} enter>
           <Box style={[[ui.w28, ui.h28, ui.rounded3xl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
           borderWidth: 1,
-          borderColor: "rgba(200,164,74,0.3)"
-        }]} gradient={["rgba(200,164,74,0.2)", "rgba(200,164,74,0.05)"]} glass>
-            <Label style={[[ui.text5xl]]}>✦</Label>
+          borderColor: "rgba(105,120,255,0.3)"
+        }]} gradient={["rgba(105,120,255,0.2)", "rgba(105,120,255,0.05)"]} glass>
+            <CheckIcon size={40} style={{ color: palette.accent }} />
           </Box>
         </Box>
 
@@ -69,7 +33,7 @@ export default function ApprovalScreen({
           <Label style={[[ui.fontDisplay, ui.text4xl, ui.textWhite, ui.leadingTight], { fontStyle: "italic" }]}>
             Seni{"\n"}
             <Label style={{
-            color: "#c8a44a"
+            color: palette.accent
           }}>
               bekliyorduk.
             </Label>
@@ -80,8 +44,8 @@ export default function ApprovalScreen({
         {/* Stats */}
         <Box style={[[ui.flex, ui.wFull, ui.gap2], { flexWrap: "nowrap" }]} enter>
           {STATS.map((s, i) => <GlassCard key={i} style={[[ui.flex1, ui.p3, ui.textCenter], { minWidth: 0 }]}>
-              <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight], {
-            color: "#c8a44a"
+              <Label style={[[ui.fontDisplay, ui.textBase, ui.fontLight], {
+            color: palette.accent
           }]}>
                 {s.value}
               </Label>
@@ -93,8 +57,8 @@ export default function ApprovalScreen({
 
         {/* CTA */}
         <Touch onPress={() => navigate("interests")} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.textBase, ui.fontSemibold, ui.trackingWide], {
-        color: "#1a1200"
-      }]} gradient={["#c8a44a", "#dab96e", "#c09038"]} enter>
+        color: palette.text
+      }]} gradient={palette.actionGradient} enter>
           Profilini Oluştur
         </Touch>
       </Box>

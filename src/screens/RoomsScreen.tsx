@@ -1,3 +1,5 @@
+import { palette } from "../theme/palette";
+import { MessageIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { Circle, Path, Polygon, Polyline, Rect } from "react-native-svg";
 import BottomNav from "../components/BottomNav";
@@ -68,7 +70,7 @@ export default function RoomsScreen({
                   </GlassCard>
                 </Touch>)}
             </Box> : <GlassCard style={[[ui.p6, ui.textCenter]]}>
-              <Label style={[[ui.text2xl, ui.mb2, ui.opacity30]]}>🚀</Label>
+              <MessageIcon size={32} style={{ color: palette.muted, marginBottom: 16 }} />
               <Label style={[[ui.textSm, ui.textWhite35]]}>
                 Henüz aktif etkinliğin yok.
               </Label>
@@ -124,7 +126,7 @@ export default function RoomsScreen({
                 <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                 <Circle cx="12" cy="10" r="3" />
               </Vector>} title="Canlı Konum Paylaşımı" subtitle="Buluşma noktasını gerçek zamanlı görün, geç kalma." />
-          <ComingSoonCard accent="gold" icon={<Vector width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(200,164,74,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <ComingSoonCard accent="gold" icon={<Vector width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(105,120,255,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <Rect x="3" y="3" width="18" height="18" rx="2" />
                 <Circle cx="8.5" cy="8.5" r="1.5" />
                 <Polyline points="21 15 16 10 5 21" />

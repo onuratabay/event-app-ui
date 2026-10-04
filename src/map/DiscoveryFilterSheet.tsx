@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette";
 import { useRef, useState } from "react"
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native"
 import * as Location from "expo-location"
@@ -65,7 +66,7 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
           <Box style={s.wrap}>{CITY_PRESETS.map(place => <FilterChip solid key={place.name} label={place.name} selected={draft.place?.name === place.name} onPress={() => choosePlace(place)} />)}<FilterChip solid label="Her yerde" selected={!draft.place && !query} onPress={() => { searchVersion.current++; setQuery(""); setResults([]); setDraft(previous => ({ ...previous, place: null })) }} /></Box>
           {draft.place && <><Label style={s.hint}>⌖ {draft.place.name} çevresinde</Label><Box style={s.wrap}>{[1, 5, 15, 30, 75].map(radiusKm => <FilterChip solid key={radiusKm} label={`${radiusKm} km`} selected={draft.radiusKm === radiusKm} onPress={() => setDraft(previous => ({ ...previous, radiusKm }))} />)}</Box></>}
           <Label style={s.section}>Ne yapmak istersin?</Label>
-          <Box style={s.wrap}><FilterChip solid label="Tüm etkinlikler" selected={!draft.interestIds.length} onPress={() => setDraft(previous => ({ ...previous, interestIds: [] }))} />{categories.map(item => <FilterChip solid key={item.id} label={`${categoryVisual(item.name).icon} ${item.name}`} selected={draft.interestIds.includes(item.id)} onPress={() => setDraft(previous => ({ ...previous, interestIds: previous.interestIds.includes(item.id) ? previous.interestIds.filter(id => id !== item.id) : [...previous.interestIds, item.id] }))} />)}</Box>
+          <Box style={s.wrap}><FilterChip solid label="Tüm etkinlikler" selected={!draft.interestIds.length} onPress={() => setDraft(previous => ({ ...previous, interestIds: [] }))} />{categories.map(item => <FilterChip solid key={item.id} label={item.name} selected={draft.interestIds.includes(item.id)} onPress={() => setDraft(previous => ({ ...previous, interestIds: previous.interestIds.includes(item.id) ? previous.interestIds.filter(id => id !== item.id) : [...previous.interestIds, item.id] }))} />)}</Box>
           {!categories.length && <Label style={s.hint}>Etkinlik türleri yüklenemedi. Haritadan yenileyebilirsin.</Label>}
         </Scroll>
         {error && <Label style={s.error}>{error}</Label>}
@@ -80,10 +81,10 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
   </Modal>
 }
 const s = StyleSheet.create({
-  keyboard: { maxHeight: "94%" }, panel: { backgroundColor: "#10101d", borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 22, paddingBottom: 34, gap: 16, maxHeight: "100%" },
-  heading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, eyebrow: { color: "#c8a44a", fontSize: 10, letterSpacing: 2 }, title: { fontFamily: "Fraunces", fontSize: 32, color: "#f0ede8" },
-  close: { padding: 15 }, scroll: { flexShrink: 1 }, section: { fontFamily: "Outfit-SemiBold", color: "#f0ede8", fontSize: 17, marginTop: 16, marginBottom: 10 },
-  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 8 }, row: { flexDirection: "row", gap: 12, marginTop: 8 }, grow: { flex: 1 }, text: { color: "#f0ede8", fontSize: 14 },
-  hint: { color: "#9995ab", fontSize: 12, lineHeight: 18 }, link: { color: "#dcb95d", fontSize: 12, paddingVertical: 8 }, search: { padding: 12, backgroundColor: "#ffffff0d", alignItems: "center", borderRadius: 12, marginVertical: 8 },
-  result: { padding: 12, borderBottomWidth: 1, borderColor: "#ffffff15" }, error: { color: "#efaa91", fontSize: 12 }, reset: { padding: 14, justifyContent: "center" }, apply: { flex: 1, padding: 16, backgroundColor: "#dcb95d", borderRadius: 18, alignItems: "center" }, applyText: { fontFamily: "Outfit-SemiBold", color: "#191322", fontSize: 14 },
+  keyboard: { maxHeight: "94%" }, panel: { backgroundColor: palette.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 22, paddingBottom: 34, gap: 16, maxHeight: "100%" },
+  heading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, eyebrow: { color: palette.accent, fontSize: 10, letterSpacing: 2 }, title: { fontFamily: "Fraunces", fontSize: 32, color: "#f4f5ff" },
+  close: { padding: 15 }, scroll: { flexShrink: 1 }, section: { fontFamily: "Outfit-SemiBold", color: "#f4f5ff", fontSize: 17, marginTop: 16, marginBottom: 10 },
+  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 8 }, row: { flexDirection: "row", gap: 12, marginTop: 8 }, grow: { flex: 1 }, text: { color: "#f4f5ff", fontSize: 14 },
+  hint: { color: "#9995ab", fontSize: 12, lineHeight: 18 }, link: { color: "#b9c3ff", fontSize: 12, paddingVertical: 8 }, search: { padding: 12, backgroundColor: "#ffffff0d", alignItems: "center", borderRadius: 12, marginVertical: 8 },
+  result: { padding: 12, borderBottomWidth: 1, borderColor: "#ffffff15" }, error: { color: "#efaa91", fontSize: 12 }, reset: { padding: 14, justifyContent: "center" }, apply: { flex: 1, padding: 16, backgroundColor: "#4d5bcb", borderRadius: 18, alignItems: "center" }, applyText: { fontFamily: "Outfit-SemiBold", color: "#f4f5ff", fontSize: 14 },
 })

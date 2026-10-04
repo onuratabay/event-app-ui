@@ -1,4 +1,4 @@
-# Event App
+# ewent.app
 
 Expo SDK 57, React Native 0.86 and TypeScript application for iOS and Android.
 
@@ -98,3 +98,11 @@ Tek bağlantı `src/services/socket.ts` içindedir. Veri polling'i yoktur: sohbe
 `[API REQUEST]` geliştirme logları method, endpoint, süre, yaklaşık JSON boyutu ve istek sayısını gösterir. Socket logları içerik veya token yazmaz. Uygulama arka planda bağlantıyı keser; yeniden bağlantıda yalnızca ilgili küçük özetler/açık oda eşitlenir. JWT yenilemesi ve WebSocket heartbeat'leri normal güvenlik/bağlantı trafiğidir.
 
 Backend'deki `docs/realtime-traffic.md` olay sözleşmesini, ölçüm sınırlarını ve gereken `1790020000000-RealtimeEventActivity` migration'ını açıklar. Migration bu çalışma sırasında canlı DB'ye uygulanmadı. Yeni backend ile kullanmadan önce uygulanmalıdır. Mevcut backend/Expo servisleri kapalı bırakıldı.
+
+## Brand
+
+The display name is `ewent.app`; the website is https://ewent.app. Supplied original artwork is stored in `assets/brand/`. The transparent wordmark appears above the Welcome headline at 150 × 50 and centered in the Discover action row at 104 × 35. Discover actions run left to right: search, sorting/filters, wordmark, recommendations, notifications. Its blur fades below the action row without a divider. Splash retains its original orbit animation. The supplied square icon is used only as the installed app icon. Navigation and action buttons retain their functional icons. Existing application identifiers and `eventapp://` links remain compatible. HTTPS event sharing requires a deployed domain landing page and verified iOS/Android domain association before activation. Native app icon changes require a new application build; Expo Go retains its own launcher icon.
+
+### ewent görsel tema
+
+Tüm native ekranlar gece laciverti zemin ve logoya uyumlu mavi/mor vurgu paletini kullanır (`src/theme/palette.ts`). Ana butonlar beyaz yazılı koyu mavi/mor geçişlidir; seçili filtreler hafif renklendirilmiş yüzeylerdir. Kartlar sakin yüzeyler, ince kenarlar ve ortak çizgi ikonlarla düzenlenmiştir. Durum/hata renkleri anlamlarını korur. Splash düzeni ve akış üst çubuğunun ikon sırası korunmuştur. Özel topluluk hissi görseldir; yeni gizlilik veya üyelik kısıtlaması eklenmemiştir.

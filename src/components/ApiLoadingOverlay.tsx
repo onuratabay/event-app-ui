@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette";
 import { useEffect, useRef, useState } from "react"
 import { ActivityIndicator, Animated, Easing, StyleSheet, View } from "react-native"
 import { BlurView } from "expo-blur"
@@ -66,7 +67,7 @@ export default function ApiLoadingOverlay() {
       <Label style={styles.spark}>✦</Label>
     </Animated.View>
     <Label style={styles.title}>Etkinlikler hazırlanıyor</Label>
-    <ActivityIndicator color="#e4c875" style={styles.spinner} />
+    <ActivityIndicator color="#b9c3ff" style={styles.spinner} />
   </View>
 }
 
@@ -76,8 +77,8 @@ const styles = StyleSheet.create({
   event: { position: "absolute", width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,.10)", borderWidth: 1, borderColor: "rgba(226,200,117,.32)" },
   eventIcon: { fontSize: 21, lineHeight: 28, textShadowColor: "rgba(0,0,0,.55)", textShadowRadius: 8 },
   orbitRing: { position: "absolute", width: 128, height: 128, borderRadius: 64, borderWidth: 1, borderColor: "rgba(255,255,255,.08)" },
-  core: { position: "absolute", marginTop: -71, width: 80, height: 80, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(200,164,74,.16)", borderWidth: 1, borderColor: "rgba(242,216,137,.42)" },
-  spark: { color: "#f4d47d", fontSize: 32, lineHeight: 38, textShadowColor: "rgba(200,164,74,.75)", textShadowRadius: 14 },
-  title: { color: "#f8fafc", fontFamily: "Outfit-SemiBold", fontSize: 13, lineHeight: 19, marginTop: 4, textShadowColor: "rgba(0,0,0,.75)", textShadowRadius: 7 },
+  core: { position: "absolute", marginTop: -71, width: 80, height: 80, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(105,120,255,.16)", borderWidth: 1, borderColor: "rgba(183,197,255,.42)" },
+  spark: { color: "#f4d47d", fontSize: 32, lineHeight: 38, textShadowColor: "rgba(105,120,255,.75)", textShadowRadius: 14 },
+  title: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 13, lineHeight: 19, marginTop: 4, textShadowColor: "rgba(0,0,0,.75)", textShadowRadius: 7 },
   spinner: { marginTop: 7 },
 })

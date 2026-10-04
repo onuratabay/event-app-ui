@@ -66,7 +66,7 @@ export default function SplashScreen({
         </Animated.View>
         <Animated.View style={{ position: "absolute", top: 58, transform: [{ scale: coreScale }] }}>
           <Box style={[[ui.w20, ui.h20, ui.rounded28px, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-            backgroundColor: "rgba(200,164,74,.16)", borderWidth: 1, borderColor: "rgba(242,216,137,.42)",
+            backgroundColor: "rgba(105,120,255,.16)", borderWidth: 1, borderColor: "rgba(183,197,255,.42)",
           }]} glass>
             <Label style={[[ui.fontDisplay, ui.text2xl, ui.textWhite90]]}>✦</Label>
           </Box>
@@ -76,7 +76,7 @@ export default function SplashScreen({
             Yeni anlar yaklaşıyor.
           </Label>
           <Label style={[[ui.textSm, ui.textWhite45, ui.mt1]]}>Etkinlikler, insanlar ve iyi bir başlangıç.</Label>
-          <Box style={[[ui.mt2, ui.hPx, ui.w24, ui.mxAuto], {}]} gradient={["transparent", "rgba(200,164,74,0.6)", "transparent"]} gradientDirection="right" />
+          <Box style={[[ui.mt2, ui.hPx, ui.w24, ui.mxAuto], {}]} gradient={["transparent", "rgba(105,120,255,0.6)", "transparent"]} gradientDirection="right" />
         </Box>
       </Box>
     </Box>;

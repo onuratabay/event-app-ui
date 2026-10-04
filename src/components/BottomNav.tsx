@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette";
 import { StyleSheet } from "react-native"
 import { useStore } from "../native/Store"
 import { Box, Label, Picture, Touch } from "../native/UI"
@@ -30,14 +31,14 @@ export default function BottomNav({
             onPress={() => navigate(screen)}
             gradient={
               screen === "create-event"
-                ? ["#c8a44a", "#dab96e", "#c09038"]
+                ? palette.actionGradient
                 : undefined
             }
             style={[
               s.item,
-              active === screen && { backgroundColor: "rgba(225,189,101,.12)", borderColor: "rgba(225,189,101,.20)" },
+              active === screen && { backgroundColor: "rgba(185,195,255,.12)", borderColor: "rgba(185,195,255,.20)" },
               screen === "create-event" && {
-                backgroundColor: "#c8a44a",
+                backgroundColor: "#4d5bcb",
                 flex: 0,
                 width: 52,
               },
@@ -47,13 +48,13 @@ export default function BottomNav({
               <LocationIcon
                 size={22}
                 strokeWidth={1.75}
-                style={{ color: active === screen ? "#c8a44a" : "#777582" }}
+                style={{ color: active === screen ? palette.accent : palette.muted }}
               />
             ) : screen === "rooms" ? (
               <MessageIcon
                 size={22}
                 strokeWidth={1.75}
-                style={{ color: active === screen ? "#c8a44a" : "#777582" }}
+                style={{ color: active === screen ? palette.accent : palette.muted }}
               />
             ) : screen === "profile" ? (
               <Picture
@@ -61,14 +62,14 @@ export default function BottomNav({
                 style={{ width: 24, height: 24, borderRadius: 12 }}
               />
             ) : (
-              screen === "create-event" ? <PlusIcon size={22} strokeWidth={1.75} style={{ color: "#1a1200" }} /> : <CompassIcon size={22} strokeWidth={1.75} style={{ color: active === screen ? "#e1bd65" : "#aeb8ca" }} />
+              screen === "create-event" ? <PlusIcon size={22} strokeWidth={1.75} style={{ color: palette.text }} /> : <CompassIcon size={22} strokeWidth={1.75} style={{ color: active === screen ? "#c7ceff" : palette.muted }} />
             )}
             {screen !== "create-event" && (
               <Label
                 style={{
                   fontSize: 11,
                   fontFamily: "Outfit-Medium",
-                  color: active === screen ? "#e1bd65" : "#aeb8ca",
+                  color: active === screen ? "#c7ceff" : palette.muted,
                 }}
               >
                 {label}
@@ -95,10 +96,10 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     padding: 8,
-    borderRadius: 28,
-    backgroundColor: "rgba(15,23,42,.82)",
+    borderRadius: 24,
+    backgroundColor: "rgba(11,16,32,.94)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.18)",
+    borderColor: "rgba(183,197,255,.12)",
     shadowColor: "#000",
     shadowOpacity: 0.28,
     shadowRadius: 22,

@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette";
 import DateTimePicker from "@react-native-community/datetimepicker"
 import { BlurView } from "expo-blur"
 import * as Haptics from "expo-haptics"
@@ -39,7 +40,7 @@ import Svg, { type SvgProps } from "react-native-svg"
 export type NativeStyle = ViewStyle & TextStyle
 export type NativeStyleProp = StyleProp<NativeStyle>
 const Typography = createContext<TextStyle>({
-  color: "#f8fafc",
+  color: palette.text,
   fontFamily: "Outfit",
   fontSize: 15,
   lineHeight: 21,
@@ -155,7 +156,7 @@ function Paint({
         <>
           <BlurView intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
           <LinearGradient
-            colors={["rgba(255,255,255,.16)", "rgba(255,255,255,.04)", "rgba(124,112,240,.06)"]}
+            colors={["rgba(183,197,255,.035)", "rgba(183,197,255,.01)", "rgba(146,125,255,.02)"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
@@ -409,13 +410,13 @@ export function Picture({
       style={[
         split(style).view,
         {
-          backgroundColor: "#242033",
+          backgroundColor: palette.elevated,
           alignItems: "center",
           justifyContent: "center",
         },
       ]}
     >
-      <Text style={{ color: "#c8a44a" }}>
+      <Text style={{ color: palette.accent }}>
         {accessibilityLabel?.slice(0, 1) || "✦"}
       </Text>
     </View>
@@ -485,7 +486,7 @@ export function Field({
             >
               <SafeAreaView
                 edges={["bottom"]}
-                style={{ backgroundColor: "#151322", padding: 20 }}
+                style={{ backgroundColor: palette.surface, padding: 20 }}
               >
                 <DateTimePicker
                   value={date}
@@ -508,9 +509,9 @@ export function Field({
                   onPress={() => setOpen(false)}
                   style={{
                     padding: 16,
-                    backgroundColor: "#c8a44a",
+                    backgroundColor: palette.accent,
                     borderRadius: 12,
-                    color: "#1a1200",
+                    color: palette.text,
                     textAlign: "center",
                   }}
                 >
@@ -543,7 +544,7 @@ export function Field({
       }
       autoCapitalize={mode === "email" ? "none" : props.autoCapitalize}
       placeholderTextColor="rgba(226,232,240,.48)"
-      selectionColor="#e1bd65"
+      selectionColor="#c7ceff"
     />
   )
 }

@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette"
 import React from "react"
 import { StyleSheet, View } from "react-native"
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg"
@@ -14,42 +15,43 @@ const s = StyleSheet.create({
   card: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.18)",
-    backgroundColor: "rgba(255,255,255,.10)",
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
   },
   input: {
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.19)",
-    backgroundColor: "rgba(15,23,42,.58)",
+    borderColor: palette.border,
+    backgroundColor: palette.background,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    color: "#f8fafc",
+    color: palette.text,
     fontSize: 16,
   },
   label: {
     fontSize: 13,
     color: "rgba(241,245,249,.72)",
     marginBottom: 6,
-    letterSpacing: 0.8,
+    letterSpacing: 1.2,
     textTransform: "uppercase",
   },
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 10,
+    minHeight: 44,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.17)",
-    backgroundColor: "rgba(255,255,255,.09)",
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
     color: "rgba(248,250,252,.88)",
   },
   selected: {
-    backgroundColor: "rgba(200,164,74,.2)",
-    borderColor: "rgba(200,164,74,.6)",
-    color: "#c8a44a",
+    backgroundColor: palette.selected,
+    borderColor: "rgba(105,120,255,.38)",
+    color: palette.accent,
   },
   row: { flexDirection: "row", alignItems: "center" },
-  gold: { backgroundColor: "#c8a44a", color: "#1a1200" },
+  gold: { backgroundColor: palette.selected, borderColor: "rgba(105,120,255,.38)", color: palette.accent },
 })
 export function GlassCard({
   style,
@@ -66,7 +68,7 @@ export function GlassCard({
       glass
       style={[
         s.card,
-        variant === "strong" && { backgroundColor: "rgba(255,255,255,.16)" },
+        variant === "strong" && { backgroundColor: palette.elevated },
         style,
       ]}
     >
@@ -110,10 +112,10 @@ export function FilterChip({
     <Touch
       onPress={onPress}
       accessibilityState={{ selected }}
-      style={[s.chip, { flexShrink: 0 }, selected && s.gold, solid && { backgroundColor: selected ? "#e1bd65" : "#242336", borderColor: selected ? "#f3d78b" : "#68647b", borderWidth: 1.5, minHeight: 44, paddingHorizontal: 15, paddingVertical: 11 }]}
+      style={[s.chip, { flexShrink: 0 }, selected && s.gold, solid && { backgroundColor: selected ? palette.selected : palette.surface, borderColor: selected ? "rgba(105,120,255,.38)" : palette.border, borderWidth: 1, minHeight: 44, paddingHorizontal: 15, paddingVertical: 11 }]}
     >
-      <Label style={solid ? { color: selected ? "#241b09" : "#faf7f0", fontFamily: "Outfit-SemiBold", fontSize: 13 } : undefined}>
-        {emoji ? `${emoji} ` : ""}
+      <Label style={solid ? { color: selected ? palette.accent : palette.text, fontFamily: "Outfit-SemiBold", fontSize: 13 } : undefined}>
+
         {label}
       </Label>
     </Touch>
@@ -201,7 +203,7 @@ export function ProgressStepper({
                 height: 1,
                 marginHorizontal: 4,
                 backgroundColor:
-                  i < current ? "#c8a44a" : "rgba(255,255,255,.15)",
+                  i < current ? palette.accent : "rgba(255,255,255,.15)",
               }}
             />
           )}
@@ -263,11 +265,11 @@ export function ScoreBadge({ score, label }: { score: number; label: string }) {
               height: 6,
               borderRadius: 3,
               backgroundColor:
-                i <= Math.round(score) ? "#c8a44a" : "rgba(255,255,255,.15)",
+                i <= Math.round(score) ? palette.accent : "rgba(255,255,255,.15)",
             }}
           />
         ))}
-        <Label style={{ color: "#c8a44a", marginLeft: 4 }}>
+        <Label style={{ color: palette.accent, marginLeft: 4 }}>
           {score.toFixed(1)}
         </Label>
       </Box>
@@ -280,20 +282,20 @@ export function AtmoBackground({
   variant?: "violet" | "gold" | "success"
 }) {
   const colors = {
-    violet: ["#7c70f0", "#0ea5a8"],
-    gold: ["#d4a72c", "#7c70f0"],
-    success: ["#10b981", "#0ea5a8"],
+    violet: [palette.blue, palette.violet],
+    gold: [palette.violet, palette.blue],
+    success: [palette.blue, palette.success],
   }[variant]
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Svg width="100%" height="100%">
         <Defs>
           <RadialGradient id="atmo" cx="28%" cy="14%" rx="82%" ry="65%">
-            <Stop offset="0" stopColor={colors[0]} stopOpacity={0.34} />
+            <Stop offset="0" stopColor={colors[0]} stopOpacity={0.14} />
             <Stop offset="1" stopColor={colors[0]} stopOpacity={0} />
           </RadialGradient>
           <RadialGradient id="atmoSecondary" cx="88%" cy="78%" rx="70%" ry="62%">
-            <Stop offset="0" stopColor={colors[1]} stopOpacity={0.20} />
+            <Stop offset="0" stopColor={colors[1]} stopOpacity={0.07} />
             <Stop offset="1" stopColor={colors[1]} stopOpacity={0} />
           </RadialGradient>
         </Defs>

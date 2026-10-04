@@ -1,3 +1,4 @@
+import { CloseIcon } from "./Icons"
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
@@ -45,7 +46,7 @@ export function ErrorNoticeProvider({ children }: { children: ReactNode }) {
           <Pressable accessibilityRole="button" accessibilityLabel="Bildirimi kapat" onPress={() => {
             hide(notice.id)
             notice.onDismiss?.()
-          }} style={styles.close}><Text style={styles.closeText}>×</Text></Pressable>
+          }} style={styles.close}><CloseIcon size={18} style={{ color: "#f39baf" }} /></Pressable>
         </View>
       </View>}
     </NoticeContext.Provider>
@@ -79,5 +80,5 @@ const styles = StyleSheet.create({
   close: { width: 32, height: 32, alignItems: "center", justifyContent: "center", marginTop: -4, marginRight: -4 },
   closeText: { color: "#d2c5c9", fontSize: 24, lineHeight: 28 },
   retry: { minHeight: 30, justifyContent: "flex-end", alignSelf: "flex-start", marginTop: 2 },
-  retryText: { color: "#dab96e", fontFamily: "Outfit-Medium", fontSize: 13 },
+  retryText: { color: "#927dff", fontFamily: "Outfit-Medium", fontSize: 13 },
 })

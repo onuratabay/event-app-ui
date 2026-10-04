@@ -1,6 +1,7 @@
+import { palette } from "../theme/palette";
 import type { ReactNode } from "react"
 import { StyleSheet } from "react-native"
-import { BlurView } from "expo-blur"
+import FeedHeaderBackdrop from "./FeedHeaderBackdrop"
 import type { NavigateFn, Screen } from "../types"
 import { Box, Label, Touch } from "../native/UI"
 import { ArrowLeftIcon } from "./Icons"
@@ -28,7 +29,7 @@ export default function TopNavBar({
 }) {
   return (
     <Box pointerEvents="box-none" style={[s.frame, floating && s.floatingFrame]}>
-      {floating ? <BlurView intensity={34} tint="dark" style={s.backdrop} /> : null}
+      {floating ? <FeedHeaderBackdrop /> : null}
       <Box style={[s.bar, floating && s.floatingBar]}>
         <Touch
           accessibilityLabel="Geri git"
@@ -84,7 +85,7 @@ const s = StyleSheet.create({
   floatingBar: {
     paddingHorizontal: 20,
     minHeight: TOP_NAV_HEIGHT,
-    backgroundColor: "rgba(36, 48, 86, .16)",
+    backgroundColor: "transparent",
   },
   back: {
     width: 44,
@@ -95,14 +96,14 @@ const s = StyleSheet.create({
   },
   backWithLabel: { width: 64, flexDirection: "row", gap: 5 },
   backLabel: {
-    color: "#f8fafc",
+    color: palette.text,
     fontFamily: "Outfit-SemiBold",
     fontSize: 12,
     lineHeight: 16,
   },
-  icon: { color: "#f8fafc" },
+  icon: { color: palette.text },
   copy: { flex: 1, minWidth: 0, paddingHorizontal: 12 },
-  title: { color: "#f8fafc", fontFamily: "Outfit-SemiBold", fontSize: 15, lineHeight: 20 },
+  title: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15, lineHeight: 20 },
   subtitle: { color: "rgba(226,232,240,.62)", fontFamily: "Outfit", fontSize: 11, lineHeight: 15 },
   right: { minWidth: 44, alignItems: "flex-end", justifyContent: "center" },
 })

@@ -1,3 +1,5 @@
+import { palette } from "../theme/palette";
+import { EditIcon, StarIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
@@ -35,7 +37,7 @@ function InlineEditField({
         {multiline ? <Field value={draft} onChangeText={e => setDraft(e)} autoFocus style={[[ui.wFull, ui.bgWhite8, ui.border, ui.borderC8a44a40, ui.roundedXl, ui.px3, ui.py25, ui.textSm, ui.textWhite80]]} multiline /> : <Field value={draft} onChangeText={e => setDraft(e)} autoFocus style={[[ui.wFull, ui.bgWhite8, ui.border, ui.borderC8a44a40, ui.roundedXl, ui.px3, ui.py25, ui.textSm, ui.textWhite80]]} />}
         <Box style={[[ui.flex, ui.gap2, ui.mt15]]}>
           <Touch onPress={save} style={[[ui.textXs, ui.px3, ui.py1, ui.roundedLg, ui.text1a1200, ui.fontMedium], {
-          backgroundColor: "#c8a44a"
+          backgroundColor: "#4d5bcb"
         }]}>
             Kaydet
           </Touch>
@@ -48,11 +50,9 @@ function InlineEditField({
         </Box>
       </Box>;
   }
-  return <Touch onPress={() => setEditing(true)} style={[[ui.relative]]}>
+  return <Touch onPress={() => setEditing(true)} accessibilityLabel="Düzenle" style={[[ui.relative, ui.flex, ui.itemsCenter]]}>
       <Label style={[[]]}>{value}</Label>
-      <Label style={[[ui.ml2, ui.opacity0, ui.opacity60, ui.textC8a44a, ui.textXs]]}>
-        ✎
-      </Label>
+      <EditIcon size={15} style={{ color: palette.muted, marginLeft: 8 }} />
     </Touch>;
 }
 export default function ProfileScreen({
@@ -133,7 +133,7 @@ export default function ProfileScreen({
 
       <Scroll style={[[ui.relative, ui.hFull, ui.pb28], { paddingTop: 80 }]}>
         {/* Header */}
-        <Box style={[[ui.pt14, ui.px5, ui.pb5]]}>
+        <Box style={[[ui.pt4, ui.px5, ui.pb5]]}>
           {/* Profile header */}
           <Box style={[[ui.flex, ui.itemsStart, ui.gap4]]}>
             <Touch style={[[ui.relative]]} onPress={async () => {
@@ -144,7 +144,7 @@ export default function ProfileScreen({
           }}>
               <Picture uri={user.avatar} accessibilityLabel={user.name} style={[[ui.w20, ui.h20, ui.rounded2xl]]} />
               {isOwn && <Box style={[[ui.fixed, ui.inset0, ui.rounded2xl, ui.bgBlack50, ui.opacity0, ui.opacity60, ui.flex, ui.itemsCenter, ui.justifyCenter]]}>
-                  <Label style={[[ui.textXs, ui.textWhite]]}>✎</Label>
+                  <EditIcon size={15} style={{ color: palette.text }} />
                 </Box>}
             </Touch>
 
@@ -219,17 +219,13 @@ export default function ProfileScreen({
                   Event Skoru
                 </Label>
                 <Label style={[[ui.fontDisplay, ui.text4xl, ui.fontLight, ui.mt1], {
-                color: "#c8a44a"
+                color: palette.accent
               }]}>
                   {user.score.toFixed(1)}
                 </Label>
               </Box>
               <Box style={[[ui.flex, ui.gap1]]}>
-                {[1, 2, 3, 4, 5].map(i => <Label key={i} style={[[ui.textXl, i <= Math.round(user.score) ? [ui.opacity100] : [ui.opacity15]], {
-                color: "#c8a44a"
-              }]}>
-                    ★
-                  </Label>)}
+                {[1, 2, 3, 4, 5].map(i => <StarIcon key={i} size={19} filled={i <= Math.round(user.score)} style={{ color: palette.accent, opacity: i <= Math.round(user.score) ? 1 : .25 }} />)}
               </Box>
             </Box>
             <Box style={[[ui.spaceY0]]}>
@@ -265,9 +261,9 @@ export default function ProfileScreen({
               <Touch onPress={() => setShowReferences(!showReferences)} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.justifyBetween, ui.p4]]}>
                 <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
                   <Box style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textSm], {
-                backgroundColor: "rgba(124,112,240,0.12)",
+                backgroundColor: "rgba(146,125,255,0.12)",
                 borderWidth: 1,
-                borderColor: "rgba(124,112,240,0.2)"
+                borderColor: "rgba(146,125,255,0.2)"
               }]}>
                     🤝
                   </Box>
@@ -327,7 +323,7 @@ export default function ProfileScreen({
             <Label style={[[ui.textXs, ui.textWhite25, ui.uppercase, ui.trackingWider]]}>
               Sizinle Olacak
             </Label>
-            <ComingSoonCard accent="gold" icon={<Vector width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(200,164,74,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <ComingSoonCard accent="gold" icon={<Vector width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(105,120,255,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <Circle cx="12" cy="8" r="7" />
                   <Polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
                 </Vector>} title="Rozetler ve Başarılar" subtitle="Etkinlik geçmişine göre özel rozetler kazan, topluluğa ilhamını yansıt." />
@@ -357,12 +353,12 @@ const profileNavStyles = StyleSheet.create({
   },
   signOut: {},
   actionLabel: {
-    color: "#f8fafc",
+    color: palette.text,
     fontFamily: "Outfit-SemiBold",
     fontSize: 12,
     lineHeight: 16,
   },
-  signOutLabel: { color: "#e4c875" },
+  signOutLabel: { color: "#b9c3ff" },
   disabled: { opacity: 0.45 },
 });
 
@@ -376,11 +372,11 @@ const profileInstagramStyles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     borderRadius: 14,
-    backgroundColor: "rgba(200,164,74,.09)",
+    backgroundColor: "rgba(105,120,255,.09)",
     borderWidth: 1,
-    borderColor: "rgba(200,164,74,.22)",
+    borderColor: "rgba(105,120,255,.22)",
   },
-  icon: { color: "#e4c875" },
+  icon: { color: "#b9c3ff" },
   handle: {
     color: "#f2d889",
     fontFamily: "Outfit-SemiBold",
@@ -388,7 +384,7 @@ const profileInstagramStyles = StyleSheet.create({
     lineHeight: 19,
     textDecorationLine: "underline",
   },
-  external: { color: "rgba(242,216,137,.72)", fontSize: 14 },
+  external: { color: "rgba(183,197,255,.72)", fontSize: 14 },
   private: {
     marginLeft: 2,
     color: "rgba(226,232,240,.48)",

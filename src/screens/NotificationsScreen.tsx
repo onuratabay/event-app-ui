@@ -1,3 +1,6 @@
+import { UsersIcon, ClockIcon, StarIcon, LockIcon } from "../components/Icons";
+import { palette } from "../theme/palette";
+import { CloseIcon } from "../components/Icons";
 import { ReferenceNotifications } from "../components/ReferenceNotifications";
 import { AtmoBackground } from "../components/GlassUI";
 import { CheckIcon } from "../components/Icons";
@@ -12,32 +15,32 @@ const NOTIFS: Array<{ id: number; type: string; title: string; body: string; tim
 const TYPE_ICONS: Record<string, {
   bg: string;
   color: string;
-  symbol: string;
+  symbol: React.ReactNode;
 }> = {
   join: {
-    bg: "rgba(124,112,240,0.12)",
+    bg: "rgba(146,125,255,0.12)",
     color: "#a09cf5",
-    symbol: "→"
+    symbol: <UsersIcon size={20} />
   },
   active: {
     bg: "rgba(52,211,153,0.10)",
     color: "#6ee7b7",
-    symbol: "●"
+    symbol: <CheckIcon size={20} />
   },
   reference: {
-    bg: "rgba(200,164,74,0.12)",
-    color: "#c8a44a",
-    symbol: "✦"
+    bg: "rgba(105,120,255,0.12)",
+    color: palette.accent,
+    symbol: <LockIcon size={20} />
   },
   reminder: {
     bg: "rgba(96,165,250,0.10)",
     color: "#93c5fd",
-    symbol: "◷"
+    symbol: <ClockIcon size={20} />
   },
   score: {
-    bg: "rgba(200,164,74,0.10)",
-    color: "#c8a44a",
-    symbol: "★"
+    bg: "rgba(105,120,255,0.10)",
+    color: palette.accent,
+    symbol: <StarIcon size={20} />
   }
 };
 export default function NotificationsScreen({
@@ -96,7 +99,7 @@ export default function NotificationsScreen({
               borderWidth: 1,
               borderColor: "rgba(255,255,255,0.07)"
             }]}>
-                    <Label style={[[ui.textSm, ui.leadingNone]]}>×</Label>
+                    <CloseIcon size={16} style={{ color: palette.muted }} />
                   </Touch>
                 </Box>}
             </Box>;

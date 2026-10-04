@@ -1,3 +1,4 @@
+import { palette } from "../theme/palette";
 import { updateProfile } from "../api/client";
 import TopNavBar from "../components/TopNavBar";
 import EditorialQuote from "../components/EditorialQuote";
@@ -57,7 +58,7 @@ function StickyBar({
 }: {
   children: React.ReactNode;
 }) {
-  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40], {}]} gradient={["#101827", "transparent"]} gradientDirection="up">
+  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up">
       {children}
     </Box>;
 }
@@ -72,15 +73,15 @@ function IconBadge({
 }) {
   const styles = {
     gold: {
-      backgroundColor: "rgba(200,164,74,0.10)",
+      backgroundColor: "rgba(105,120,255,0.10)",
       borderWidth: 1,
-      borderColor: "rgba(200,164,74,0.18)",
-      color: "#c8a44a"
+      borderColor: "rgba(105,120,255,0.18)",
+      color: palette.accent
     },
     violet: {
-      backgroundColor: "rgba(124,112,240,0.10)",
+      backgroundColor: "rgba(146,125,255,0.10)",
       borderWidth: 1,
-      borderColor: "rgba(124,112,240,0.18)",
+      borderColor: "rgba(146,125,255,0.18)",
       color: "#a09cf5"
     },
     neutral: {
@@ -230,10 +231,10 @@ function Step1({
       <StickyBar>
         {createError && <ErrorNotice title="Kayıt tamamlanamadı" message={createError} onDismiss={() => setCreateError(null)} />}
         <Touch onPress={() => void continueRegistration()} disabled={!canContinue || creating} disabledOpacity={1} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
-        color: canContinue ? "#1a1200" : "rgba(226,232,240,.62)",
+        color: canContinue ? palette.text : "rgba(226,232,240,.62)",
         borderWidth: 1,
-        borderColor: canContinue ? "rgba(242,216,137,.5)" : "rgba(148,163,184,.22)",
-      }]} gradient={canContinue ? ["#c8a44a", "#dab96e", "#c09038"] : ["#202b3d", "#182235", "#151f30"]}>
+        borderColor: canContinue ? "rgba(183,197,255,.5)" : "rgba(148,163,184,.22)",
+      }]} gradient={canContinue ? palette.actionGradient : ["#202b3d", "#182235", "#151f30"]}>
           {creating ? "Hesap oluşturuluyor…" : "Devam Et"}
         </Touch>
       </StickyBar>
@@ -338,7 +339,7 @@ function Step2({
                 setCode(e);
                 setCodeValid(null);
               }} style={[[ui.flex1, ui.uppercase, ui.trackingWidest]]} />
-                  <Touch onPress={validateCode} style={[[ui.px4, ui.py3, ui.roundedXl, ui.textSm, ui.fontMedium, ui.text1a1200, ui.flexShrink0], {}]} gradient={["#c8a44a", "#c09038"]}>
+                  <Touch onPress={validateCode} style={[[ui.px4, ui.py3, ui.roundedXl, ui.textSm, ui.fontMedium, ui.text1a1200, ui.flexShrink0], {}]} gradient={["#4d5bcb", "#6651c9"]}>
                     Doğrula
                   </Touch>
                 </Touch>}
@@ -380,8 +381,8 @@ function Step2({
           </Box>
         )}
         <Touch onPress={() => void submitApplication()} disabled={submitting} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
-        color: "#1a1200"
-      }]} gradient={["#c8a44a", "#dab96e", "#c09038"]}>
+        color: palette.text
+      }]} gradient={palette.actionGradient}>
           {submitting ? "Gönderiliyor..." : "Başvuruyu Gönder"}
         </Touch>
       </StickyBar>
@@ -423,9 +424,9 @@ function Step3({
         <Box style={[[ui.flex, ui.justifyCenter]]} enter>
           <Box style={[[ui.relative]]}>
             <Box style={[[ui.w24, ui.h24, ui.roundedFull, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-            backgroundColor: "rgba(200,164,74,0.08)",
+            backgroundColor: "rgba(105,120,255,0.08)",
             borderWidth: 1,
-            borderColor: "rgba(200,164,74,0.15)"
+            borderColor: "rgba(105,120,255,0.15)"
           }]} glass enter>
               <Label style={[[ui.text4xl]]} glass enter>
                 ⏳

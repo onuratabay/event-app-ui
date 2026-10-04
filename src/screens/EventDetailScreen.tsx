@@ -1,3 +1,5 @@
+import { palette } from "../theme/palette";
+import { CategoryIcon } from "../components/Icons";
 import { socketAction } from '../services/socket';
 import { participate, getApiErrorMessage, getEvent } from "../api/client";
 import { mapApiEvent } from "../native/Store";
@@ -47,7 +49,7 @@ export default function EventDetailScreen({
         {/* Cover image header */}
         <Box style={[[ui.relative, ui.h72, ui.flexShrink0, ui.bgGray900]]}>
           <Picture uri={event.coverImage} accessibilityLabel={event.title} style={[[ui.wFull, ui.hFull]]} />
-          <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["#101827", "transparent"]} gradientDirection="up" />
+          <Box style={[[ui.fixed, ui.inset0], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up" />
 
           {/* Status */}
           <Box style={[[ui.fixed, ui.bottom4, ui.left5]]}>
@@ -63,7 +65,7 @@ export default function EventDetailScreen({
             <Box style={[[ui.flex, ui.itemsStart, ui.justifyBetween, ui.mt1]]}>
               <Box style={[[ui.flex1]]}>
                 <Label style={[[ui.textXs, ui.textWhite40, ui.fontMedium]]}>
-                  {event.categoryEmoji} {event.category}
+                  {event.category}
                 </Label>
                 <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mt1, ui.leadingTight]]}>
                   {event.title}
@@ -74,19 +76,19 @@ export default function EventDetailScreen({
             {/* Meta info */}
             <Box style={[[ui.mt4, ui.grid, ui.gap3]]} columns={2}>
               {[{
-              icon: <ClockIcon size={14} strokeWidth={1.5} />,
+              icon: <ClockIcon size={17} strokeWidth={1.75} />,
               label: "Tarih & Saat",
               value: `${event.date} · ${event.time}`
             }, {
-              icon: <LocationIcon size={14} strokeWidth={1.5} />,
+              icon: <LocationIcon size={17} strokeWidth={1.75} />,
               label: "Konum",
               value: event.location
             }, {
-              icon: <StarIcon size={14} strokeWidth={1.5} />,
+              icon: <StarIcon size={17} strokeWidth={1.75} />,
               label: "Mesafe",
               value: event.distance
             }, {
-              icon: <CheckIcon size={14} strokeWidth={1.5} />,
+              icon: <CheckIcon size={17} strokeWidth={1.75} />,
               label: "Seviye",
               value: event.level
             }].map((item, i) => <GlassCard key={i} style={[[ui.p3]]}>
@@ -136,7 +138,7 @@ export default function EventDetailScreen({
                 <Box style={[[ui.h1, ui.roundedFull, ui.bgWhite8, ui.overflowHidden]]}>
                   <Box style={[[ui.hFull, ui.roundedFull], {
                 width: `${event.currentParticipants / event.minParticipants * 100}%`
-              }]} gradient={["#c8a44a", "#dab96e"]} gradientDirection="right" />
+              }]} gradient={["#4d5bcb", "#6651c9"]} gradientDirection="right" />
                 </Box>
                 <Label style={[[ui.textXs, ui.textAmber30060, ui.mt15]]}>
                   Etkinliğin aktif olması için{" "}
@@ -181,7 +183,7 @@ export default function EventDetailScreen({
                   {event.host.name}
                 </Label>
                 <Box style={[[ui.flex, ui.itemsCenter, ui.gap1, ui.mt05]]}>
-                  <Label style={[[ui.textC8a44a, ui.textXs]]}>★</Label>
+                  <StarIcon size={14} style={{ color: palette.accent }} />
                   <Label style={[[ui.textXs, ui.textWhite40]]}>
                     {event.host.score} · {event.host.stats.organized} etkinlik
                   </Label>
@@ -207,7 +209,7 @@ export default function EventDetailScreen({
         borderBottomWidth: 0,
         borderBottomColor: "transparent"
       }]} glass enter>
-            <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(255,255,255,0.04)", "transparent", "rgba(200,164,74,0.03)"]} pointerEvents="none" />
+            <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(255,255,255,0.04)", "transparent", "rgba(105,120,255,0.03)"]} pointerEvents="none" />
             <Box style={[[ui.relative, ui.px5, ui.pt4, ui.pb10]]}>
               <Box style={[[ui.w10, ui.h1, ui.roundedFull, ui.bgWhite15, ui.mxAuto, ui.mb5]]} />
               <Box style={[[ui.grid, ui.gap3, ui.mb4]]} columns={4}>
@@ -258,11 +260,11 @@ export default function EventDetailScreen({
             borderColor: "rgba(255,255,255,0.09)"
           }]}>
                 <Box style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-              backgroundColor: "rgba(200,164,74,0.10)",
+              backgroundColor: "rgba(105,120,255,0.10)",
               borderWidth: 1,
-              borderColor: "rgba(200,164,74,0.15)"
+              borderColor: "rgba(105,120,255,0.15)"
             }]}>
-                  <Vector width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c8a44a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <Vector width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={palette.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                     <Path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                     <Path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                   </Vector>
@@ -281,7 +283,7 @@ export default function EventDetailScreen({
         </Sheet>}
 
       {/* Sticky CTA */}
-      <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40, ui.spaceY25], {}]} gradient={["#101827", "transparent"]} gradientDirection="up">
+      <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40, ui.spaceY25], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up">
         {/* Room entry — only when event is active AND user has joined */}
         {isActive && joined ? <Touch onPress={() => navigate("event-room", {
         eventId: event.id
@@ -329,10 +331,10 @@ export default function EventDetailScreen({
           catch (cause) { Alert.alert('Yedek liste', cause instanceof Error ? cause.message : 'Tekrar dene.'); }
           finally { setJoining(false); }
         }} glass style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase], {
-        color: "#1a1200",
+        color: palette.text,
         borderWidth: 1,
-        borderColor: "rgba(255,232,157,.58)"
-      }]} gradient={["rgba(225,189,101,.88)", "rgba(200,164,74,.84)", "rgba(192,144,56,.86)"]} enter>
+        borderColor: "rgba(183,197,255,.58)"
+      }]} gradient={palette.actionGradient} enter>
             {event.waitlisted ? 'Yedek listeden ayrıl' : event.currentParticipants >= event.maxParticipants ? 'Yedek listeye katıl' : 'Katıl'}
           </Touch> : <Touch disabled={joining || event.host.id === store.user.id} onPress={() => setJoined(false)} style={[[ui.wFull, ui.py35, ui.rounded2xl, ui.textSm, ui.textWhite35, ui.border, ui.borderWhite8, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.gap2]]}>
             <CheckIcon size={14} strokeWidth={2} style={[[ui.textWhite35]]} />
