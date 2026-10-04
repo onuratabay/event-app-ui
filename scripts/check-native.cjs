@@ -45,7 +45,7 @@ Module._load = function (id, parent, isMain) {
   if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]) }
   if (id === "socket.io-client") return require("./mock-socket.cjs")
   if (id === "expo-location") return {
-    getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: false }),
+    getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
     Accuracy: { Balanced: 3 }, geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => [],
   }
   if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker" }
@@ -60,11 +60,11 @@ Module._load = function (id, parent, isMain) {
       ScrollView: "ScrollView",
       TextInput: "TextInput",
       Modal: "Modal",
-      Platform: { OS: "ios" },
+      Platform: { OS: process.env.TEST_PLATFORM || "ios" },
       Alert: { alert() {} },
       AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) },
       AccessibilityInfo: { isReduceMotionEnabled: async () => false, announceForAccessibility() {}, getRecommendedTimeoutMillis: async value => value },
-      Easing: { cubic: value => value ** 3, out: easing => easing },
+      Easing: { linear: value => value, quad: value => value ** 2, cubic: value => value ** 3, out: easing => easing, inOut: easing => easing },
       Linking: { openURL: async () => {} },
       Share: { share: async () => {} },
       StyleSheet: {
@@ -83,6 +83,8 @@ Module._load = function (id, parent, isMain) {
         createAnimatedComponent: (c) => c,
         Value,
         timing: anim,
+        loop: anim,
+        sequence: anim,
         spring: anim,
       },
     }
@@ -94,7 +96,7 @@ Module._load = function (id, parent, isMain) {
   if (id === "expo-haptics") return { impactAsync: async () => {}, ImpactFeedbackStyle: { Light: "light" } }
   if (id === "expo-image") return { Image: "Image" }
   if (id === "expo-linear-gradient") return { LinearGradient: "LinearGradient" }
-  if (id === "expo-blur") return { BlurView: "BlurView" }
+  if (id === "expo-blur") return { BlurView: "BlurView", BlurTargetView: "View" }
   if (id === "react-native-safe-area-context") return { SafeAreaView: "View" }
   if (id === "@react-native-community/datetimepicker")
     return { __esModule: true, default: "DateTimePicker" }
@@ -167,6 +169,25 @@ async function tap(tree, label) {
   audit(tree.toJSON())
 }
 ;(async () => {
+  // Selection behavior must remain identical on both platform hosts, including leap-day clamping.
+  const Wheel = require("../src/components/DateTimeWheel.tsx").default
+  let wheel, result, closed = 0
+  await act(async () => { wheel = create(React.createElement(Wheel, { mode: "date", value: "2024-01-31", onConfirm: value => { result = value }, onClose: () => { closed++ } }), { createNodeMock: () => ({ scrollTo() {} }) }) })
+  const february = wheel.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "Ay: Şubat")
+  await act(async () => february.props.onPress())
+  const confirm = wheel.root.findAllByType("Pressable").find(node => text(node.toJSON ? node.toJSON() : null) === "Tamam" || node.findAllByType("Text").some(child => child.props.children === "Tamam"))
+  await act(async () => confirm.props.onPress())
+  assert.equal(result, "2024-02-29")
+  assert.equal(closed, 1)
+  await act(async () => wheel.unmount())
+  result = undefined
+  await act(async () => { wheel = create(React.createElement(Wheel, { mode: "time", value: "23:59", onConfirm: value => { result = value }, onClose: () => { closed++ } })) })
+  const cancel = wheel.root.findAllByType("Pressable").find(node => node.findAllByType("Text").some(child => child.props.children === "İptal"))
+  await act(async () => cancel.props.onPress())
+  assert.equal(result, undefined, "Cancelling does not mutate the field")
+  await act(async () => wheel.unmount())
+  console.log(`PASS: ${process.env.TEST_PLATFORM || "ios"} common date/time panel, leap-day selection and cancellation.`)
+
   const { resolveApiUrl } = require("../src/api/config.ts")
   assert.equal(resolveApiUrl(undefined, "192.168.1.15:8081", "ios"), "http://192.168.1.15:3000")
   assert.equal(resolveApiUrl(undefined, "192.168.1.25:8081", "android"), "http://192.168.1.25:3000")
@@ -174,6 +195,15 @@ async function tap(tree, label) {
   assert.equal(resolveApiUrl(undefined, undefined, "android"), "http://10.0.2.2:3000")
   const api = require("../src/api/client.ts")
   const server = require("./mock-server.cjs")();
+  const { mapApiEvent, mapApiEventPreservingCover } = require("../src/native/Store.tsx")
+  const photoFree = { ...server.events[0], coverPhoto: null }
+  const defaultCover = mapApiEvent(photoFree).coverImage
+  assert(defaultCover.startsWith("https://images.unsplash.com/"), "Events without stored photos use the project's category cover")
+  const actualCover = "data:image/png;base64,iVBORw0KGgo="
+  const existing = { ...mapApiEvent(photoFree), coverImage: actualCover }
+  assert.equal(mapApiEventPreservingCover(photoFree, existing).coverImage, actualCover, "Photo-free map payload must preserve an existing cover")
+  assert.equal(mapApiEvent({ ...photoFree, coverPhoto: actualCover }).coverImage, actualCover, "Real server photo takes priority over stock cover")
+  console.log("PASS: category cover fallback, real photo priority and image preservation across map/AI navigation.")
   global.fetch = server.fetch;
   const originalFetch = global.fetch
   let registrationRequest
@@ -242,6 +272,7 @@ async function tap(tree, label) {
   assert(text(restored.toJSON()).includes("Katıldın"))
   await tap(restored, "İptal Et")
   await act(async () => restored.unmount())
+  global.__testLocationPermission = true
   const createEvent = await mount("CreateEvent")
   await tap(createEvent, "Padel")
   await act(async () => {

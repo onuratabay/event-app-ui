@@ -1,10 +1,11 @@
+import ActivityIndicator from "../components/LoadingSpinner";
 import { palette } from "../theme/palette";
 import { CategoryIcon } from "../components/Icons";
 import { useScreenActive } from '../native/useScreenActive'
 import { useEventDeltas, patchApiEvent } from '../services/event-deltas'
 import TopNavBar from "../components/TopNavBar"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ActivityIndicator, AppState, StyleSheet, View } from "react-native"
+import { AppState, StyleSheet, View } from "react-native"
 import { getPreferences, putPreference } from "../api/client"
 import * as Location from "expo-location"
 import DiscoveryFilterSheet from "../map/DiscoveryFilterSheet"
@@ -14,7 +15,7 @@ import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg"
 import BottomNav from "../components/BottomNav"
 import { FilterChip } from "../components/GlassUI"
 import { getApiErrorMessage, getMapEvents, getMapInterests, type ApiEvent } from "../api/client"
-import { mapApiEvent, useStore } from "../native/Store"
+import { mapApiEventPreservingCover, useStore } from "../native/Store"
 import { Box, Label, Scroll, Touch } from "../native/UI"
 import { COLORS, createIndex, densitySpots, INITIAL_REGION, isVisible, modeForZoom, zoomForRegion } from "../map/model"
 import type { NavigateFn } from "../types"
@@ -155,7 +156,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     longitudeDelta: Math.min(350, Math.max(0.0002, region.longitudeDelta * factor)),
   }, 350)
   const openEvent = (event: ApiEvent) => {
-    setData(current => ({ ...current, events: [mapApiEvent(event), ...current.events.filter(item => item.id !== event.id)] }))
+    setData(current => ({ ...current, events: [mapApiEventPreservingCover(event, current.events.find(item => item.id === event.id)), ...current.events.filter(item => item.id !== event.id)] }))
     navigate("event-detail", { eventId: event.id })
   }
   return <Box style={s.root}>
@@ -188,7 +189,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
                 }
               } else if (event) setSelected([event])
             }}>
-            <View style={{ alignItems: "center" }}><View style={[s.pin, isCluster && s.cluster, { backgroundColor: isCluster ? "#e9ac60" : categoryVisual(event?.interest.name || "").color }]}>
+            <View style={{ alignItems: "center" }}><View style={[s.pin, isCluster && s.cluster, { backgroundColor: isCluster ? "#6978ff" : categoryVisual(event?.interest.name || "").color }]}>
               {isCluster ? <Label style={s.pinText}>{String(count)}</Label> : <CategoryIcon name={event?.interest.name} size={19} style={{ color: palette.text }} />}
             </View>
             {!isCluster && zoom >= 14 && <View style={s.pinLabel}><Label style={s.pinLabelText}>{event?.interest.name} · {event?.startTime}</Label></View>}
@@ -263,7 +264,7 @@ const s = StyleSheet.create({
   cluster: { minWidth: 44, height: 44, borderRadius: 22, borderColor: "#181823", borderWidth: 3 },
   pinText: { fontFamily: "Outfit-SemiBold", fontSize: 19, color: "#151320" },
   bottom: { position: "absolute", bottom: 88, left: 16, right: 16 },
-  panel: { borderRadius: 22, padding: 16, gap: 12, backgroundColor: "rgba(13, 18, 36, .76)", borderWidth: 1, borderColor: "rgba(226, 232, 240, .22)", shadowColor: "#020617", shadowOpacity: .28, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  panel: { borderRadius: 22, padding: 16, gap: 12, backgroundColor: "rgba(13, 18, 36, .76)", borderWidth: 1, borderColor: "rgba(226, 232, 240, .22)", boxShadow: "0px 8px 18px rgba(2,6,23,.28)" },
   panelTitle: { fontFamily: "Outfit-SemiBold", color: "#f4f5ff", fontSize: 15 },
   muted: { color: "#ddd9e8", fontSize: 11, lineHeight: 16 },
   legend: { flexDirection: "row", gap: 14, flexWrap: "wrap" },

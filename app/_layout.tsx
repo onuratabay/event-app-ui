@@ -1,3 +1,4 @@
+import { BlurSurface } from "../src/native/SharedBlur";
 import { palette } from "../src/theme/palette";
 import { useFonts } from "expo-font"
 import { Stack } from "expo-router"
@@ -44,7 +45,7 @@ export default function RootLayout() {
             style={s.root}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
-            <StoreProvider>
+            <BlurSurface overlay={<ApiLoadingOverlay />}><StoreProvider>
               <Stack
                 screenOptions={{
                   headerShown: false,
@@ -53,9 +54,8 @@ export default function RootLayout() {
                   animationDuration: 100,
                 }}
               />
-            </StoreProvider>
+            </StoreProvider></BlurSurface>
           </KeyboardAvoidingView>
-          <ApiLoadingOverlay />
         </ErrorNoticeProvider>
       </SafeAreaView>
     </SafeAreaProvider>

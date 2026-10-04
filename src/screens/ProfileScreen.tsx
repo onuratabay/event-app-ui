@@ -1,5 +1,5 @@
 import { palette } from "../theme/palette";
-import { EditIcon, StarIcon } from "../components/Icons";
+import { StarIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
@@ -52,7 +52,6 @@ function InlineEditField({
   }
   return <Touch onPress={() => setEditing(true)} accessibilityLabel="Düzenle" style={[[ui.relative, ui.flex, ui.itemsCenter]]}>
       <Label style={[[]]}>{value}</Label>
-      <EditIcon size={15} style={{ color: palette.muted, marginLeft: 8 }} />
     </Touch>;
 }
 export default function ProfileScreen({
@@ -143,9 +142,6 @@ export default function ProfileScreen({
             }
           }}>
               <Picture uri={user.avatar} accessibilityLabel={user.name} style={[[ui.w20, ui.h20, ui.rounded2xl]]} />
-              {isOwn && <Box style={[[ui.fixed, ui.inset0, ui.rounded2xl, ui.bgBlack50, ui.opacity0, ui.opacity60, ui.flex, ui.itemsCenter, ui.justifyCenter]]}>
-                  <EditIcon size={15} style={{ color: palette.text }} />
-                </Box>}
             </Touch>
 
             <Box style={[[ui.flex1, ui.minW0]]}>

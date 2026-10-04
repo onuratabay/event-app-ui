@@ -1,6 +1,6 @@
 import { palette } from "../theme/palette";
-import DateTimePicker from "@react-native-community/datetimepicker"
-import { BlurView } from "expo-blur"
+import DateTimeWheel from "../components/DateTimeWheel"
+import { SharedBlur } from "./SharedBlur"
 import * as Haptics from "expo-haptics"
 import { Image } from "expo-image"
 import { LinearGradient, type LinearGradientProps } from "expo-linear-gradient"
@@ -73,6 +73,7 @@ function font(style: TextStyle): TextStyle {
   const weight = Number(fontWeight) || 400
   return {
     ...rest,
+    includeFontPadding: false,
     fontFamily:
       family === "Fraunces"
         ? "Fraunces"
@@ -80,7 +81,9 @@ function font(style: TextStyle): TextStyle {
           ? "Outfit-SemiBold"
           : weight >= 500
             ? "Outfit-Medium"
-            : "Outfit",
+            : !fontWeight && ["Outfit-Medium", "Outfit-SemiBold"].includes(style.fontFamily || "")
+              ? style.fontFamily
+              : "Outfit",
   }
 }
 interface LayoutProps extends Omit<ViewProps, "style"> {
@@ -154,7 +157,7 @@ function Paint({
     >
       {glass && (
         <>
-          <BlurView intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
+          <SharedBlur intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
           <LinearGradient
             colors={["rgba(183,197,255,.035)", "rgba(183,197,255,.01)", "rgba(146,125,255,.02)"]}
             start={{ x: 0, y: 0 }}
@@ -402,8 +405,9 @@ export function Picture({
   style?: NativeStyleProp
   accessibilityLabel?: string
 }) {
-  const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [uri])
+  const sourceUri = uri?.trim() || ""
+  const [failedUri, setFailedUri] = useState<string | null>(null)
+  const failed = !sourceUri || failedUri === sourceUri
   return failed ? (
     <View
       accessibilityLabel={accessibilityLabel}
@@ -416,18 +420,19 @@ export function Picture({
         },
       ]}
     >
-      <Text style={{ color: palette.accent }}>
+      <Text style={{ color: palette.accent, fontFamily: "Outfit-Medium", fontSize: 16, lineHeight: 22, includeFontPadding: false }}>
         {accessibilityLabel?.slice(0, 1) || "✦"}
       </Text>
     </View>
   ) : (
     <Image
-      source={{ uri }}
+      source={{ uri: sourceUri }}
+      recyclingKey={sourceUri}
       accessibilityLabel={accessibilityLabel}
       style={split(style).view as ImageStyle}
       contentFit="cover"
       transition={150}
-      onError={() => setFailed(true)}
+      onError={() => setFailedUri(sourceUri)}
     />
   )
 }
@@ -449,16 +454,6 @@ export function Field({
   const inherited = useContext(Typography)
   const [open, setOpen] = useState(false)
   const dateMode = mode === "date" || mode === "time"
-  let date = new Date()
-  if (value) {
-    if (mode === "time") {
-      const [h, m] = value.split(":").map(Number)
-      date.setHours(h || 0, m || 0)
-    } else {
-      const parsed = new Date(value + "T12:00:00")
-      if (!isNaN(parsed.getTime())) date = parsed
-    }
-  }
   if (dateMode)
     return (
       <>
@@ -466,61 +461,12 @@ export function Field({
           accessibilityLabel={
             props.accessibilityLabel || props.placeholder || mode
           }
-          style={[style, { minHeight: 48 }]}
+          style={[{ minHeight: 52, paddingVertical: 12, justifyContent: "center" }, style]}
           onPress={() => setOpen(true)}
         >
           <Label>{value || (mode === "time" ? "Saat seç" : "Tarih seç")}</Label>
         </Touch>
-        {open && (
-          <Modal
-            transparent
-            animationType="slide"
-            onRequestClose={() => setOpen(false)}
-          >
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "flex-end",
-                backgroundColor: "rgba(0,0,0,.55)",
-              }}
-            >
-              <SafeAreaView
-                edges={["bottom"]}
-                style={{ backgroundColor: palette.surface, padding: 20 }}
-              >
-                <DateTimePicker
-                  value={date}
-                  mode={mode}
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  themeVariant="dark"
-                  onChange={(event, selected) => {
-                    if (Platform.OS === "android") setOpen(false)
-                    if (event.type === "set" && selected) {
-                      const pad = (n: number) => String(n).padStart(2, "0")
-                      onChangeText?.(
-                        mode === "time"
-                          ? `${pad(selected.getHours())}:${pad(selected.getMinutes())}`
-                          : `${selected.getFullYear()}-${pad(selected.getMonth() + 1)}-${pad(selected.getDate())}`,
-                      )
-                    }
-                  }}
-                />
-                <Touch
-                  onPress={() => setOpen(false)}
-                  style={{
-                    padding: 16,
-                    backgroundColor: palette.accent,
-                    borderRadius: 12,
-                    color: palette.text,
-                    textAlign: "center",
-                  }}
-                >
-                  <Label>Tamam</Label>
-                </Touch>
-              </SafeAreaView>
-            </View>
-          </Modal>
-        )}
+        {open && <DateTimeWheel mode={mode as "date" | "time"} value={value} onConfirm={next => onChangeText?.(next)} onClose={() => setOpen(false)} />}
       </>
     )
   return (
@@ -530,9 +476,9 @@ export function Field({
       value={value}
       onChangeText={onChangeText}
       style={[
+        { minHeight: 52, paddingVertical: 12, paddingHorizontal: 0, textAlignVertical: "center" },
         style,
         font({ ...inherited, ...split(style).text }),
-        { minHeight: 40 },
         props.multiline && { minHeight: 96, textAlignVertical: "top" },
       ]}
       keyboardType={
@@ -543,6 +489,8 @@ export function Field({
             : props.keyboardType
       }
       autoCapitalize={mode === "email" ? "none" : props.autoCapitalize}
+      underlineColorAndroid="transparent"
+      cursorColor={palette.accent}
       placeholderTextColor="rgba(226,232,240,.48)"
       selectionColor="#c7ceff"
     />

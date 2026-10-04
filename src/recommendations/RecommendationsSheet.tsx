@@ -1,14 +1,15 @@
+import ActivityIndicator from "../components/LoadingSpinner";
 import { palette } from "../theme/palette";
 import { useEventDeltas, patchApiEvent } from '../services/event-deltas'
 import { useEffect, useRef, useState } from "react"
-import { ActivityIndicator, type ScrollView, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native"
+import { type ScrollView, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native"
 import * as Location from "expo-location"
 import { getApiErrorMessage, getMapEvents, putPreference } from "../api/client"
 import { FilterChip, GlassInput } from "../components/GlassUI"
 import HeaderIconButton from "../components/HeaderIconButton"
 import { SparklesIcon } from "../components/Icons"
 import { apiDate, dateRange, filterError, localDate, placeBounds, type MapPlace } from "../map/filters"
-import { mapApiEvent, useStore } from "../native/Store"
+import { mapApiEventPreservingCover, useStore } from "../native/Store"
 import { Box, Label, Scroll, Touch } from "../native/UI"
 import type { NavigateFn } from "../types"
 import { ACTIVITIES, EQUIPMENT, initialProfile, PLACES, recommend, recommendationFilters, targetActivities, type RecommendationProfile } from "./model"
@@ -92,7 +93,7 @@ export default function RecommendationsSheet({ onClose, navigate }: { onClose: (
               <Label style={s.resultTitle}>{results.length ? `${period} ${location.name} için sana özel ${results.length}${activities.length === 1 ? ` ${activities[0].label.toLocaleLowerCase("tr-TR")}` : ""} etkinlik buldum.` : "Bu planla eşleşen etkinlik henüz yok."}</Label>
               {!results.length && <Label style={s.hint}>Tarihi, yeri veya etkinlik tercihlerini değiştirerek tekrar deneyebilirsin.</Label>}
               {results.map(({ event, reason }) => <Touch key={event.id} style={s.card} onPress={() => {
-                setData(current => ({ ...current, events: [mapApiEvent(event), ...current.events.filter(item => item.id !== event.id)] }))
+                setData(current => ({ ...current, events: [mapApiEventPreservingCover(event, current.events.find(item => item.id === event.id)), ...current.events.filter(item => item.id !== event.id)] }))
                 onClose(); navigate("event-detail", { eventId: event.id })
               }}><Label style={s.text}>{event.interest.name} →</Label><Label style={s.hint}>{event.date} · {event.startTime}</Label><Label style={s.reason}>{reason}</Label></Touch>)}
               {partial && <Label style={s.hint}>Bu öneriler yüklenen ilk 2.000 etkinlik içinden seçildi.</Label>}

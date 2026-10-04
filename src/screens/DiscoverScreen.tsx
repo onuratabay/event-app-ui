@@ -1,7 +1,8 @@
+import ActivityIndicator from "../components/LoadingSpinner";
 import { palette } from "../theme/palette";
 import { CategoryIcon } from "../components/Icons";
 import { favoriteEvent, getApiErrorMessage } from "../api/client";
-import { ActivityIndicator, Alert, FlatList, Platform } from "react-native";
+import { Alert, FlatList, Platform } from "react-native";
 import { useState } from "react";
 import { Line, Path, Polyline } from "react-native-svg";
 import RecommendationsSheet from "../recommendations/RecommendationsSheet";

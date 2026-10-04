@@ -1,3 +1,5 @@
+import { palette } from "../theme/palette";
+import { CategoryIcon } from "../components/Icons";
 import { getCurrentUser, hasSession, logout } from "../api/client";
 import { useEffect, useRef } from "react";
 import { Animated, Easing } from "react-native";
@@ -54,13 +56,13 @@ export default function SplashScreen({
 
       <Box style={[[ui.relative, ui.flex, ui.flexCol, ui.itemsCenter, ui.gap4]]} enter>
         <Animated.View style={{ width: 184, height: 184, alignItems: "center", justifyContent: "center", transform: [{ rotate: spin }] }}>
-          {[["🏃", -64, -52], ["🎨", 64, -45], ["☕", 54, 66], ["🎵", -66, 52]].map(([icon, x, y]) => <Box key={String(icon)} style={[[ui.fixed, ui.w11, ui.h11, ui.roundedFull, ui.flex, ui.itemsCenter, ui.justifyCenter], {
+          {[["Doğa", -64, -52], ["Sanat", 64, -45], ["Kahve", 54, 66], ["Müzik", -66, 52]].map(([icon, x, y]) => <Box key={String(icon)} style={[[ui.fixed, ui.w11, ui.h11, ui.roundedFull, ui.flex, ui.itemsCenter, ui.justifyCenter], {
             transform: [{ translateX: x as number }, { translateY: y as number }],
             backgroundColor: "rgba(255,255,255,.10)",
             borderWidth: 1,
             borderColor: "rgba(226, 200, 117, .32)",
           }]} glass>
-              <Label style={{ fontSize: 21, lineHeight: 28 }}>{icon}</Label>
+              <CategoryIcon name={String(icon)} size={21} style={{ color: palette.accent }} />
             </Box>)}
           <Box style={[[ui.fixed, ui.roundedFull, ui.border, ui.borderWhite8], { width: 128, height: 128 }]} />
         </Animated.View>

@@ -106,3 +106,13 @@ The display name is `ewent.app`; the website is https://ewent.app. Supplied orig
 ### ewent görsel tema
 
 Tüm native ekranlar gece laciverti zemin ve logoya uyumlu mavi/mor vurgu paletini kullanır (`src/theme/palette.ts`). Ana butonlar beyaz yazılı koyu mavi/mor geçişlidir; seçili filtreler hafif renklendirilmiş yüzeylerdir. Kartlar sakin yüzeyler, ince kenarlar ve ortak çizgi ikonlarla düzenlenmiştir. Durum/hata renkleri anlamlarını korur. Splash düzeni ve akış üst çubuğunun ikon sırası korunmuştur. Özel topluluk hissi görseldir; yeni gizlilik veya üyelik kısıtlaması eklenmemiştir.
+
+### Ortak iOS / Android görünümü
+
+Uygulama alanlarında ortak input yüksekliği/iç boşluğu, Outfit/Fraunces fontları, Android font-padding düzeltmesi, aynı çizgi ikonlar, yükleme göstergesi ve gölge değerleri kullanılır. Tarih/saat alanları işletim sistemi penceresi yerine ortak iOS tarzı tekerlek panelini açar; değişiklik Tamam ile kaydedilir, İptal ile korunur. Blur yüzeyleri Android için ortak BlurTargetView kullanır.
+
+Platform kontrolleri: `TEST_PLATFORM=ios npm test` ve `TEST_PLATFORM=android npm test`. Host testleri gerçek cihazda piksel eşitliğini kanıtlamaz; farklı ekran ölçüleri ve işletim sistemi klavye/izin/fotoğraf seçici arayüzleri platforma bağlı kalır.
+
+### Eksik kapak görselleri
+
+Sunucuda kapak/kategori fotoğrafı bulunmayan etkinlikler, projede zaten bulunan kategoriye uygun stok görselleri gösterir; bunlar veritabanına kaydedilmez. Gerçek kapak önceliklidir. Harita/öneri sorgularının fotoğrafsız yanıtları önceden yüklenmiş gerçek kapağı silmez. Fotoğrafı olmayan kişiler için sahte yüz yerine baş harf gösterilir.

@@ -1,7 +1,9 @@
+import ActivityIndicator from "./LoadingSpinner";
+import { CategoryIcon } from "./Icons";
 import { palette } from "../theme/palette";
 import { useEffect, useRef, useState } from "react"
-import { ActivityIndicator, Animated, Easing, StyleSheet, View } from "react-native"
-import { BlurView } from "expo-blur"
+import { Animated, Easing, StyleSheet, View } from "react-native"
+import { SharedBlur } from "../native/SharedBlur"
 import { apiLoading } from "../api/loading"
 import { Label } from "../native/UI"
 
@@ -58,9 +60,9 @@ export default function ApiLoadingOverlay() {
   const counterSpin = orbit.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "-360deg"] })
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [.9, 1.08] })
   return <View pointerEvents="none" style={styles.layer} accessibilityRole="progressbar" accessibilityLabel="Etkinlikler hazırlanıyor">
-    <BlurView intensity={9} tint="dark" style={StyleSheet.absoluteFill} />
+    <SharedBlur intensity={9} tint="dark" style={StyleSheet.absoluteFill} />
     <Animated.View style={[styles.orbit, { transform: [{ rotate: spin }] }]}>
-      {[["🏃", -64, -52], ["🎨", 64, -45], ["☕", 54, 66], ["🎵", -66, 52]].map(([icon, x, y]) => <Animated.View key={String(icon)} style={[styles.event, { transform: [{ translateX: x as number }, { translateY: y as number }, { rotate: counterSpin }] }]}><Label style={styles.eventIcon}>{icon}</Label></Animated.View>)}
+      {[["Doğa", -64, -52], ["Sanat", 64, -45], ["Kahve", 54, 66], ["Müzik", -66, 52]].map(([icon, x, y]) => <Animated.View key={String(icon)} style={[styles.event, { transform: [{ translateX: x as number }, { translateY: y as number }, { rotate: counterSpin }] }]}><CategoryIcon name={String(icon)} size={21} style={{ color: palette.accent }} /></Animated.View>)}
       <View style={styles.orbitRing} />
     </Animated.View>
     <Animated.View style={[styles.core, { transform: [{ scale }] }]}>

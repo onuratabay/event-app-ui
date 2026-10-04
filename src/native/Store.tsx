@@ -1,3 +1,4 @@
+import { defaultEventCover } from "./images"
 import { startSocket, stopSocket, onSocket, watchEvent } from '../services/socket'
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import React, {
@@ -59,7 +60,7 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
       id: participant.id,
       name: `${participant.firstName} ${participant.lastName}`.trim(),
     })),
-    coverImage: event.coverPhoto || "",
+    coverImage: event.coverPhoto || defaultEventCover(event.interest.name),
     description: event.description,
     requirements: event.requirements ? [event.requirements] : [],
     status: event.status.enum,
@@ -70,6 +71,12 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     duration: event.durationMinutes ? `${event.durationMinutes} dk` : undefined,
   }
 }
+/** Lightweight map/AI payloads omit photos; keep an already loaded real cover. */
+export function mapApiEventPreservingCover(event: Parameters<typeof mapApiEvent>[0], previous?: AppEvent): AppEvent {
+  const mapped = mapApiEvent(event)
+  return { ...mapped, coverImage: event.coverPhoto || previous?.coverImage || mapped.coverImage }
+}
+
 const Context = createContext<{
   data: Data
   setData: React.Dispatch<React.SetStateAction<Data>>

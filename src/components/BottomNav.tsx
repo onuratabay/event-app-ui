@@ -100,11 +100,7 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(11,16,32,.94)",
     borderWidth: 1,
     borderColor: "rgba(183,197,255,.12)",
-    shadowColor: "#000",
-    shadowOpacity: 0.28,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 14,
+    boxShadow: "0px 10px 22px rgba(0,0,0,.28)",
   },
   item: {
     flex: 1,
