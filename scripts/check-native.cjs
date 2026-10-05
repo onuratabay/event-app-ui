@@ -323,6 +323,13 @@ async function tap(tree, label) {
   assert.equal(server.events[0].maxParticipants, 100000, 'Closed max is sent as unlimited capacity')
   assert.equal(storage.has('event-app:v1'), false, 'No domain data is written to device storage')
   storage.set("event-app:access-token", "invite-test")
+  server.state.createBlocked = true
+  const blockedCreate = await mount("CreateEvent")
+  await act(async () => { await new Promise(r=>setTimeout(r,20)) })
+  assert(text(blockedCreate.toJSON()).includes("hakkınız kalmadı"), "Create flow is blocked when the user cannot create events")
+  assert(!text(blockedCreate.toJSON()).includes("Ne yapmak"), "Creation steps are hidden while blocked")
+  await act(async () => blockedCreate.unmount())
+  server.state.createBlocked = false
   const notifications = await mount("Notifications")
   await act(async () => { await new Promise(r=>setTimeout(r,20)) })
   assert(text(notifications.toJSON()).includes("etkinliğine davet etti"), "Pending invitations are listed")

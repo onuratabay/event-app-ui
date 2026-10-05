@@ -2,7 +2,7 @@ import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
 import { Alert, Platform } from "react-native";
 import * as Location from "expo-location";
-import { createEvent, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, getSuggestions } from "../api/client";
+import { canCreateEvent, createEvent, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, getSuggestions } from "../api/client";
 import { mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useState } from "react";
 import { Avatar, AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
@@ -114,6 +114,9 @@ export default function CreateEventScreen({
   const ACTIVITIES = activities.map(a => ({ label: a.name, icon: '✨' }));
   const LEVELS = levels.map(l => l.name);
   const PRIVACIES = visibilities.filter(v => PRIVACY_OPTIONS[v.enum]).map(v => ({ label: v.name, enum: v.enum, ...PRIVACY_OPTIONS[v.enum] }));
+  // The server also enforces the limit on create; a failed check does not block the form.
+  const [createBlocked, setCreateBlocked] = useState<string | null>(null);
+  useEffect(() => { canCreateEvent().then(result => setCreateBlocked(result.canCreate ? null : result.message || "Şu an yeni etkinlik oluşturamazsın.")).catch(() => {}); }, []);
   const [canInvite, setCanInvite] = useState(false);
   const [friends, setFriends] = useState<FriendUser[] | null>(null);
   const [invitedIds, setInvitedIds] = useState<string[]>([]);
@@ -188,6 +191,20 @@ export default function CreateEventScreen({
   // Re-entering create-event from its own tab would reset the unfinished draft.
   const navigateAway: NavigateFn = (screen, opts) => { if (screen !== "create-event") navigate(screen, opts); };
   const suggestions = personalSuggestions.length ? personalSuggestions : REQUIREMENTS_SUGGESTIONS[data.activity] || REQUIREMENTS_SUGGESTIONS.default;
+  if (createBlocked) {
+    return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
+      <AtmoBackground />
+      <TopNavBar navigate={navigate} fallback="discover" title="Etkinlik Oluştur" />
+      <Box style={[[ui.flex1, ui.px5, ui.justifyCenter, ui.spaceY5]]}>
+        <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite]]}>
+          Etkinlik{"\n"}oluşturamıyorsun
+        </Label>
+        <Label style={[[ui.textSm, ui.textWhite55]]}>{createBlocked}</Label>
+        <PrimaryButton onPress={() => navigate("discover")}>Keşfet'e dön</PrimaryButton>
+      </Box>
+      <BottomNav active="create-event" navigate={navigateAway} />
+    </Box>;
+  }
   if (step === 9) {
     // Preview
     return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>

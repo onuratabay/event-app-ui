@@ -6,6 +6,7 @@ module.exports = function () {
   const user = { id: 'server-user', firstName: 'Sunucu', lastName: 'Kullanıcısı', city: 'Ankara', bio: 'Sunucu profili', profilePhoto: null }
   let interests = [{ id: 'padel', name: 'Padel' }]
   const suggestions = ['Su getir.', 'Raket gerekli.']
+  const state = { createBlocked: false }
   const friends = [{ user: { id: 'friend-1', firstName: 'Ayşe', lastName: 'Arkadaş', profilePhoto: null } }]
   const invitations = [{ ...events[1], id: 'invite-1', owner: { id: 'inviter', firstName: 'Davet', lastName: 'Eden' }, viewerParticipationStatus: 'invited' }]
   const fetch = async (url, options = {}) => {
@@ -19,6 +20,7 @@ module.exports = function () {
     else if (path === '/users/me/interests') { if (body) interests = body.interestIds.map(id => ({ id, name: 'Padel' })); result = interests }
     else if (path === '/interests') result = [{ id: 'padel', name: 'Padel', slug: 'padel' }]
     else if (path === '/enum-values') result = new URL(url).searchParams.get('group') === 'event_level' ? [{ id: 'beginner', enum: 'beginner', name: 'Başlangıç' }] : [{ id: 'public', enum: 'public', name: 'Herkese Açık' }, { id: 'recommended', enum: 'recommended', name: 'Önerilenler' }, { id: 'invite_only', enum: 'invite_only', name: 'Sadece Davet' }]
+    else if (path === '/events/can-create') result = { canCreate: !state.createBlocked, message: state.createBlocked ? 'Yeni etkinlik açma hakkınız kalmadı. Daha fazlası için dükkana gidin.' : null }
     else if (path === '/users/me/settings') result = { canCreateInviteOnly: true }
     else if (path === '/friends') { require('node:assert/strict').equal(new URL(url).searchParams.get('active'), 'true'); result = { items: [...friends] } }
     else if (path === '/events/invitations') result = { items: [...invitations], total: invitations.length }
@@ -37,5 +39,5 @@ module.exports = function () {
     return { ok: true, status: 200, json: async () => result }
   }
   const saveMessage = text => { const message = { id: String(messages.length), text, user, createdAt: new Date().toISOString() }; messages.push(message); return message }
-  return { fetch, events, preferences, requests, user, saveMessage, suggestions, invitations }
+  return { fetch, events, preferences, requests, user, saveMessage, suggestions, invitations, state }
 }

@@ -269,6 +269,7 @@ export const participate = (id: string, join: boolean) => request<ApiEvent>(`/ev
 // Most frequent lines from the user's own past event descriptions (dismissed ones excluded).
 export const getSuggestions = () => request<{ items: string[] }>('/events/mine/suggestions')
 export const dismissSuggestion = (text: string) => request<{ items: string[] }>('/events/mine/suggestions', { method: 'DELETE', body: JSON.stringify({ text }) })
+export const canCreateEvent = () => request<{ canCreate: boolean; message: string | null }>('/events/can-create')
 export const getUserSettings = () => request<{ canCreateInviteOnly: boolean }>('/users/me/settings')
 export interface FriendUser { id: string; firstName: string; lastName: string; profilePhoto: string | null }
 // Accepted friends whose accounts are approved; only they can be invited.
