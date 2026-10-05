@@ -48,6 +48,7 @@ export interface AppEvent {
   isActive: boolean
   isSaved: boolean
   waitlisted?: boolean
+  invited?: boolean
   joined?: boolean
   duration?: string
   privacy?: string

@@ -2,6 +2,7 @@ import { UsersIcon, ClockIcon, StarIcon, LockIcon } from "../components/Icons";
 import { palette } from "../theme/palette";
 import { CloseIcon } from "../components/Icons";
 import { ReferenceNotifications } from "../components/ReferenceNotifications";
+import { EventInvitations } from "../components/EventInvitations";
 import { AtmoBackground } from "../components/GlassUI";
 import { CheckIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
@@ -53,6 +54,7 @@ export default function NotificationsScreen({
 
       {/* List */}
       <Scroll style={[[ui.flex1, ui.px5, ui.pb10, ui.spaceY2], { paddingTop: 80 }]} enter>
+        <EventInvitations navigate={navigate} />
         <ReferenceNotifications />
         {NOTIFS.map(notif => {
         const style = TYPE_ICONS[notif.type];

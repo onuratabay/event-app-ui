@@ -2,11 +2,11 @@ import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
 import { Alert, Platform } from "react-native";
 import * as Location from "expo-location";
-import { createEvent, getMapInterests, getEnums, getApiErrorMessage } from "../api/client";
+import { createEvent, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, getSuggestions } from "../api/client";
 import { mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useState } from "react";
-import { AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
-import { CameraIcon, GlobeIcon, ImageIcon, LockIcon, SearchIcon, UserPlusIcon } from "../components/Icons";
+import { Avatar, AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
+import { CameraIcon, CheckIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, SearchIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
@@ -64,8 +64,20 @@ function isPastStart(date: string, time: string) {
 }
 const MIN_PARTICIPANTS = 2;
 const MAX_PARTICIPANTS = 100;
-const DURATIONS = ["30 dk", "1 saat", "1.5 saat", "2 saat", "3+ saat"];
-const PRIVACY_ICONS = [GlobeIcon, LockIcon, UserPlusIcon];
+const DURATIONS = [30, 60, 90, 120, 180];
+const MAX_DURATION_MINUTES = 1440;
+function formatDuration(minutes: number) {
+  const hours = Math.floor(minutes / 60), rest = minutes % 60;
+  return [hours && `${hours} saat`, rest && `${rest} dk`].filter(Boolean).join(" ");
+}
+// Shows the stored YYYY-MM-DD date as dd/MM/yyyy.
+const displayDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.split("-").reverse().join("/") : date;
+const INVITE_ONLY = "invite_only";
+// "Önerilenler" is not offered to users; the remaining options get their own icon and copy.
+const PRIVACY_OPTIONS: Record<string, { icon: typeof GlobeIcon; desc: string }> = {
+  public: { icon: GlobeIcon, desc: "Herkes görebilir ve katılabilir." },
+  [INVITE_ONLY]: { icon: UserPlusIcon, desc: "Yalnızca davet ettiğin arkadaşların görür." },
+};
 const REQUIREMENTS_SUGGESTIONS: {
   [key: string]: string[];
 } = {
@@ -91,17 +103,35 @@ export default function CreateEventScreen({
   const [coordinate, setCoordinate] = useState<{ latitude: number; longitude: number } | null>(null);
   const [findingPlace, setFindingPlace] = useState(false);
   const loadCatalog = () => Promise.all([getMapInterests(), getEnums('event_level'), getEnums('event_visibility')]).then(([a, l, v]) => { setActivities(a); setLevels(l); setVisibilities(v); }).catch(error => Alert.alert('Seçenekler yüklenemedi', getApiErrorMessage(error)));
-  useEffect(() => { void loadCatalog(); }, []);
+  // Personal suggestions are optional; the category defaults remain if they cannot load.
+  const [personalSuggestions, setPersonalSuggestions] = useState<string[]>([]);
+  useEffect(() => { void loadCatalog(); getSuggestions().then(result => setPersonalSuggestions(result.items)).catch(() => {}); }, []);
+  const removeSuggestion = (text: string) => {
+    const previous = personalSuggestions;
+    setPersonalSuggestions(items => items.filter(item => item !== text));
+    dismissSuggestion(text).then(result => setPersonalSuggestions(result.items)).catch(error => { setPersonalSuggestions(previous); Alert.alert('Öneri silinemedi', getApiErrorMessage(error)); });
+  };
   const ACTIVITIES = activities.map(a => ({ label: a.name, icon: '✨' }));
   const LEVELS = levels.map(l => l.name);
-  const PRIVACIES = visibilities.map(v => ({ label: v.name, desc: '' }));
+  const PRIVACIES = visibilities.filter(v => PRIVACY_OPTIONS[v.enum]).map(v => ({ label: v.name, enum: v.enum, ...PRIVACY_OPTIONS[v.enum] }));
+  const [canInvite, setCanInvite] = useState(false);
+  const [friends, setFriends] = useState<FriendUser[] | null>(null);
+  const [invitedIds, setInvitedIds] = useState<string[]>([]);
+  useEffect(() => { getUserSettings().then(settings => setCanInvite(settings.canCreateInviteOnly)).catch(() => {}); }, []);
+  const chooseInviteOnly = (label: string) => {
+    setData(p => ({ ...p, privacy: label }));
+    if (friends === null) getActiveFriends().then(result => setFriends(result.items.map(item => item.user))).catch(error => { setFriends([]); Alert.alert('Arkadaşlar yüklenemedi', getApiErrorMessage(error)); });
+  };
+  const toggleInvite = (id: string) => setInvitedIds(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
   const [step, setStep] = useState(0);
+  const [customDurationOpen, setCustomDurationOpen] = useState(false);
+  const [customDuration, setCustomDuration] = useState({ hours: "", minutes: "" });
   const [data, setData] = useState(() => ({
     coverImage: "",
     activity: "",
     level: "",
     ...defaultStart(),
-    duration: "",
+    durationMinutes: null as number | null,
     location: "",
     minParticipants: 2,
     maxParticipants: null as number | null,
@@ -125,13 +155,14 @@ export default function CreateEventScreen({
     const interest = activities.find(i => i.name === data.activity), level = levels.find(i => i.name === data.level), visibility = visibilities.find(i => i.name === data.privacy);
     const missing = [!interest && 'etkinlik türü', !level && 'seviye', !coordinate && 'konum', !visibility && 'görünürlük'].filter(Boolean);
     if (!interest || !level || !visibility || !coordinate) { Alert.alert('Eksik bilgi', `Şunları seç: ${missing.join(', ')}.`); return; }
+    const inviteOnly = visibility.enum === INVITE_ONLY;
+    if (inviteOnly && !invitedIds.length) { Alert.alert('Davet listesi boş', 'Davet etmek istediğin en az bir arkadaşını seç.'); setStep(8); return; }
     if (isPastStart(data.date, data.time)) { Alert.alert('Geçmiş tarih', 'Etkinlik zamanı geçmiş. Tarih ve saati ileri bir zamana güncelle.'); setStep(2); return; }
     if (data.description.trim().length < 10) { Alert.alert('Açıklama gerekli', 'Etkinliği en az 10 karakterle açıkla.'); return; }
     setCreating(true);
     try {
-      const date = /^\d{4}-\d{2}-\d{2}$/.test(data.date) ? data.date.split('-').reverse().join('/') : data.date;
-      const durations: Record<string, number> = { '30 dk': 30, '1 saat': 60, '1.5 saat': 90, '2 saat': 120, '3+ saat': 180 };
-      const event = await createEvent({ interestId: interest.id, levelId: level.id, visibilityId: visibility.id, date, startTime: data.time, durationMinutes: durations[data.duration], latitude: coordinate.latitude, longitude: coordinate.longitude, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
+      const date = displayDate(data.date);
+      const event = await createEvent({ interestId: interest.id, levelId: level.id, visibilityId: visibility.id, date, startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: coordinate.latitude, longitude: coordinate.longitude, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(inviteOnly ? { invitedUserIds: invitedIds } : {}), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
       setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)] }));
       navigate('event-detail', { eventId: event.id });
     } catch (error) { Alert.alert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
@@ -150,10 +181,13 @@ export default function CreateEventScreen({
   };
   const progressPct = step / 9 * 100;
   const startsInPast = isPastStart(data.date, data.time);
-  const hasStickyBar = step === 2 || step === 4 || step === 5 || step === 6 || step === 7;
+  const customMinutes = (Number(customDuration.hours) || 0) * 60 + (Number(customDuration.minutes) || 0);
+  const customDurationValid = customMinutes >= 1 && customMinutes <= MAX_DURATION_MINUTES;
+  const isInviteOnly = visibilities.find(v => v.name === data.privacy)?.enum === INVITE_ONLY;
+  const hasStickyBar = step === 8 && isInviteOnly || step === 3 && customDurationOpen || step === 2 || step === 4 || step === 5 || step === 6 || step === 7;
   // Re-entering create-event from its own tab would reset the unfinished draft.
   const navigateAway: NavigateFn = (screen, opts) => { if (screen !== "create-event") navigate(screen, opts); };
-  const suggestions = REQUIREMENTS_SUGGESTIONS[data.activity] || REQUIREMENTS_SUGGESTIONS.default;
+  const suggestions = personalSuggestions.length ? personalSuggestions : REQUIREMENTS_SUGGESTIONS[data.activity] || REQUIREMENTS_SUGGESTIONS.default;
   if (step === 9) {
     // Preview
     return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
@@ -181,12 +215,12 @@ export default function CreateEventScreen({
                 {data.activity || "Etkinlik Adı"}
               </Label>
               <Box style={[[ui.grid, ui.gap2, ui.textXs, ui.textWhite50]]} columns={2}>
-                {[{ icon: <ClockIcon size={16} />, text: `${data.date || "Tarih"} · ${data.time || "Saat"}` },
-                  { icon: <ClockIcon size={16} />, text: data.duration || "Süre" },
+                {[{ icon: <ClockIcon size={16} />, text: `${displayDate(data.date) || "Tarih"} · ${data.time || "Saat"}` },
+                  { icon: <ClockIcon size={16} />, text: data.durationMinutes ? formatDuration(data.durationMinutes) : "Süre" },
                   { icon: <LocationIcon size={16} />, text: data.location || "Konum" },
                   { icon: <StarIcon size={16} />, text: data.level || "Seviye" },
                   { icon: <UsersIcon size={16} />, text: data.maxParticipants ? `${data.minParticipants}-${data.maxParticipants} kişi` : `En az ${data.minParticipants} kişi · sınırsız` },
-                  { icon: <LockIcon size={16} />, text: data.privacy || "Gizlilik" }
+                  { icon: <LockIcon size={16} />, text: data.privacy ? `${data.privacy}${invitedIds.length && isInviteOnly ? ` · ${invitedIds.length} davetli` : ""}` : "Gizlilik" }
                 ].map((item, index) => <Box key={index} style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>{item.icon}<Label style={{ flexShrink: 1 }}>{item.text}</Label></Box>)}
               </Box>
               {data.description && <Label style={[[ui.textSm, ui.textWhite55]]}>
@@ -284,10 +318,22 @@ export default function CreateEventScreen({
                 Tahminen ne kadar sürer?
               </Label>
               <Box style={[[ui.grid, ui.gap3]]} columns={3}>
-                {DURATIONS.map(d => <Touch key={d} onPress={() => selectAndNext("duration", d)} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, data.duration === d ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>
-                    <Label style={[[ui.textSm, ui.fontMedium]]}>{d}</Label>
+                {DURATIONS.map(minutes => <Touch key={minutes} onPress={() => { setCustomDurationOpen(false); setData(p => ({ ...p, durationMinutes: minutes })); setTimeout(next, 180); }} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, !customDurationOpen && data.durationMinutes === minutes ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>
+                    <Label style={[[ui.textSm, ui.fontMedium]]}>{formatDuration(minutes)}</Label>
                   </Touch>)}
+                <Touch onPress={() => setCustomDurationOpen(true)} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, customDurationOpen || data.durationMinutes && !DURATIONS.includes(data.durationMinutes) ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>
+                    <Label style={[[ui.textSm, ui.fontMedium]]}>Özel süre</Label>
+                  </Touch>
               </Box>
+              {customDurationOpen && <Box style={[[ui.spaceY3], { marginTop: 24 }]}>
+                  <Box style={[[ui.flex, ui.gap3]]}>
+                    <GlassInput label="Saat" placeholder="0" keyboardType="number-pad" maxLength={2} value={customDuration.hours} onChangeText={hours => setCustomDuration(p => ({ ...p, hours: hours.replace(/\D/g, "") }))} />
+                    <GlassInput label="Dakika" placeholder="0" keyboardType="number-pad" maxLength={2} value={customDuration.minutes} onChangeText={minutes => setCustomDuration(p => ({ ...p, minutes: minutes.replace(/\D/g, "") }))} />
+                  </Box>
+                  <Label style={[[ui.textXs], { color: customMinutes > MAX_DURATION_MINUTES ? palette.error : palette.muted }]}>
+                    {customMinutes > MAX_DURATION_MINUTES ? "Süre en fazla 24 saat olabilir." : customDurationValid ? `Süre: ${formatDuration(customMinutes)}` : "Saat ve dakika gir."}
+                  </Label>
+                </Box>}
             </Box>}
 
           {/* Step 4 - Location */}
@@ -429,12 +475,17 @@ export default function CreateEventScreen({
                   Hızlı ekle
                 </Label>
                 <Box style={[[ui.flex, ui.flexWrap, ui.gap2]]}>
-                  {suggestions.map(s => <Touch key={s} onPress={() => setData(p => ({
-                ...p,
-                description: toggleLine(p.description, s)
-              }))} style={[[ui.px3, ui.py15, ui.roundedXl, ui.textXs, ui.border, hasLine(data.description, s) ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite10, ui.bgWhite004, ui.textWhite55]]]}>
-                      {s}
-                    </Touch>)}
+                  {suggestions.map(s => <Box key={s} style={[[ui.flex, ui.itemsCenter, ui.roundedXl, ui.border, hasLine(data.description, s) ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite10, ui.bgWhite004]]]}>
+                      <Touch onPress={() => setData(p => ({
+                  ...p,
+                  description: toggleLine(p.description, s)
+                }))} style={[[ui.py15, ui.px3, ui.textXs, hasLine(data.description, s) ? ui.textC8a44a : ui.textWhite55], { flexShrink: 1 }, personalSuggestions.length > 0 && { paddingRight: 0 }]}>
+                        {s}
+                      </Touch>
+                      {personalSuggestions.length > 0 && <Touch accessibilityLabel={`${s} önerisini sil`} onPress={() => removeSuggestion(s)} hitSlop={8} style={{ paddingHorizontal: 8, alignSelf: "stretch", justifyContent: "center" }}>
+                          <CloseIcon size={12} strokeWidth={2} style={{ color: palette.muted }} />
+                        </Touch>}
+                    </Box>)}
                 </Box>
               </Box>
 
@@ -450,34 +501,50 @@ export default function CreateEventScreen({
                 Kapıyı ne kadar aralık bırakmak istersin?
               </Label>
               <Box style={[[ui.spaceY3]]}>
-                {PRIVACIES.map((p, i) => {
-              const Icon = PRIVACY_ICONS[i % PRIVACY_ICONS.length];
-              return <Touch key={p.label} onPress={() => selectAndNext("privacy", p.label)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.textLeft, ui.flex, ui.itemsCenter, ui.gap4, ui.border, data.privacy === p.label ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
-                      <Box style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0, data.privacy === p.label ? [ui.textC8a44a] : [ui.textWhite35]], {
-                  backgroundColor: data.privacy === p.label ? "rgba(105,120,255,0.10)" : "rgba(255,255,255,0.05)",
+                {PRIVACIES.map(p => {
+              const Icon = p.icon;
+              const selected = data.privacy === p.label;
+              const locked = p.enum === INVITE_ONLY && !canInvite;
+              return <Touch key={p.label} disabled={locked} onPress={() => p.enum === INVITE_ONLY ? chooseInviteOnly(p.label) : selectAndNext("privacy", p.label)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap4, ui.border, selected ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
+                      <Box style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0, selected ? [ui.textC8a44a] : [ui.textWhite35]], {
+                  backgroundColor: selected ? "rgba(105,120,255,0.10)" : "rgba(255,255,255,0.05)",
                   borderWidth: 1,
                   borderColor: "rgba(255,255,255,0.07)"
                 }]}>
                         <Icon size={18} strokeWidth={1.75} />
                       </Box>
-                      <Box>
-                        <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>
+                      <Box style={{ flex: 1, alignItems: "flex-start", justifyContent: "center" }}>
+                        <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85], { textAlign: "left" }]}>
                           {p.label}
                         </Label>
-                        <Label style={[[ui.textXs, ui.textWhite40]]}>
-                          {p.desc}
+                        <Label style={[[ui.textXs, ui.textWhite40], { textAlign: "left" }]}>
+                          {locked ? "Bu seçenek hesabında açık değil." : p.desc}
                         </Label>
                       </Box>
                     </Touch>;
             })}
               </Box>
+              {isInviteOnly && <Box style={[[ui.spaceY3], { marginTop: 24 }]}>
+                  <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider]]}>
+                    Arkadaşlarını davet et{invitedIds.length ? ` · ${invitedIds.length} seçili` : ""}
+                  </Label>
+                  {friends === null ? <Label style={[[ui.textSm, ui.textWhite40]]}>Arkadaşların yükleniyor…</Label> : !friends.length ? <Label style={[[ui.textSm, ui.textWhite40]]}>Henüz aktif arkadaşın yok.</Label> : friends.map(friend => {
+                const name = `${friend.firstName} ${friend.lastName}`.trim();
+                const chosen = invitedIds.includes(friend.id);
+                return <Touch key={friend.id} accessibilityLabel={`${name} davet et`} accessibilityState={{ selected: chosen }} onPress={() => toggleInvite(friend.id)} style={[[ui.wFull, ui.p3, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap3, ui.border, chosen ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
+                        <Avatar uri={friend.profilePhoto || ""} name={name} size="sm" />
+                        <Label style={[[ui.textSm, ui.textWhite85], { flex: 1, textAlign: "left" }]}>{name}</Label>
+                        {chosen && <CheckIcon size={16} strokeWidth={2} style={{ color: palette.accent }} />}
+                      </Touch>;
+              })}
+                </Box>}
             </Box>}
         </Box>
       </Scroll>
 
       {/* Sticky CTA for steps that need explicit continue */}
       {hasStickyBar && <StickyBar>
-          <PrimaryButton onPress={next} disabled={step === 2 && (!data.date || !data.time || startsInPast) || step === 4 && !coordinate}>
+          <PrimaryButton onPress={step === 3 ? () => { setData(p => ({ ...p, durationMinutes: customMinutes })); next(); } : next} disabled={step === 8 && !invitedIds.length || step === 3 && !customDurationValid || step === 2 && (!data.date || !data.time || startsInPast) || step === 4 && !coordinate}>
             Devam Et
           </PrimaryButton>
         </StickyBar>}

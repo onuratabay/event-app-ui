@@ -71,6 +71,7 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     isActive: event.status.enum === "started",
     isSaved: event.isFavorite,
     waitlisted: event.viewerParticipationStatus === 'waitlisted',
+    invited: event.viewerParticipationStatus === 'invited',
     joined: event.viewerParticipationStatus === "confirmed",
     duration: event.durationMinutes ? `${event.durationMinutes} dk` : undefined,
   }

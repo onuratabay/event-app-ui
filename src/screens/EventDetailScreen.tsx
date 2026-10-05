@@ -323,7 +323,14 @@ export default function EventDetailScreen({
             </Label>
           </Box>}
 
-        {!joined ? <Touch disabled={joining || ['cancelled', 'closed'].includes(event.status || '')} onPress={async () => {
+        {event.invited && !joined ? <Box style={[[ui.flex, ui.gap3]]} enter>
+            <Touch disabled={joining || ['cancelled', 'closed'].includes(event.status || '')} onPress={() => setJoined(true)} style={[[ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase], { flex: 1, color: palette.text }]} gradient={palette.actionGradient}>
+              Daveti kabul et
+            </Touch>
+            <Touch disabled={joining} onPress={() => setJoined(false)} style={[[ui.py4, ui.rounded2xl, ui.textBase, ui.textWhite60, ui.border, ui.borderWhite8], { flex: 1 }]}>
+              Reddet
+            </Touch>
+          </Box> : !joined ? <Touch disabled={joining || ['cancelled', 'closed'].includes(event.status || '')} onPress={async () => {
           if (event.waitlisted) return setJoined(false);
           if (event.currentParticipants < event.maxParticipants) return setJoined(true);
           setJoining(true);

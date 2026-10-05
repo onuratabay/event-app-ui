@@ -5,6 +5,9 @@ module.exports = function () {
   const preferences = {}, messages = [], requests = []
   const user = { id: 'server-user', firstName: 'Sunucu', lastName: 'Kullanıcısı', city: 'Ankara', bio: 'Sunucu profili', profilePhoto: null }
   let interests = [{ id: 'padel', name: 'Padel' }]
+  const suggestions = ['Su getir.', 'Raket gerekli.']
+  const friends = [{ user: { id: 'friend-1', firstName: 'Ayşe', lastName: 'Arkadaş', profilePhoto: null } }]
+  const invitations = [{ ...events[1], id: 'invite-1', owner: { id: 'inviter', firstName: 'Davet', lastName: 'Eden' }, viewerParticipationStatus: 'invited' }]
   const fetch = async (url, options = {}) => {
     const path = new URL(url).pathname, body = options.body ? JSON.parse(options.body) : null
     requests.push({ path, body, method: options.method || 'GET' })
@@ -15,8 +18,13 @@ module.exports = function () {
     else if (path === '/users/me/profile') { Object.assign(user, body); result = { ...user } }
     else if (path === '/users/me/interests') { if (body) interests = body.interestIds.map(id => ({ id, name: 'Padel' })); result = interests }
     else if (path === '/interests') result = [{ id: 'padel', name: 'Padel', slug: 'padel' }]
-    else if (path === '/enum-values') result = new URL(url).searchParams.get('group') === 'event_level' ? [{ id: 'beginner', enum: 'beginner', name: 'Başlangıç' }] : [{ id: 'public', enum: 'public', name: 'Herkese Açık' }]
+    else if (path === '/enum-values') result = new URL(url).searchParams.get('group') === 'event_level' ? [{ id: 'beginner', enum: 'beginner', name: 'Başlangıç' }] : [{ id: 'public', enum: 'public', name: 'Herkese Açık' }, { id: 'recommended', enum: 'recommended', name: 'Önerilenler' }, { id: 'invite_only', enum: 'invite_only', name: 'Sadece Davet' }]
+    else if (path === '/users/me/settings') result = { canCreateInviteOnly: true }
+    else if (path === '/friends') { require('node:assert/strict').equal(new URL(url).searchParams.get('active'), 'true'); result = { items: [...friends] } }
+    else if (path === '/events/invitations') result = { items: [...invitations], total: invitations.length }
+    else if (path.startsWith('/events/invite-1/')) { const invite = invitations.splice(0, 1)[0]; result = { ...invite, viewerParticipationStatus: path.endsWith('/join') ? 'confirmed' : 'declined' } }
     else if (path.endsWith('/messages')) { if (body) messages.push({ id: String(messages.length), text: body.text, user, createdAt: new Date().toISOString() }); result = body ? messages.at(-1) : { items: [...messages] } }
+    else if (path === '/events/mine/suggestions') { if (body) suggestions.splice(suggestions.indexOf(body.text), 1); result = { items: [...suggestions] } }
     else if (path === '/events' && body) { const event = { ...events[0], ...body, id: 'created-on-server', owner: user }; events.unshift(event); result = event }
     else if (path === '/events' || ['/events/mine','/events/participating','/events/favorites'].includes(path)) result = { items: [...events], total: events.length }
     else if (path.startsWith('/events/')) {
@@ -29,5 +37,5 @@ module.exports = function () {
     return { ok: true, status: 200, json: async () => result }
   }
   const saveMessage = text => { const message = { id: String(messages.length), text, user, createdAt: new Date().toISOString() }; messages.push(message); return message }
-  return { fetch, events, preferences, requests, user, saveMessage }
+  return { fetch, events, preferences, requests, user, saveMessage, suggestions, invitations }
 }

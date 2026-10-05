@@ -266,6 +266,14 @@ export function putPreference<K extends keyof Preferences>(key: K, value: NonNul
 export const getEvent = (id: string) => request<ApiEvent>(`/events/${id}`)
 export const favoriteEvent = (id: string, saved: boolean) => request(`/events/${id}/favorite`, { method: saved ? 'PUT' : 'DELETE' })
 export const participate = (id: string, join: boolean) => request<ApiEvent>(`/events/${id}/${join ? 'join' : 'leave'}`, { method: 'POST' })
+// Most frequent lines from the user's own past event descriptions (dismissed ones excluded).
+export const getSuggestions = () => request<{ items: string[] }>('/events/mine/suggestions')
+export const dismissSuggestion = (text: string) => request<{ items: string[] }>('/events/mine/suggestions', { method: 'DELETE', body: JSON.stringify({ text }) })
+export const getUserSettings = () => request<{ canCreateInviteOnly: boolean }>('/users/me/settings')
+export interface FriendUser { id: string; firstName: string; lastName: string; profilePhoto: string | null }
+// Accepted friends whose accounts are approved; only they can be invited.
+export const getActiveFriends = () => request<{ items: Array<{ user: FriendUser }> }>('/friends?active=true&limit=100')
+export const getInvitations = () => request<EventListResponse>('/events/invitations?limit=50')
 export const getEnums = (group: string) => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`)
 export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value) })
 export interface ApiMessage { kind?: 'message' | 'announcement'; id: string; text: string; createdAt: string; user: { id: string; firstName: string; lastName: string } }

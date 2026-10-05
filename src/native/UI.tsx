@@ -464,7 +464,7 @@ export function Field({
           style={[{ minHeight: 52, paddingVertical: 12, justifyContent: "center" }, style]}
           onPress={() => setOpen(true)}
         >
-          <Label>{value || (mode === "time" ? "Saat seç" : "Tarih seç")}</Label>
+          <Label>{(mode === "date" && value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split("-").reverse().join("/") : value) || (mode === "time" ? "Saat seç" : "Tarih seç")}</Label>
         </Touch>
         {open && <DateTimeWheel mode={mode as "date" | "time"} value={value} onConfirm={next => onChangeText?.(next)} onClose={() => setOpen(false)} />}
       </>
