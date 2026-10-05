@@ -97,7 +97,8 @@ export default function CreateEventScreen({
     try {
       if (Platform.OS === 'android' && !(await Location.requestForegroundPermissionsAsync()).granted) throw new Error('Konum izni gerekli.');
       const results = await Location.geocodeAsync(data.location);
-      setPlaces(results); setCoordinate(null);
+      // Geocoding results also carry altitude/accuracy, which the API rejects as unknown fields.
+      setPlaces(results.map(({ latitude, longitude }) => ({ latitude, longitude }))); setCoordinate(null);
       if (!results.length) Alert.alert('Konum bulunamadı', 'Şehir ve açık adresle tekrar ara.');
     } catch { Alert.alert('Konum aranamadı', 'Konum iznini ve bağlantını kontrol et.'); }
     finally { setFindingPlace(false); }
@@ -105,13 +106,14 @@ export default function CreateEventScreen({
   const publish = async () => {
     if (creating) return;
     const interest = activities.find(i => i.name === data.activity), level = levels.find(i => i.name === data.level), visibility = visibilities.find(i => i.name === data.privacy);
-    if (!interest || !level || !visibility || !coordinate) { Alert.alert('Eksik bilgi', 'Etkinlik türünü, seviyeyi, konumu ve görünürlüğü seç.'); return; }
+    const missing = [!interest && 'etkinlik türü', !level && 'seviye', !coordinate && 'konum', !visibility && 'görünürlük'].filter(Boolean);
+    if (!interest || !level || !visibility || !coordinate) { Alert.alert('Eksik bilgi', `Şunları seç: ${missing.join(', ')}.`); return; }
     if (data.description.trim().length < 10) { Alert.alert('Açıklama gerekli', 'Etkinliği en az 10 karakterle açıkla.'); return; }
     setCreating(true);
     try {
       const date = /^\d{4}-\d{2}-\d{2}$/.test(data.date) ? data.date.split('-').reverse().join('/') : data.date;
       const durations: Record<string, number> = { '30 dk': 30, '1 saat': 60, '1.5 saat': 90, '2 saat': 120, '3+ saat': 180 };
-      const event = await createEvent({ interestId: interest.id, levelId: level.id, visibilityId: visibility.id, date, startTime: data.time, durationMinutes: durations[data.duration], ...coordinate, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants, description: data.description.trim(), requirements: data.requirements.join('\n'), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
+      const event = await createEvent({ interestId: interest.id, levelId: level.id, visibilityId: visibility.id, date, startTime: data.time, durationMinutes: durations[data.duration], latitude: coordinate.latitude, longitude: coordinate.longitude, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants, description: data.description.trim(), requirements: data.requirements.join('\n'), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
       setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)] }));
       navigate('event-detail', { eventId: event.id });
     } catch (error) { Alert.alert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
