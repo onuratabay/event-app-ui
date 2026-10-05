@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollView, Alert } from "react-native";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
 import { getMessages, getApiErrorMessage, getEvent, type ApiMessage } from "../api/client";
-import { EMPTY_USER, mapApiEvent } from "../native/Store";
+import { EMPTY_USER, mapApiEvent, participantCount } from "../native/Store";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -93,7 +93,7 @@ export default function EventRoomScreen({
         <Scroll style={[[ui.flex, ui.gap2]]} horizontal>
           {[{
           icon: <UsersIcon size={16} />,
-          text: `${event.currentParticipants}/${event.maxParticipants} kişi`
+          text: `${participantCount(event.currentParticipants, event.maxParticipants)} kişi`
         }, {
           icon: <LocationIcon size={16} />,
           text: event.location

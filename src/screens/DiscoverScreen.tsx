@@ -14,7 +14,7 @@ import { HeartButton, RippleButton, SpringButton } from "../components/Expressiv
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
 import { BellIcon, SearchIcon, SparklesIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
 import { copyEvent, shareEvent as shareNativeEvent } from "../native/media";
-import { useStore } from "../native/Store";
+import { participantCount, useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
@@ -368,7 +368,7 @@ function EventCard({
                   </Box>}
               </Box>
               <Label style={[[ui.textXs, ui.textWhite40]]}>
-                {event.currentParticipants}/{event.maxParticipants} kişi
+                {participantCount(event.currentParticipants, event.maxParticipants)} kişi
               </Label>
             </Box>
             <Label style={[[ui.text10px, ui.px2, ui.py05, ui.roundedFull, ui.fontMedium], {

@@ -3,7 +3,7 @@ import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../c
 import { Alert, Platform } from "react-native";
 import * as Location from "expo-location";
 import { createEvent, getMapInterests, getEnums, getApiErrorMessage } from "../api/client";
-import { mapApiEvent } from "../native/Store";
+import { mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useState } from "react";
 import { AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
 import { CameraIcon, GlobeIcon, ImageIcon, LockIcon, SearchIcon, UserPlusIcon } from "../components/Icons";
@@ -45,6 +45,25 @@ function PrimaryButton({
 interface Props {
   navigate: NavigateFn;
 }
+const pad2 = (value: number) => String(value).padStart(2, "0");
+// New events start one hour from now; the date rolls over past midnight.
+function defaultStart() {
+  const start = new Date(Date.now() + 60 * 60 * 1000);
+  return { date: `${start.getFullYear()}-${pad2(start.getMonth() + 1)}-${pad2(start.getDate())}`, time: `${pad2(start.getHours())}:${pad2(start.getMinutes())}` };
+}
+const hasLine = (text: string, line: string) => text.split("\n").some(item => item.trim() === line);
+// Quick-add chips append their sentence to the textarea on its own line; tapping again removes it.
+function toggleLine(text: string, line: string) {
+  if (hasLine(text, line)) return text.split("\n").filter(item => item.trim() !== line).join("\n");
+  return text.trimEnd() ? `${text.trimEnd()}\n${line}` : line;
+}
+function isPastStart(date: string, time: string) {
+  const day = date.match(/^(\d{4})-(\d{2})-(\d{2})$/), clock = time.match(/^(\d{2}):(\d{2})$/);
+  if (!day || !clock) return false;
+  return new Date(+day[1], +day[2] - 1, +day[3], +clock[1], +clock[2]).getTime() <= Date.now();
+}
+const MIN_PARTICIPANTS = 2;
+const MAX_PARTICIPANTS = 100;
 const DURATIONS = ["30 dk", "1 saat", "1.5 saat", "2 saat", "3+ saat"];
 const PRIVACY_ICONS = [GlobeIcon, LockIcon, UserPlusIcon];
 const REQUIREMENTS_SUGGESTIONS: {
@@ -77,20 +96,18 @@ export default function CreateEventScreen({
   const LEVELS = levels.map(l => l.name);
   const PRIVACIES = visibilities.map(v => ({ label: v.name, desc: '' }));
   const [step, setStep] = useState(0);
-  const [data, setData] = useState({
+  const [data, setData] = useState(() => ({
     coverImage: "",
     activity: "",
     level: "",
-    date: "",
-    time: "",
+    ...defaultStart(),
     duration: "",
     location: "",
-    minParticipants: 4,
-    maxParticipants: 8,
+    minParticipants: 2,
+    maxParticipants: null as number | null,
     description: "",
-    requirements: [] as string[],
     privacy: ""
-  });
+  }));
   const findPlace = async () => {
     if (findingPlace || !data.location.trim()) return;
     setFindingPlace(true);
@@ -108,12 +125,13 @@ export default function CreateEventScreen({
     const interest = activities.find(i => i.name === data.activity), level = levels.find(i => i.name === data.level), visibility = visibilities.find(i => i.name === data.privacy);
     const missing = [!interest && 'etkinlik türü', !level && 'seviye', !coordinate && 'konum', !visibility && 'görünürlük'].filter(Boolean);
     if (!interest || !level || !visibility || !coordinate) { Alert.alert('Eksik bilgi', `Şunları seç: ${missing.join(', ')}.`); return; }
+    if (isPastStart(data.date, data.time)) { Alert.alert('Geçmiş tarih', 'Etkinlik zamanı geçmiş. Tarih ve saati ileri bir zamana güncelle.'); setStep(2); return; }
     if (data.description.trim().length < 10) { Alert.alert('Açıklama gerekli', 'Etkinliği en az 10 karakterle açıkla.'); return; }
     setCreating(true);
     try {
       const date = /^\d{4}-\d{2}-\d{2}$/.test(data.date) ? data.date.split('-').reverse().join('/') : data.date;
       const durations: Record<string, number> = { '30 dk': 30, '1 saat': 60, '1.5 saat': 90, '2 saat': 120, '3+ saat': 180 };
-      const event = await createEvent({ interestId: interest.id, levelId: level.id, visibilityId: visibility.id, date, startTime: data.time, durationMinutes: durations[data.duration], latitude: coordinate.latitude, longitude: coordinate.longitude, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants, description: data.description.trim(), requirements: data.requirements.join('\n'), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
+      const event = await createEvent({ interestId: interest.id, levelId: level.id, visibilityId: visibility.id, date, startTime: data.time, durationMinutes: durations[data.duration], latitude: coordinate.latitude, longitude: coordinate.longitude, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
       setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)] }));
       navigate('event-detail', { eventId: event.id });
     } catch (error) { Alert.alert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
@@ -131,6 +149,7 @@ export default function CreateEventScreen({
     setTimeout(next, 180);
   };
   const progressPct = step / 9 * 100;
+  const startsInPast = isPastStart(data.date, data.time);
   const hasStickyBar = step === 2 || step === 4 || step === 5 || step === 6 || step === 7;
   // Re-entering create-event from its own tab would reset the unfinished draft.
   const navigateAway: NavigateFn = (screen, opts) => { if (screen !== "create-event") navigate(screen, opts); };
@@ -166,7 +185,7 @@ export default function CreateEventScreen({
                   { icon: <ClockIcon size={16} />, text: data.duration || "Süre" },
                   { icon: <LocationIcon size={16} />, text: data.location || "Konum" },
                   { icon: <StarIcon size={16} />, text: data.level || "Seviye" },
-                  { icon: <UsersIcon size={16} />, text: `${data.minParticipants}-${data.maxParticipants} kişi` },
+                  { icon: <UsersIcon size={16} />, text: data.maxParticipants ? `${data.minParticipants}-${data.maxParticipants} kişi` : `En az ${data.minParticipants} kişi · sınırsız` },
                   { icon: <LockIcon size={16} />, text: data.privacy || "Gizlilik" }
                 ].map((item, index) => <Box key={index} style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>{item.icon}<Label style={{ flexShrink: 1 }}>{item.text}</Label></Box>)}
               </Box>
@@ -250,6 +269,9 @@ export default function CreateEventScreen({
             ...p,
             time: e
           }))} mode="time" />
+              {startsInPast && <Label style={[[ui.textSm], { color: palette.error }]}>
+                Geçmiş bir tarih veya saat seçemezsin.
+              </Label>}
               <Box style={[[ui.h4]]} />
             </Box>}
 
@@ -294,43 +316,60 @@ export default function CreateEventScreen({
 
               {[{
             label: "Minimum",
-            key: "minParticipants",
-            value: data.minParticipants
+            value: data.minParticipants,
+            display: `${data.minParticipants} kişi`,
+            disabled: false,
+            canDecrease: data.minParticipants > MIN_PARTICIPANTS,
+            canIncrease: data.minParticipants < MAX_PARTICIPANTS - 1,
+            change: (delta: number) => setData(p => {
+              const min = Math.min(MAX_PARTICIPANTS - 1, Math.max(MIN_PARTICIPANTS, p.minParticipants + delta));
+              // Max opens once min rises above 2 and must always stay above min.
+              const max = min === MIN_PARTICIPANTS ? null : Math.max(min + 1, p.maxParticipants ?? 0);
+              return { ...p, minParticipants: min, maxParticipants: max };
+            })
           }, {
             label: "Maksimum",
-            key: "maxParticipants",
-            value: data.maxParticipants
+            value: data.maxParticipants ?? 0,
+            display: data.maxParticipants ? `${data.maxParticipants} kişi` : "Sınırsız",
+            disabled: data.maxParticipants === null,
+            canDecrease: data.maxParticipants !== null && data.maxParticipants > data.minParticipants + 1,
+            canIncrease: data.maxParticipants !== null && data.maxParticipants < MAX_PARTICIPANTS,
+            change: (delta: number) => setData(p => p.maxParticipants === null ? p : {
+              ...p,
+              maxParticipants: Math.min(MAX_PARTICIPANTS, Math.max(p.minParticipants + 1, p.maxParticipants + delta))
+            })
           }].map(({
             label,
-            key,
-            value
-          }) => <Box key={key} style={[[ui.glass, ui.rounded2xl, ui.p5]]} glass>
+            value,
+            display,
+            disabled,
+            canDecrease,
+            canIncrease,
+            change
+          }) => <Box key={label} style={[[ui.glass, ui.rounded2xl, ui.p5], disabled && { opacity: .45 }]} glass>
                   <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb3]]}>
                     <Label style={[[ui.textSm, ui.textWhite60]]}>{label}</Label>
                     <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>
-                      {value} kişi
+                      {display}
                     </Label>
                   </Box>
                   <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-                    <Touch onPress={() => setData(p => ({
-                ...p,
-                [key]: key === "minParticipants" ? Math.max(2, p.minParticipants - 1) : Math.max(p.minParticipants, p.maxParticipants - 1)
-              }))} style={[[ui.w10, ui.h10, ui.roundedXl, ui.glassStrong, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite70, ui.textXl, ui.fontLight]]} glass>
+                    <Touch accessibilityLabel={`${label} azalt`} disabled={!canDecrease} onPress={() => change(-1)} style={[[ui.w10, ui.h10, ui.roundedXl, ui.glassStrong, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite70, ui.textXl, ui.fontLight]]} glass>
                       −
                     </Touch>
                     <Box style={[[ui.flex1, ui.h15, ui.roundedFull, ui.bgWhite10, ui.overflowHidden]]}>
                       <Box style={[[ui.hFull, ui.bgC8a44a, ui.roundedFull], {
-                  width: `${value / 50 * 100}%`
+                  width: `${value / MAX_PARTICIPANTS * 100}%`
                 }]} />
                     </Box>
-                    <Touch onPress={() => setData(p => ({
-                ...p,
-                [key]: key === "minParticipants" ? Math.min(p.maxParticipants, p.minParticipants + 1) : Math.min(50, p.maxParticipants + 1)
-              }))} style={[[ui.w10, ui.h10, ui.roundedXl, ui.glassStrong, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite70, ui.textXl, ui.fontLight]]} glass>
+                    <Touch accessibilityLabel={`${label} artır`} disabled={!canIncrease} onPress={() => change(1)} style={[[ui.w10, ui.h10, ui.roundedXl, ui.glassStrong, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite70, ui.textXl, ui.fontLight]]} glass>
                       +
                     </Touch>
                   </Box>
                 </Box>)}
+              <Label style={[[ui.textXs, ui.textWhite40]]}>
+                {data.maxParticipants === null ? "Maksimum sınırı belirlemek için minimumu 2'nin üzerine çıkar." : "Maksimum, minimumdan büyük olmalı."}
+              </Label>
 
               <Box style={[[ui.h4]]} />
             </Box>}
@@ -390,14 +429,10 @@ export default function CreateEventScreen({
                   Hızlı ekle
                 </Label>
                 <Box style={[[ui.flex, ui.flexWrap, ui.gap2]]}>
-                  {suggestions.map(s => <Touch key={s} onPress={() => {
-                if (!data.requirements.includes(s)) {
-                  setData(p => ({
-                    ...p,
-                    requirements: [...p.requirements, s]
-                  }));
-                }
-              }} style={[[ui.px3, ui.py15, ui.roundedXl, ui.textXs, ui.border, data.requirements.includes(s) ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite10, ui.bgWhite004, ui.textWhite55]]]}>
+                  {suggestions.map(s => <Touch key={s} onPress={() => setData(p => ({
+                ...p,
+                description: toggleLine(p.description, s)
+              }))} style={[[ui.px3, ui.py15, ui.roundedXl, ui.textXs, ui.border, hasLine(data.description, s) ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite10, ui.bgWhite004, ui.textWhite55]]]}>
                       {s}
                     </Touch>)}
                 </Box>
@@ -442,7 +477,7 @@ export default function CreateEventScreen({
 
       {/* Sticky CTA for steps that need explicit continue */}
       {hasStickyBar && <StickyBar>
-          <PrimaryButton onPress={next} disabled={step === 2 && (!data.date || !data.time) || step === 4 && !coordinate}>
+          <PrimaryButton onPress={next} disabled={step === 2 && (!data.date || !data.time || startsInPast) || step === 4 && !coordinate}>
             Devam Et
           </PrimaryButton>
         </StickyBar>}

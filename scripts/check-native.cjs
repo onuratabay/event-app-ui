@@ -281,7 +281,7 @@ async function tap(tree, label) {
   assert(text(createEvent.toJSON()).includes("Hangi seviyede"))
   await tap(createEvent, "Başlangıç")
   await act(async () => { await new Promise(r=>setTimeout(r,220)) })
-  for (const [mode,value] of [["date","2026-10-01"],["time","18:30"]]) {
+  for (const [mode,value] of [["date","2030-10-01"],["time","18:30"]]) {
     const field=createEvent.root.findAll(n=>n.props.mode===mode && typeof n.props.onChangeText==='function')[0]
     assert(field, `Missing ${mode} field`)
     await act(async()=>field.props.onChangeText(value))
@@ -307,6 +307,8 @@ async function tap(tree, label) {
   assert.equal(server.events[0].locationName, 'Native Test Mekanı')
   assert.equal(server.events[0].visibilityId, 'public')
   assert.equal(server.events[0].durationMinutes, 60)
+  assert.equal(server.events[0].minParticipants, 2)
+  assert.equal(server.events[0].maxParticipants, 100000, 'Closed max is sent as unlimited capacity')
   assert.equal(storage.has('event-app:v1'), false, 'No domain data is written to device storage')
   const routes=fs.readdirSync(path.join(__dirname,"../app"))
   for(const screen of [...names.filter(n=>n!=="Splash"&&n!=="Onboarding").map(n=>n.replace(/[A-Z]/g,(c,i)=>(i?"-":"")+c.toLowerCase())),"onboarding-1","onboarding-2","onboarding-3"]){assert(routes.includes(screen+".tsx"),`Missing route ${screen}`)}

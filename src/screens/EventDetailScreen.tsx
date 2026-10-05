@@ -2,7 +2,7 @@ import { palette } from "../theme/palette";
 import { CategoryIcon } from "../components/Icons";
 import { socketAction } from '../services/socket';
 import { participate, getApiErrorMessage, getEvent } from "../api/client";
-import { mapApiEvent } from "../native/Store";
+import { isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
@@ -110,7 +110,7 @@ export default function EventDetailScreen({
                 Katılımcılar
               </Label>
               <Label style={[[ui.textSm, ui.fontSemibold, ui.textWhite]]}>
-                {event.currentParticipants}/{event.maxParticipants}
+                {participantCount(event.currentParticipants, event.maxParticipants)}
               </Label>
             </Box>
             <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.flexWrap]]}>
@@ -128,7 +128,7 @@ export default function EventDetailScreen({
                 </Box>}
               {/* Empty slots */}
               {Array.from({
-              length: Math.max(0, event.maxParticipants - event.currentParticipants)
+              length: isUnlimitedCapacity(event.maxParticipants) ? 0 : Math.max(0, event.maxParticipants - event.currentParticipants)
             }).map((_, i) => <Box key={i} style={[[ui.w8, ui.h8, ui.roundedFull, ui.border, ui.borderDashed, ui.borderWhite15, ui.flex, ui.itemsCenter, ui.justifyCenter]]}>
                   <Label style={[[ui.textWhite20, ui.textXs]]}>+</Label>
                 </Box>)}

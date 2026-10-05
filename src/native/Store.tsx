@@ -26,6 +26,10 @@ export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
   return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0 }
 
 }
+// Events without a participant cap are stored with the API's highest allowed capacity.
+export const UNLIMITED_PARTICIPANTS = 100000
+export const isUnlimitedCapacity = (max: number) => max >= UNLIMITED_PARTICIPANTS
+export const participantCount = (current: number, max: number) => `${current}/${isUnlimitedCapacity(max) ? "∞" : max}`
 export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"][number]): AppEvent {
   const host: AppUser = {
     id: event.owner.id,
