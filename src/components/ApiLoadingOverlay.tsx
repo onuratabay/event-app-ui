@@ -1,6 +1,7 @@
 import ActivityIndicator from "./LoadingSpinner";
 import { CategoryIcon } from "./Icons";
 import { palette } from "../theme/palette";
+import { usePathname } from "expo-router"
 import { useEffect, useRef, useState } from "react"
 import { Animated, Easing, StyleSheet, View } from "react-native"
 import { SharedBlur } from "../native/SharedBlur"
@@ -9,6 +10,8 @@ import { Label } from "../native/UI"
 
 export default function ApiLoadingOverlay() {
   const [visible, setVisible] = useState(false)
+  // Splash has its own intro animation; the overlay covers API waits on every other screen.
+  const onSplash = usePathname() === "/"
   const pending = useRef(0)
   const appear = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const hide = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -55,7 +58,7 @@ export default function ApiLoadingOverlay() {
     }
   }, [])
 
-  if (!visible) return null
+  if (!visible || onSplash) return null
   const spin = orbit.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] })
   const counterSpin = orbit.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "-360deg"] })
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [.9, 1.08] })
