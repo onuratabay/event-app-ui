@@ -13,12 +13,15 @@ import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import TopNavBar from "../components/TopNavBar";
+import BottomNav from "../components/BottomNav";
+// Keeps the sticky CTA above the bottom navigation bar.
+const NAV_CLEARANCE = 74;
 function StickyBar({
   children
 }: {
   children: React.ReactNode;
 }) {
-  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up">
+  return <Box style={[[ui.fixed, ui.left0, ui.right0, ui.px5, ui.pt4, ui.z40], { bottom: NAV_CLEARANCE, paddingBottom: 8 }]} gradient={[palette.background, "transparent"]} gradientDirection="up">
       {children}
     </Box>;
 }
@@ -126,12 +129,15 @@ export default function CreateEventScreen({
     setTimeout(next, 180);
   };
   const progressPct = step / 9 * 100;
+  const hasStickyBar = step === 2 || step === 4 || step === 5 || step === 6 || step === 7;
+  // Re-entering create-event from its own tab would reset the unfinished draft.
+  const navigateAway: NavigateFn = (screen, opts) => { if (screen !== "create-event") navigate(screen, opts); };
   const suggestions = REQUIREMENTS_SUGGESTIONS[data.activity] || REQUIREMENTS_SUGGESTIONS.default;
   if (step === 9) {
     // Preview
     return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
       <TopNavBar navigate={navigate} fallback="discover" onBack={back} title="Etkinlik Önizlemesi" />
-      <Scroll style={[[ui.flex1, ui.pb20], { paddingTop: 80 }]}>
+      <Scroll style={[[ui.flex1, ui.pb28], { paddingTop: 80 }]}>
         <AtmoBackground variant="gold" />
         <Box style={[[ui.relative, ui.pt4, ui.px5]]}>
           <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb6]]}>
@@ -175,6 +181,7 @@ export default function CreateEventScreen({
           </Touch>
         </Box>
       </Scroll>
+      <BottomNav active="create-event" navigate={navigateAway} />
     </Box>;
   }
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
@@ -188,7 +195,7 @@ export default function CreateEventScreen({
       }]} gradient={["#4d5bcb", "#6651c9"]} gradientDirection="right" />
       </Box>
 
-      <Scroll style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull, ui.pb28], { paddingTop: 80 }]}>
+      <Scroll style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull, ui.pb28], { paddingTop: 80 }, hasStickyBar && { paddingBottom: 176 }]}>
         <Box style={[[ui.pt4, ui.px5]]}>
 
           {/* Step 0 - Activity */}
@@ -432,10 +439,11 @@ export default function CreateEventScreen({
       </Scroll>
 
       {/* Sticky CTA for steps that need explicit continue */}
-      {(step === 2 || step === 4 || step === 5 || step === 6 || step === 7) && <StickyBar>
+      {hasStickyBar && <StickyBar>
           <PrimaryButton onPress={next} disabled={step === 2 && (!data.date || !data.time) || step === 4 && !coordinate}>
             Devam Et
           </PrimaryButton>
         </StickyBar>}
+      <BottomNav active="create-event" navigate={navigateAway} />
     </Box>;
 }
