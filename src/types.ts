@@ -49,6 +49,8 @@ export interface AppEvent {
   isSaved: boolean
   waitlisted?: boolean
   invited?: boolean
+  lastMessageAt?: string
+  unreadCount?: number
   joined?: boolean
   duration?: string
   privacy?: string

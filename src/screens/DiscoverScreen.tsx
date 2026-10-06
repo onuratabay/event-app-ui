@@ -377,7 +377,7 @@ function EventCard({
             borderWidth: 1,
             borderColor: energy.border
           }]}>
-              {energy.label} · {event.level}
+              {energy.label}{event.level ? ` · ${event.level}` : ""}
             </Label>
           </Box>
 

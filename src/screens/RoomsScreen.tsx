@@ -5,12 +5,18 @@ import { Circle, Path, Polygon, Polyline, Rect } from "react-native-svg";
 import BottomNav from "../components/BottomNav";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
-import { useStore } from "../native/Store";
+import { byLatestMessage, isEventMember, isRoomReady, roomTitle, useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 interface Props {
   navigate: NavigateFn;
+}
+// Today shows the clock time, older messages show the day.
+function lastMessageLabel(at: string) {
+  const date = new Date(at), now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return date.toDateString() === now.toDateString() ? `${pad(date.getHours())}:${pad(date.getMinutes())}` : `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
 }
 export default function RoomsScreen({
   navigate
@@ -19,8 +25,9 @@ export default function RoomsScreen({
     data: store, loadMoreEvents, moreEvents
   } = useStore();
   const EVENTS = store.events;
-  const activeEvents = EVENTS.filter(e => e.isActive && (e.host.id === store.user.id || e.participants.some(p => p.id === store.user.id)));
-  const formingEvents = EVENTS.filter(e => !['closed', 'cancelled'].includes(e.status || '') && !e.isActive && (e.host.id === store.user.id || e.joined || e.participants.some(p => p.id === store.user.id)));
+  // Each event whose room is open appears as a chat named after the event.
+  const activeEvents = EVENTS.filter(e => isRoomReady(e) && isEventMember(e, store.user.id)).sort(byLatestMessage);
+  const formingEvents = EVENTS.filter(e => !['closed', 'cancelled'].includes(e.status || '') && !isRoomReady(e) && isEventMember(e, store.user.id));
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="discover" onBack={() => navigate("discover")} title="Etkinliklerim" subtitle="Katıldığın ve düzenlediğin etkinlikler" />
@@ -30,7 +37,7 @@ export default function RoomsScreen({
         {/* Active rooms */}
         <Box style={[[ui.px5, ui.mb6]]}>
           <Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-            Aktif Odalar
+            Sohbetler
           </Label>
           {activeEvents.length > 0 ? <Box style={[[ui.spaceY3]]}>
               {activeEvents.map(event => <Touch key={event.id} onPress={() => navigate("event-room", {
@@ -43,11 +50,11 @@ export default function RoomsScreen({
                         <Box style={[[ui.fixed, ui.Top1, ui.Right1, ui.w35, ui.h35, ui.roundedFull, ui.bgEmerald400, ui.border2, ui.border06060e]]} />
                       </Box>
                       <Box style={[[ui.flex1, ui.minW0]]}>
-                        <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]} numberOfLines={1}>
-                          {event.title}
+                        <Label style={[[ui.textSm, (event.unreadCount || 0) > 0 ? ui.fontSemibold : ui.fontMedium, ui.textWhite85]]} numberOfLines={1}>
+                          {roomTitle(event)}
                         </Label>
-                        <Label style={[[ui.textXs, ui.textWhite40]]}>
-                          {event.date} · {event.time}
+                        <Label style={[[ui.textXs, ui.textWhite40]]} numberOfLines={1}>
+                          {event.lastMessageAt ? `Son mesaj ${lastMessageLabel(event.lastMessageAt)}` : "Henüz mesaj yok"} · {event.time}
                         </Label>
                         <Box style={[[ui.flex, ui.itemsCenter, ui.gap15, ui.mt1]]}>
                           <Box style={[[ui.flex]]}>
@@ -59,9 +66,13 @@ export default function RoomsScreen({
                         </Box>
                       </Box>
                       <Box style={[[ui.flex, ui.flexCol, ui.itemsEnd, ui.gap1]]}>
-                        <Label style={[[ui.text10px, ui.textEmerald400, ui.fontMedium]]}>
-                          Aktif
-                        </Label>
+                        {(event.unreadCount || 0) > 0 ? <Box accessibilityLabel={`${event.unreadCount} okunmamış mesaj`} style={{ minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: palette.accent }}>
+                            <Label style={{ fontFamily: "Outfit-SemiBold", fontSize: 11, lineHeight: 14, color: palette.background }}>
+                              {(event.unreadCount || 0) > 99 ? "99+" : event.unreadCount}
+                            </Label>
+                          </Box> : <Label style={[[ui.text10px, ui.textEmerald400, ui.fontMedium]]}>
+                          Oda açık
+                        </Label>}
                         <Label style={[[ui.text10px, ui.textWhite30]]}>
                           Odaya gir →
                         </Label>
@@ -72,7 +83,7 @@ export default function RoomsScreen({
             </Box> : <GlassCard style={[[ui.p6, ui.textCenter]]}>
               <MessageIcon size={32} style={{ color: palette.muted, marginBottom: 16 }} />
               <Label style={[[ui.textSm, ui.textWhite35]]}>
-                Henüz aktif etkinliğin yok.
+                Henüz açık bir sohbet odan yok. Etkinliğin minimum katılımcıya ulaşınca oda burada açılır.
               </Label>
               <Touch onPress={() => navigate("discover")} style={[[ui.mt3, ui.textXs, ui.textC8a44a, ui.underline]]}>
                 Etkinlikleri keşfet
@@ -95,10 +106,10 @@ export default function RoomsScreen({
                     <Picture uri={event.coverImage} accessibilityLabel="" style={[[ui.w12, ui.h12, ui.roundedXl, ui.opacity60]]} />
                     <Box style={[[ui.flex1, ui.minW0]]}>
                       <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite70]]} numberOfLines={1}>
-                        {event.title}
+                        {roomTitle(event)}
                       </Label>
                       <Label style={[[ui.textXs, ui.textWhite35]]}>
-                        {event.date} · {event.time}
+                        {event.time}{event.location ? ` · ${event.location}` : ""}
                       </Label>
                       <Box style={[[ui.mt1, ui.flex, ui.itemsCenter, ui.gap2]]}>
                         <Box style={[[ui.flex1, ui.h1, ui.roundedFull, ui.bgWhite8, ui.overflowHidden]]}>

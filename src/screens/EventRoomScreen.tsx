@@ -7,8 +7,8 @@ import TopNavBar from "../components/TopNavBar";
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, Alert } from "react-native";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
-import { getMessages, getApiErrorMessage, getEvent, type ApiMessage } from "../api/client";
-import { EMPTY_USER, mapApiEvent, participantCount } from "../native/Store";
+import { getMessages, getApiErrorMessage, getEvent, markRoomRead, type ApiMessage } from "../api/client";
+import { EMPTY_USER, mapApiEvent, participantCount, roomTitle, setOpenRoom } from "../native/Store";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -51,10 +51,20 @@ export default function EventRoomScreen({
     };
     if (!event) void getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(() => {});
     const release = retainEvent(eventId);
+    // While the room is on screen everything counts as read; bursts are batched into one request.
+    setOpenRoom(eventId);
+    let readTimer: ReturnType<typeof setTimeout> | undefined;
+    const markRead = (delay = 0) => {
+      setStore(p => ({ ...p, events: p.events.map(e => e.id === eventId ? { ...e, unreadCount: 0 } : e) }));
+      clearTimeout(readTimer);
+      readTimer = setTimeout(() => { void markRoomRead(eventId).catch(() => {}); }, delay);
+    };
+    markRead();
     const unsubscribe = onSocket('chat:message_created', payload => {
       if (payload.eventId !== eventId) return;
       setMessages(prev => [...prev.filter(m => m.id !== payload.message.id), mapMessage(payload.message)]);
       void socketAction('chat:read', { eventId, messageId: payload.message.id }).catch(() => {});
+      markRead(1000);
     });
     const announced = onSocket('event:announcement', payload => { if (payload.eventId === eventId) setMessages(prev => [...prev.filter(m => m.id !== payload.message.id), mapMessage(payload.message)]); });
     const typingListener = onSocket('chat:typing', payload => {
@@ -65,7 +75,7 @@ export default function EventRoomScreen({
     });
     const sync = onSocket('sync:required', () => { void load(); });
     void load();
-    return () => { active = false; controller.abort(); release(); unsubscribe(); announced(); sync(); typingListener(); if (typingExpiry.current) clearTimeout(typingExpiry.current); };
+    return () => { active = false; controller.abort(); release(); unsubscribe(); announced(); sync(); typingListener(); if (typingExpiry.current) clearTimeout(typingExpiry.current); if (readTimer) { clearTimeout(readTimer); void markRoomRead(eventId).catch(() => {}); } setOpenRoom(null); };
   }, [eventId, reload, ME.id, screenActive]);
   const [input, setInput] = useState("");
   const messagesEnd = useRef<ScrollView>(null);
@@ -84,7 +94,7 @@ export default function EventRoomScreen({
   if (!event) return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}><TopNavBar navigate={navigate} fallback="rooms" title="Etkinlik Odası" /><Box style={{ paddingTop: 96, paddingHorizontal: 20 }}><Label>{error || 'Etkinlik yükleniyor…'}</Label></Box></Box>;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
-      <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} title={event.title} subtitle={`${event.date} · ${event.time}`} />
+      <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} title={roomTitle(event)} subtitle={event.location ? `${event.time} · ${event.location}` : event.time} />
       {error && <Label>{error}</Label>}
       <Touch accessibilityLabel="Mesajları yenile" disabled={loading || sending} onPress={() => setReload(value => value + 1)} style={{ padding: 12, marginTop: 76, backgroundColor: 'rgba(255,255,255,.08)' }}><Label>{loading ? 'Mesajlar yükleniyor…' : 'Mesajları eşitle'}</Label></Touch>
 
@@ -100,10 +110,10 @@ export default function EventRoomScreen({
         }, {
           icon: <ClockIcon size={16} />,
           text: event.time
-        }, {
+        }, ...(event.level ? [{
           icon: <StarIcon size={16} />,
           text: event.level
-        }].map((item, i) => <Box key={i} style={[[ui.flexShrink0, ui.flex, ui.itemsCenter, ui.gap15, ui.px3, ui.py15, ui.roundedFull, ui.textXs, ui.textWhite50], {
+        }] : [])].map((item, i) => <Box key={i} style={[[ui.flexShrink0, ui.flex, ui.itemsCenter, ui.gap15, ui.px3, ui.py15, ui.roundedFull, ui.textXs, ui.textWhite50], {
           backgroundColor: "rgba(255,255,255,0.05)",
           borderWidth: 1,
           borderColor: "rgba(255,255,255,0.07)"
