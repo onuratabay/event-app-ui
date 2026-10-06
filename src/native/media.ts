@@ -1,3 +1,4 @@
+import { createEventShare, getApiErrorMessage } from "../api/client"
 import * as Clipboard from "expo-clipboard"
 
 import * as ImagePicker from "expo-image-picker"
@@ -29,25 +30,29 @@ export async function selectPhoto(camera = false): Promise<string | null> {
     return null
   }
 }
-export function eventLink(event: AppEvent) {
-  return `eventapp://event-detail?eventId=${encodeURIComponent(event.id)}`
+export async function eventLink(event: AppEvent) {
+  const result = await createEventShare(event.id)
+  const url = new URL(result.url)
+  if (!["https:", "http:"].includes(url.protocol)) throw new Error("Geçersiz paylaşım bağlantısı")
+  return result.url
 }
 export async function shareEvent(event: AppEvent) {
   try {
+    const url = await eventLink(event)
     await Share.share({
       title: event.title,
-      message: `${event.title}\n${event.date} · ${event.time}\n${event.location}\n${eventLink(event)}`,
+      message: `${event.title}\n${event.date} · ${event.time}\n${event.location}\n${url}`,
     })
-  } catch {
-    Alert.alert("Paylaşılamadı", "Lütfen tekrar dene.")
+  } catch (error) {
+    Alert.alert("Paylaşılamadı", getApiErrorMessage(error))
   }
 }
 export async function copyEvent(event: AppEvent) {
   try {
-    await Clipboard.setStringAsync(eventLink(event))
+    await Clipboard.setStringAsync(await eventLink(event))
     return true
-  } catch {
-    Alert.alert("Kopyalanamadı", "Lütfen tekrar dene.")
+  } catch (error) {
+    Alert.alert("Kopyalanamadı", getApiErrorMessage(error))
     return false
   }
 }

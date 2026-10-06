@@ -8,7 +8,7 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { CheckIcon, ChevronDownIcon, InstagramIcon, KeyIcon, ScrollIcon, UsersIcon } from "../components/Icons";
 import { ReferencePicker } from "../components/ReferencePicker";
 import { useStore } from "../native/Store";
-import { getApiErrorMessage, register } from "../api/client";
+import { getApiErrorMessage, register, redeemGuestReference } from "../api/client";
 import { Box, Label, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
@@ -256,7 +256,13 @@ function Step2({
   const [instagram, setInstagram] = useState("");
   const [code, setCode] = useState("");
   const [codeValid, setCodeValid] = useState<boolean | null>(null);
-  const validateCode = () => { setCodeValid(false); setSubmitError("Davet koduyla üyelik şu anda kullanılamıyor. Referans isteğiyle devam edebilirsin."); };
+  const validateCode = async () => {
+    if (submitting) return;
+    setSubmitting(true); setSubmitError(null);
+    try { await redeemGuestReference(code); setCodeValid(true); }
+    catch (error) { setCodeValid(false); setSubmitError(getApiErrorMessage(error, "Referans kodunu kontrol et.")); }
+    finally { setSubmitting(false); }
+  };
   const submitApplication = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -322,7 +328,7 @@ function Step2({
                 </IconBadge>
                 <Box style={[[ui.flex1]]}>
                   <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>
-                    Davet Kodu
+                    Etkinlik Referans Kodu
                   </Label>
                   <Label style={[[ui.textXs, ui.textWhite40]]}>
                     Kodunu gir
@@ -330,12 +336,12 @@ function Step2({
                 </Box>
                 {codeValid === true && <Box style={[[ui.flex, ui.itemsCenter, ui.gap1, ui.textEmerald400]]}>
                     <CheckIcon size={14} strokeWidth={2} />
-                    <Label style={[[ui.textXs]]}>Geçerli</Label>
+                    <Label style={[[ui.textXs]]}>+1 referans puanı</Label>
                   </Box>}
                 {method === "code" && codeValid !== true && <Box style={[[ui.w2, ui.h2, ui.roundedFull, ui.bgC8a44a]]} />}
               </Box>
               {method === "code" && <Touch onPress={e => e.stopPropagation()} style={[[ui.mt3, ui.flex, ui.gap2]]} enter>
-                  <GlassInput placeholder="EVENT2026" value={code} onChangeText={e => {
+                  <GlassInput placeholder="EWT-G-…" value={code} onChangeText={e => {
                 setCode(e);
                 setCodeValid(null);
               }} style={[[ui.flex1, ui.uppercase, ui.trackingWidest]]} />

@@ -29,6 +29,7 @@ module.exports = function () {
     else if (path === '/events/mine/suggestions') { if (body) suggestions.splice(suggestions.indexOf(body.text), 1); result = { items: [...suggestions] } }
     else if (path === '/events' && body) { const event = { ...events[0], ...body, id: 'created-on-server', owner: user }; events.unshift(event); result = event }
     else if (path === '/events' || ['/events/mine','/events/participating','/events/favorites'].includes(path)) result = { items: [...events], total: events.length }
+    else if (/^\/events\/[^/]+\/share$/.test(path)) { require('node:assert/strict').equal(options.method, 'POST'); result = { url: 'https://ewent.app/e/EWT-test-share', expiresAt: '2030-11-01T00:00:00Z' } }
     else if (path.startsWith('/events/')) {
       const [, , id, action] = path.split('/'); const event = events.find(e => e.id === id)
       if (action === 'join') { event.viewerParticipationStatus = 'confirmed'; event.participants = [user] }

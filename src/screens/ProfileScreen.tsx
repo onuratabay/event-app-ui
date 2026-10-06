@@ -4,7 +4,7 @@ import TopNavBar from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
-import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getReferenceRequests, getApiErrorMessage, type ReferenceRequest } from "../api/client";
+import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getReferenceRequests, getGuestReferenceCredit, getApiErrorMessage, type ReferenceRequest } from "../api/client";
 import BottomNav from "../components/BottomNav";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
@@ -79,6 +79,8 @@ export default function ProfileScreen({
     } catch { Alert.alert("Çıkış yapılamadı", "Lütfen tekrar dene."); }
     finally { setLoggingOut(false); }
   };
+  const [guestPoints, setGuestPoints] = useState(0);
+  useEffect(() => { if (isOwn) getGuestReferenceCredit().then(result => setGuestPoints(result.points || 0)).catch(() => {}); }, [isOwn]);
   const [references, setReferences] = useState<ReferenceRequest[]>([]);
   useEffect(() => { getReferenceRequests().then(result => setReferences(result.items.filter(i => i.status === 'approved'))).catch(() => {}); }, []);
   const update = async (key: string, value: string) => {
@@ -278,6 +280,7 @@ export default function ProfileScreen({
               </Touch>
 
               {showReferences && <Box style={{ padding: 16 }}>
+                {guestPoints > 0 && <Label style={{color:palette.accent,marginBottom:12}}>Etkinlik katılımından +{guestPoints} referans puanı</Label>}
                 {!references.length && <Label>Henüz onaylanmış referans yok.</Label>}
                 {references.map(ref => <Label key={ref.id}>{ref.direction === 'incoming' ? ref.recipient.name : ref.requester.name} · Onaylandı</Label>)}
               </Box>}

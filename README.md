@@ -116,3 +116,6 @@ Platform kontrolleri: `TEST_PLATFORM=ios npm test` ve `TEST_PLATFORM=android npm
 ### Eksik kapak görselleri
 
 Sunucuda kapak/kategori fotoğrafı bulunmayan etkinlikler, projede zaten bulunan kategoriye uygun stok görselleri gösterir; bunlar veritabanına kaydedilmez. Gerçek kapak önceliklidir. Harita/öneri sorgularının fotoğrafsız yanıtları önceden yüklenmiş gerçek kapağı silmez. Fotoğrafı olmayan kişiler için sahte yüz yerine baş harf gösterilir.
+
+### Photo sharing preview
+Share and Copy now request a server-issued event URL instead of a custom app-scheme link. The backend page publishes the event photo/title/date/location as Open Graph metadata and provides event-only guest joining and chat in the browser. Configure the backend `PUBLIC_SHARE_BASE_URL` and route `/e/*` on a public HTTPS domain. Platform preview appearance is controlled by WhatsApp/Facebook. LAN links work only on the local network and cannot produce an externally scraped card. Guests receive a personal EWT-G- coupon, redeemable once through the membership application’s second step for +1 referral credit. Their messages appear in the same native event chat, marked Misafir. The current member’s credit is shown under Referanslarım on their profile. See the backend GUEST_SHARING.md for deployment and limits.

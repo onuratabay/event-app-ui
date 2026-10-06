@@ -293,3 +293,11 @@ export async function getSocketToken(renew = false) {
 }
 
 export const getEventActivity = (id: string) => request<{ waitlist: Array<{ userId: string }>; checkins: Array<{ userId: string }> }>(`/events/${id}/activity`)
+
+export function createEventShare(eventId: string) {
+  return request<{ url: string; expiresAt: string }>(`/events/${encodeURIComponent(eventId)}/share`, { method: "POST" })
+}
+
+export const redeemGuestReference = (code: string) => request<{points:number;alreadyRedeemed:boolean}>("/sharing/redeem", {method:"POST",body:JSON.stringify({code:code.trim().toUpperCase()})});
+
+export const getGuestReferenceCredit = () => request<{points:number}>("/sharing/credits");

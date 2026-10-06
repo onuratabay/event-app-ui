@@ -205,6 +205,10 @@ async function tap(tree, label) {
   assert.equal(mapApiEvent({ ...photoFree, coverPhoto: actualCover }).coverImage, actualCover, "Real server photo takes priority over stock cover")
   console.log("PASS: category cover fallback, real photo priority and image preservation across map/AI navigation.")
   global.fetch = server.fetch;
+  const media = require("../src/native/media.ts")
+  assert.equal(await media.eventLink(mapApiEvent(server.events[0])), "https://ewent.app/e/EWT-test-share")
+  assert.equal(await media.copyEvent(mapApiEvent(server.events[0])), true)
+  console.log("PASS: server-issued HTTPS event sharing and clipboard path.")
   const originalFetch = global.fetch
   let registrationRequest
   global.fetch = async (url, options) => {

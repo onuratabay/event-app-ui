@@ -212,6 +212,13 @@ export default function EventDetailScreen({
             <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(255,255,255,0.04)", "transparent", "rgba(105,120,255,0.03)"]} pointerEvents="none" />
             <Box style={[[ui.relative, ui.px5, ui.pt4, ui.pb10]]}>
               <Box style={[[ui.w10, ui.h1, ui.roundedFull, ui.bgWhite15, ui.mxAuto, ui.mb5]]} />
+              <Box style={{ marginBottom: 20, borderRadius: 18, overflow: "hidden", backgroundColor: palette.surface }}>
+                <Picture uri={event.coverImage} accessibilityLabel={event.title} style={{ width: "100%", height: 140 }} />
+                <Box style={{ padding: 14 }}>
+                  <Label style={{ color: palette.text, fontSize: 17 }}>{event.title}</Label>
+                  <Label style={{ color: palette.muted, marginTop: 5, fontSize: 12 }}>{event.date} · {event.time} · {event.location}</Label>
+                </Box>
+              </Box>
               <Box style={[[ui.grid, ui.gap3, ui.mb4]]} columns={4}>
                 {[{
               label: "WhatsApp",
