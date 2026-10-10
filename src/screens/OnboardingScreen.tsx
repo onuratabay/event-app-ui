@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import SignOutButton from "../components/SignOutButton";
 import { updateProfile } from "../api/client";
 import TopNavBar from "../components/TopNavBar";
 import EditorialQuote from "../components/EditorialQuote";
@@ -40,6 +41,15 @@ function formatBirthDate(value: string) {
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
+// The date picker works with YYYY-MM-DD; the form and API keep dd/MM/yyyy.
+const toPickerDate = (value: string) => {
+  const parts = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return parts ? `${parts[3]}-${parts[2]}-${parts[1]}` : "";
+};
+const isFutureDate = (value: string) => {
+  const iso = toPickerDate(value);
+  return !!iso && new Date(`${iso}T00:00:00`).getTime() > Date.now();
+};
 function phoneDigits(value: string) {
   const raw = value.replace(/\D/g, "")
   const local = raw.startsWith("90") ? raw.slice(2) : raw.startsWith("0") ? raw.slice(1) : raw
@@ -130,12 +140,13 @@ function Step1({
       if (store.onboarding.accountId) { navigate("onboarding-2"); return; }
       const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: `+90${phoneDigits(form.telefon)}`, password: form.sifre, birthDate: form.dogum });
       const id = String((response.user as { id: string }).id);
-      setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}` } }));
+      const status = (response.user as { status?: { enum: string } }).status?.enum;
+      setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}`, status } }));
       if (mounted.current) navigate("onboarding-2");
     } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
     finally { if (mounted.current) setCreating(false); }
   };
-  const allFilled = Object.values(form).every(v => v.trim().length > 0) && phoneDigits(form.telefon).length === 10;
+  const allFilled = Object.values(form).every(v => v.trim().length > 0) && phoneDigits(form.telefon).length === 10 && !isFutureDate(form.dogum);
   const canContinue = Boolean(store.onboarding.accountId) || (allFilled && accepted);
   return <Box style={{
     flex: 1
@@ -179,10 +190,13 @@ function Step1({
             ...p,
             telefon: formatPhone(e)
           }))} mode="tel" keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel" maxLength={17} />
-            <GlassInput label="Doğum Tarihi" placeholder="GG/AA/YYYY" value={form.dogum} onChangeText={e => setForm(p => ({
+            <GlassInput label="Doğum Tarihi" mode="date" defaultValue="2000-01-01" value={toPickerDate(form.dogum)} onChangeText={e => setForm(p => ({
             ...p,
             dogum: formatBirthDate(e)
-          }))} keyboardType="number-pad" maxLength={10} />
+          }))} />
+            {isFutureDate(form.dogum) && <Label style={[[ui.textXs], { color: palette.error }]}>
+                Doğum tarihi gelecekte olamaz.
+              </Label>}
             <GlassInput label="Şifre" placeholder="En az 8 karakter ve özel karakter" value={form.sifre} onChangeText={e => setForm(p => ({
             ...p,
             sifre: e
@@ -399,11 +413,6 @@ function Step3({
 }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  const [stage, setStage] = useState<"waiting" | "simulating">("waiting");
-  const handleSimulate = () => {
-    setStage("simulating");
-    timer.current = setTimeout(() => navigate("approval"), 1200);
-  };
   const stages = [{
     label: "Başvuru Alındı",
     state: "done"
@@ -470,11 +479,8 @@ function Step3({
           </Box>
         </GlassCard>
 
-        {/* Demo simulate */}
-        <Box style={[[]]} enter>
-          <Touch onPress={handleSimulate} disabled={stage === "simulating"} style={[[ui.wFull, ui.py3, ui.roundedXl, ui.textXs, ui.textWhite20, ui.border, ui.borderWhite8]]}>
-            {stage === "simulating" ? "Onaylanıyor..." : "⚙ Onayı Simüle Et (Demo)"}
-          </Touch>
+        <Box style={[[ui.flex, ui.justifyCenter]]}>
+          <SignOutButton navigate={navigate} />
         </Box>
       </Box>
     </Scroll>

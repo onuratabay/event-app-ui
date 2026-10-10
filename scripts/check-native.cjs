@@ -42,7 +42,7 @@ class Value {
 const anim = () => ({ start() {}, stop() {} })
 const storage = new Map()
 Module._load = function (id, parent, isMain) {
-  if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]) }
+  if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]), usePathname: () => global.__testPathname || "/discover", useRootNavigationState: () => global.__testRootState, useRouter: () => ({ navigate: href => global.__testNavigations?.push(href.pathname ?? href), replace: href => global.__testNavigations?.push(href.pathname ?? href), push: href => global.__testNavigations?.push(href.pathname ?? href), back: () => global.__testNavigations?.push("back"), canGoBack: () => !!global.__testRootState && global.__testRootState.index > 0, canDismiss: () => true, dismissAll: () => global.__testNavigations?.push("dismissAll") }) }
   if (id === "socket.io-client") return require("./mock-socket.cjs")
   if (id === "expo-location") return {
     getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
@@ -63,6 +63,8 @@ Module._load = function (id, parent, isMain) {
       Platform: { OS: process.env.TEST_PLATFORM || "ios" },
       Alert: { alert() {} },
       AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) },
+      Keyboard: { addListener: () => ({ remove() {} }) },
+      BackHandler: { addEventListener: (_name, handler) => { global.__testBackHandler = handler; return { remove() { global.__testBackHandler = undefined } } } },
       AccessibilityInfo: { isReduceMotionEnabled: async () => false, announceForAccessibility() {}, getRecommendedTimeoutMillis: async value => value },
       Easing: { linear: value => value, quad: value => value ** 2, cubic: value => value ** 3, out: easing => easing, inOut: easing => easing },
       Linking: { openURL: async () => {} },
@@ -227,9 +229,17 @@ async function tap(tree, label) {
   let destination
   const registration = await mount("Onboarding", { step: 1, navigate: (route) => { destination = route } })
   const fields = registration.root.findAllByType("TextInput")
-  for (const [index, value] of ["Deniz", "Test", "deniz@example.com", "+90 532 123 45 67", "15061995", "Password1!"].entries()) {
+  for (const [index, value] of ["Deniz", "Test", "deniz@example.com", "+90 532 123 45 67", "Password1!"].entries()) {
     await act(async () => fields[index].props.onChangeText(value))
   }
+  // Birth date is chosen with the shared date picker (YYYY-MM-DD) and sent as dd/MM/yyyy.
+  const birthField = () => registration.root.findAll(n => n.props.mode === "date" && typeof n.props.onChangeText === "function")[0]
+  assert(birthField(), "Birth date opens the date picker")
+  assert.equal(birthField().props.defaultValue, "2000-01-01", "Picker starts at a plausible birth year")
+  await act(async () => birthField().props.onChangeText("2099-01-01"))
+  assert(text(registration.toJSON()).includes("Doğum tarihi gelecekte olamaz"), "Future birth dates are rejected")
+  await act(async () => birthField().props.onChangeText("1995-06-15"))
+  assert.equal(birthField().props.value, "1995-06-15")
   await tap(registration, "Topluluk ilkelerini okudum")
   await tap(registration, "Devam Et")
   assert.equal(destination, "onboarding-2")
@@ -244,6 +254,7 @@ async function tap(tree, label) {
   global.fetch = originalFetch
   await require("./check-map.cjs")({ mount, tap, act, text, storage })
   await require("./check-session.cjs")({ mount, tap, act, text, storage })
+  await require("./check-access.cjs")({ mount, tap, act, text, storage })
   await require("./check-recommendations.cjs")({ mount, tap, act, text, storage })
   await require("./check-password-reset.cjs")({ mount, tap, act, text, storage })
   await require("./check-server-state.cjs")({ mount, tap, act, text, storage })
@@ -309,7 +320,8 @@ async function tap(tree, label) {
   await tap(restored, "İptal Et")
   await act(async () => restored.unmount())
   global.__testLocationPermission = true
-  const createEvent = await mount("CreateEvent")
+  let createdNavigation
+  const createEvent = await mount("CreateEvent", { navigate: (route, opts) => { createdNavigation = { route, opts } } })
   await tap(createEvent, "Padel")
   await act(async () => {
     await new Promise((r) => setTimeout(r, 220))
@@ -366,6 +378,7 @@ async function tap(tree, label) {
   assert(text(createEvent.toJSON()).includes("Önizleme"))
   await tap(createEvent,"Etkinliği Oluştur")
   assert.equal(server.events[0].id, 'created-on-server')
+  assert.deepEqual(createdNavigation, { route: 'event-detail', opts: { eventId: 'created-on-server', aboveHome: true } }, 'New event detail opens with only home below it')
   assert.equal(server.events[0].locationName, 'Native Test Mekanı')
   assert.equal(server.events[0].visibilityId, 'invite_only')
   assert.deepEqual(server.events[0].invitedUserIds, ['friend-1'], 'Selected friends are invited')

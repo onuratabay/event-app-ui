@@ -9,7 +9,6 @@ import RecommendationsSheet from "../recommendations/RecommendationsSheet";
 import { BrandWordmark } from "../components/Brand";
 import FeedHeaderBackdrop from "../components/FeedHeaderBackdrop";
 import HeaderIconButton from "../components/HeaderIconButton";
-import BottomNav from "../components/BottomNav";
 import { HeartButton, RippleButton, SpringButton } from "../components/Expressive";
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
 import { BellIcon, SearchIcon, SparklesIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
@@ -528,7 +527,6 @@ export default function DiscoverScreen({
       {/* Share sheet — z above everything */}
       {shareEvent && <ShareSheet event={shareEvent} onClose={() => setShareEvent(null)} />}
 
-      <BottomNav active="discover" navigate={navigate} />
       {recommendationsOpen && <RecommendationsSheet navigate={navigate} onClose={() => setRecommendationsOpen(false)} />}
     </Box>;
 }

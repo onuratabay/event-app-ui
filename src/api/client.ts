@@ -252,7 +252,7 @@ export function resetPassword(token: string, newPassword: string) {
   return request<{ message: string }>("/auth/reset-password", { method: "POST", body: JSON.stringify({ token: token.trim(), newPassword, language: "tr" }) }, false)
 }
 
-export interface ApiUser { id: string; firstName: string; lastName: string; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
+export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
 export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; recommendationProfile?: import('../recommendations/model').RecommendationProfile }
 export const getCurrentUser = () => request<ApiUser>('/auth/me', { method: 'POST' })
 export const getUserInterests = () => request<Array<{ id: string; name: string }>>('/users/me/interests')

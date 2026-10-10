@@ -1,9 +1,11 @@
 export type Screen = "splash" | "welcome" | "login" | "forgot-password" | "onboarding-1" | "onboarding-2" | "onboarding-3" | "approval" | "interests" | "discover" | "event-detail" | "event-room" | "map" | "create-event" | "rooms" | "search" | "notifications" | "profile"
 
-export type NavigateFn = (screen: Screen, opts?: { eventId?: string; back?: boolean }) => void
+export type NavigateFn = (screen: Screen, opts?: { eventId?: string; back?: boolean; reset?: boolean; aboveHome?: boolean }) => void
 
 export interface AppUser {
   id: string
+  /** Account status (approved, profile_incomplete, reference_pending, ...). */
+  status?: string
   name: string
   avatar: string
   city: string

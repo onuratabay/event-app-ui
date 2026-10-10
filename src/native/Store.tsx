@@ -23,7 +23,7 @@ const initial: Data = { user: EMPTY_USER, events: [], messages: {}, onboarding: 
 export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
   if (!remoteUser || typeof remoteUser !== "object") return user
   const remote = remoteUser as import('../api/client').ApiUser
-  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0 }
+  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0, status: remote.status?.enum ?? user.status }
 
 }
 // Events without a participant cap are stored with the API's highest allowed capacity.

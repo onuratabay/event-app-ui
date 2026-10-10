@@ -466,7 +466,8 @@ export function Field({
         >
           <Label>{(mode === "date" && value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split("-").reverse().join("/") : value) || (mode === "time" ? "Saat seç" : "Tarih seç")}</Label>
         </Touch>
-        {open && <DateTimeWheel mode={mode as "date" | "time"} value={value} onConfirm={next => onChangeText?.(next)} onClose={() => setOpen(false)} />}
+        {/* defaultValue sets where the wheel starts while the field is still empty (e.g. a birth year). */}
+        {open && <DateTimeWheel mode={mode as "date" | "time"} value={value || props.defaultValue} onConfirm={next => onChangeText?.(next)} onClose={() => setOpen(false)} />}
       </>
     )
   return (

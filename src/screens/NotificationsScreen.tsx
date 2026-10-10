@@ -1,4 +1,5 @@
 import { UsersIcon, ClockIcon, StarIcon, LockIcon } from "../components/Icons";
+import { useBottomNavInset } from "../components/BottomNav";
 import { palette } from "../theme/palette";
 import { CloseIcon } from "../components/Icons";
 import { ReferenceNotifications } from "../components/ReferenceNotifications";
@@ -47,13 +48,14 @@ const TYPE_ICONS: Record<string, {
 export default function NotificationsScreen({
   navigate
 }: Props) {
+  const navInset = useBottomNavInset();
   const unreadCount = NOTIFS.filter(n => n.unread).length;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="discover" title="Bildirimler" subtitle={unreadCount > 0 ? `${unreadCount} yeni bildirim` : undefined} right={<Touch style={[[ui.textXs, ui.textWhite50, ui.px2]]}>Tümünü oku</Touch>} />
 
       {/* List */}
-      <Scroll style={[[ui.flex1, ui.px5, ui.pb10, ui.spaceY2], { paddingTop: 80 }]} enter>
+      <Scroll style={[[ui.flex1, ui.px5, ui.pb10, ui.spaceY2], { paddingTop: 80, paddingBottom: 40 + navInset }]} enter>
         <EventInvitations navigate={navigate} />
         <ReferenceNotifications />
         {NOTIFS.map(notif => {

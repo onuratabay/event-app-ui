@@ -13,15 +13,15 @@ import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import TopNavBar from "../components/TopNavBar";
-import BottomNav from "../components/BottomNav";
-// Keeps the sticky CTA above the bottom navigation bar.
-const NAV_CLEARANCE = 74;
+import { useBottomNavInset } from "../components/BottomNav";
 function StickyBar({
   children
 }: {
   children: React.ReactNode;
 }) {
-  return <Box style={[[ui.fixed, ui.left0, ui.right0, ui.px5, ui.pt4, ui.z40], { bottom: NAV_CLEARANCE, paddingBottom: 8 }]} gradient={[palette.background, "transparent"]} gradientDirection="up">
+  // Sits above the global bottom bar; drops to the edge while the keyboard hides the bar.
+  const inset = useBottomNavInset();
+  return <Box style={[[ui.fixed, ui.left0, ui.right0, ui.px5, ui.pt4, ui.z40], { bottom: inset, paddingBottom: 8 }]} gradient={[palette.background, "transparent"]} gradientDirection="up">
       {children}
     </Box>;
 }
@@ -179,7 +179,8 @@ export default function CreateEventScreen({
       const date = displayDate(data.date);
       const event = await createEvent({ interestId: interest.id, ...(level ? { levelId: level.id } : {}), visibilityId: visibility.id, date, startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: coordinate.latitude, longitude: coordinate.longitude, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(inviteOnly ? { invitedUserIds: invitedIds } : {}), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
       setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)] }));
-      navigate('event-detail', { eventId: event.id });
+      // The creation flow leaves history entirely; back from the new event's detail goes home.
+      navigate('event-detail', { eventId: event.id, aboveHome: true });
     } catch (error) { Alert.alert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
     finally { setCreating(false); }
   };
@@ -202,8 +203,6 @@ export default function CreateEventScreen({
   const durationChosen = customDurationOpen ? customDurationValid : !!data.durationMinutes;
   const isInviteOnly = visibilities.find(v => v.name === data.privacy)?.enum === INVITE_ONLY;
   const hasStickyBar = step === 6 && isInviteOnly || step === 2 || step === 3 || step === 4 || step === 5;
-  // Re-entering create-event from its own tab would reset the unfinished draft.
-  const navigateAway: NavigateFn = (screen, opts) => { if (screen !== "create-event") navigate(screen, opts); };
   const suggestions = personalSuggestions.length ? personalSuggestions : REQUIREMENTS_SUGGESTIONS[data.activity] || REQUIREMENTS_SUGGESTIONS.default;
   if (createBlocked) {
     return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
@@ -216,7 +215,6 @@ export default function CreateEventScreen({
         <Label style={[[ui.textSm, ui.textWhite55]]}>{createBlocked}</Label>
         <PrimaryButton onPress={() => navigate("discover")}>Keşfet'e dön</PrimaryButton>
       </Box>
-      <BottomNav active="create-event" navigate={navigateAway} />
     </Box>;
   }
   if (step === 7) {
@@ -267,7 +265,6 @@ export default function CreateEventScreen({
           </Touch>
         </Box>
       </Scroll>
-      <BottomNav active="create-event" navigate={navigateAway} />
     </Box>;
   }
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
@@ -574,6 +571,5 @@ export default function CreateEventScreen({
             Devam Et
           </PrimaryButton>
         </StickyBar>}
-      <BottomNav active="create-event" navigate={navigateAway} />
     </Box>;
 }

@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import { useBottomNavInset } from "../components/BottomNav";
 import { UsersIcon, LocationIcon, ClockIcon, StarIcon, SendIcon } from "../components/Icons";
 import { useScreenActive } from '../native/useScreenActive';
 import { EventActivity } from '../components/EventActivity';
@@ -21,6 +22,7 @@ export default function EventRoomScreen({
   navigate,
   eventId
 }: Props) {
+  const navInset = useBottomNavInset();
   const {
     data: store,
     setData: setStore
@@ -189,7 +191,7 @@ export default function EventRoomScreen({
 
       {typing && <Label>Bir katılımcı yazıyor…</Label>}
       {/* Input */}
-      <Box style={[[ui.px5, ui.pb8, ui.pt3, ui.flexShrink0]]}>
+      <Box style={[[ui.px5, ui.pb8, ui.pt3, ui.flexShrink0], { paddingBottom: 32 + navInset }]}>
         <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.rounded2xl, ui.px3, ui.py2], {
         backgroundColor: "rgba(255,255,255,0.06)",
         borderWidth: 1,

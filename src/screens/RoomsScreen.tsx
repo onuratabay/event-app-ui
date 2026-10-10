@@ -2,7 +2,6 @@ import { palette } from "../theme/palette";
 import { MessageIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { Circle, Path, Polygon, Polyline, Rect } from "react-native-svg";
-import BottomNav from "../components/BottomNav";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
 import { byLatestMessage, isEventMember, isRoomReady, roomTitle, useStore } from "../native/Store";
@@ -149,6 +148,5 @@ export default function RoomsScreen({
         {moreEvents && <Touch onPress={() => void loadMoreEvents()} style={{ padding: 16 }}><Label>Daha fazla etkinlik yükle</Label></Touch>}
       </Scroll>
 
-      <BottomNav active="rooms" navigate={navigate} />
     </Box>;
 }

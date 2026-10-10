@@ -1,6 +1,8 @@
 import { palette } from "../theme/palette";
 import { CloseIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
+import SignOutButton from "../components/SignOutButton";
+import { gatedScreen } from "../native/access";
 import { useEffect, useState } from "react";
 import { AtmoBackground, InterestChip } from "../components/GlassUI";
 import { CameraIcon, ImageIcon } from "../components/Icons";
@@ -32,7 +34,9 @@ export default function InterestsScreen({
       const interests = await setUserInterests(catalog.filter(i => selected.has(i.name)).map(i => i.id));
       if ((photo || '') !== store.user.avatar) await setProfilePhoto(photo || '');
       setStore(p => ({ ...p, user: { ...p.user, interests: interests.map(i => i.name), avatar: photo || '' } }));
-      navigate('discover');
+      // A pending account stays here until it is approved; only approved members enter the app.
+      if (gatedScreen(store.user.status)) { Alert.alert('Profilin kaydedildi', 'Hesabın onaylandığında uygulamaya girebilirsin.'); return; }
+      navigate('discover', { reset: true });
     } catch (error) { Alert.alert('Profil kaydedilemedi', getApiErrorMessage(error)); }
     finally { setSaving(false); }
   };
@@ -52,7 +56,7 @@ export default function InterestsScreen({
   };
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
-      <TopNavBar navigate={navigate} fallback="approval" onBack={() => navigate("approval", { back: true })} title="Profilini Tamamla" />
+      <TopNavBar navigate={navigate} fallback="discover" onBack={gatedScreen(store.user.status) ? undefined : () => navigate("discover", { back: true })} title="Profilini Tamamla" right={gatedScreen(store.user.status) ? <SignOutButton navigate={navigate} /> : undefined} />
 
       <Box style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull]]}>
         {/* Header */}

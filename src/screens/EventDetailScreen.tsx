@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import { useBottomNavInset } from "../components/BottomNav";
 import { CategoryIcon } from "../components/Icons";
 import { socketAction } from '../services/socket';
 import { participate, getApiErrorMessage, getEvent } from "../api/client";
@@ -22,6 +23,7 @@ export default function EventDetailScreen({
   navigate,
   eventId
 }: Props) {
+  const navInset = useBottomNavInset();
   const {
     data: store,
     setData: setStore
@@ -46,7 +48,7 @@ export default function EventDetailScreen({
   const isForming = !roomReady && !['cancelled', 'closed'].includes(event.status || '');
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <TopNavBar navigate={navigate} fallback="discover" title={event.title} subtitle={`${event.date} · ${event.time}`} floating right={<Touch accessibilityLabel="Paylaş" onPress={() => setShareOpen(true)} style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite80]]}><ShareIcon size={18} /></Touch>} />
-      <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol, ui.pb20]]}>
+      <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol, ui.pb20], { paddingBottom: 80 + navInset }]}>
         {/* Cover image header */}
         <Box style={[[ui.relative, ui.h72, ui.flexShrink0, ui.bgGray900]]}>
           <Picture uri={event.coverImage} accessibilityLabel={event.title} style={[[ui.wFull, ui.hFull]]} />
@@ -284,7 +286,7 @@ export default function EventDetailScreen({
         </Sheet>}
 
       {/* Sticky CTA */}
-      <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40, ui.spaceY25], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up">
+      <Box style={[[ui.fixed, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40, ui.spaceY25], { bottom: navInset }]} gradient={[palette.background, "transparent"]} gradientDirection="up">
         {/* Room entry — only once the minimum is reached AND the user has joined */}
         {roomReady && joined ? <Touch onPress={() => navigate("event-room", {
         eventId: event.id

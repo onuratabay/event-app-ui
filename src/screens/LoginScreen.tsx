@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import { gatedScreen } from "../native/access"
 import { useEffect, useRef, useState } from "react"
 import { AccessibilityInfo, Animated, Easing, ScrollView, StyleSheet } from "react-native"
 import TopNavBar from "../components/TopNavBar"
@@ -40,8 +41,11 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
     try {
       const response = await login(email.trim(), password)
       setData(current => ({ ...current, user: updateStoreUser(current.user, response.user), onboarding: {} }))
+      // Pending accounts go to their own page and never load the in-app feed.
+      const target = gatedScreen((response.user as { status?: { enum: string } }).status?.enum)
+      if (target) { navigate(target, { reset: true }); return }
       void refreshEvents().catch(() => {})
-      navigate("discover")
+      navigate("discover", { reset: true })
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Bilgilerini kontrol edip tekrar dene."))
     } finally {

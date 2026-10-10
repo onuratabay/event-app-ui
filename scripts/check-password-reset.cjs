@@ -53,7 +53,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   for (const [screen, props, fallback] of [
     ["Login", {}, "welcome"], ["ForgotPassword", {}, "login"],
     ["Onboarding", { step: 1 }, "welcome"], ["Onboarding", { step: 2 }, "onboarding-1"], ["Onboarding", { step: 3 }, "onboarding-2"],
-    ["Approval", {}, "onboarding-3"], ["Interests", {}, "approval"],
+    ["Approval", {}, "onboarding-3"], ["Interests", {}, "discover"],
   ]) {
     let back
     tree = await mount(screen, { ...props, navigate: (...args) => { back = args } })
