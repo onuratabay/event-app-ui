@@ -30,6 +30,7 @@ export interface ApiEvent {
   participants: Array<{ id: string; firstName: string; lastName: string; profilePhoto?: string | null }>
   isFavorite: boolean
   status: { enum: string; name: string }
+  createdAt?: string
   // Latest chat message time; only sent to room members.
   lastMessageAt?: string | null
   // Messages from others since the member last read the room.

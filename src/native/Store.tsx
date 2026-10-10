@@ -84,6 +84,7 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     isSaved: event.isFavorite,
     waitlisted: event.viewerParticipationStatus === 'waitlisted',
     invited: event.viewerParticipationStatus === 'invited',
+    createdAt: event.createdAt,
     lastMessageAt: event.lastMessageAt || undefined,
     unreadCount: event.unreadCount || 0,
     joined: event.viewerParticipationStatus === "confirmed",

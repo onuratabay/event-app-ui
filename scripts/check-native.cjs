@@ -46,7 +46,7 @@ Module._load = function (id, parent, isMain) {
   if (id === "socket.io-client") return require("./mock-socket.cjs")
   if (id === "expo-location") return {
     getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
-    Accuracy: { Balanced: 3 }, geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => [],
+    Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => ({ coords: { latitude: 39.92, longitude: 32.85 } }), geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => [],
   }
   if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker" }
   if (id === "expo-constants") return { __esModule: true, default: { expoConfig: { hostUri: "192.168.1.15:8081" } } }
@@ -55,6 +55,7 @@ Module._load = function (id, parent, isMain) {
       View: "View",
       ActivityIndicator: "ActivityIndicator",
       KeyboardAvoidingView: "KeyboardAvoidingView",
+      RefreshControl: "RefreshControl",
       Text: "Text",
       Pressable: "Pressable",
       ScrollView: "ScrollView",
@@ -217,6 +218,21 @@ async function tap(tree, label) {
   const roomC = { ...mapApiEvent(photoFree), id: "c" }
   assert.deepEqual([roomC, roomA, roomB].sort(byLatestMessage).map(room => room.id), ["b", "a", "c"], "Rooms sort by newest message across time zone formats; silent rooms last")
   assert.equal(roomTitle(roomA), `${roomA.title} · ${roomA.date}`)
+  const { sortFeed } = require("../src/discover/sort.ts")
+  const feedEvent = (id, extra) => ({ ...mapApiEvent(photoFree), id, ...extra })
+  const feed = [
+    feedEvent("old-padel", { category: "Padel", createdAt: "2026-10-01T10:00:00Z", date: "20/10/2026", time: "18:00", latitude: 39.95, longitude: 32.85 }),
+    feedEvent("new-yoga", { category: "Yoga", createdAt: "2026-10-09T10:00:00Z", date: "20/10/2026", time: "18:00", latitude: 41.0, longitude: 29.0 }),
+    feedEvent("new-padel", { category: "Padel", createdAt: "2026-10-08T10:00:00Z", date: "25/10/2026", time: "09:00", latitude: undefined, longitude: undefined }),
+    feedEvent("soon-film", { category: "Film", createdAt: "2026-10-02T10:00:00Z", date: "15/10/2026", time: "20:00", latitude: 39.93, longitude: 32.86 }),
+  ]
+  const order = (sortBy, location) => sortFeed(feed, sortBy, { interests: ["Padel"], location }).map(event => event.id)
+  assert.deepEqual(order("recommended"), ["new-padel", "old-padel", "new-yoga", "soon-film"], "Recommended: user's interests first, newest first within")
+  assert.deepEqual(order("time-asc"), ["soon-film", "new-yoga", "old-padel", "new-padel"], "Nearest time first; same start time puts the newest first")
+  assert.deepEqual(order("time-desc"), ["new-padel", "new-yoga", "old-padel", "soon-film"], "Farthest time first; same start time puts the newest first")
+  const ankara = { latitude: 39.92, longitude: 32.85 }
+  assert.deepEqual(order("distance-near", ankara), ["soon-film", "old-padel", "new-yoga", "new-padel"], "Nearest to the user first; events without a location last")
+  assert.deepEqual(order("distance-far", ankara), ["new-yoga", "old-padel", "soon-film", "new-padel"], "Farthest from the user first; events without a location last")
   console.log("PASS: category cover fallback, real photo priority and image preservation across map/AI navigation.")
   global.fetch = server.fetch;
   const originalFetch = global.fetch

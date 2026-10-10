@@ -147,6 +147,41 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     assert.equal(global.__testNavigations.includes("/onboarding-3"), bounced, `${pathname} ${bounced ? "bounces" : "stays"} for reference_pending`)
     await act(async () => guard.unmount())
   }
+  // Pulling the home feed down reloads it from the server.
+  storage.set("event-app:access-token", "a"); current = "approved"
+  const home = await mount("Discover")
+  await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+  const pull = () => home.root.findAll(n => n.props.refreshControl)[0].props.refreshControl
+  assert(pull(), "Home feed supports pull-to-refresh")
+  calls.length = 0
+  await act(async () => { pull().props.onRefresh() })
+  await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+  assert(calls.includes("/events") && calls.includes("/auth/me"), "Pull-to-refresh reloads events and the account")
+  assert.equal(pull().props.refreshing, false, "Spinner stops once the reload finishes")
+  // Distance sorts ask for the device location; without permission the order is unchanged.
+  // Innermost pressable showing the text (the sheet backdrop also contains every option's text).
+  const pressText = async (tree, label) => {
+    const node = tree.root.findAllByType("Pressable").filter(n => text(n).includes(label)).sort((a, b) => text(a).length - text(b).length)[0]
+    assert(node, `Missing button: ${label}`)
+    await act(async () => node.props.onPress?.({ stopPropagation() {} }))
+  }
+  const pressLabel = async (tree, label) => {
+    const node = tree.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === label)
+    assert(node, `Missing button: ${label}`)
+    await act(async () => node.props.onPress?.({ stopPropagation() {} }))
+  }
+  global.__testLocationPermission = false
+  await pressLabel(home, "Sıralama ve filtre")
+  await pressText(home, "En Yakın Mesafe")
+  assert(!text(home.toJSON()).includes("Temizle"), "Without location permission the distance sort is not applied")
+  global.__testLocationPermission = true
+  await pressLabel(home, "Sıralama ve filtre")
+  await pressText(home, "En Yakın Mesafe")
+  await act(() => new Promise(resolve => setTimeout(resolve, 20)))
+  assert(text(home.toJSON()).includes("En Yakın Mesafe") && text(home.toJSON()).includes("Temizle"), "With permission the feed sorts by distance from the user")
+  global.__testLocationPermission = undefined
+  await act(async () => home.unmount())
+
   global.__testPathname = undefined
   global.__testNavigations = undefined
   storage.clear()

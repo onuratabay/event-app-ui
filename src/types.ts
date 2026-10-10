@@ -51,6 +51,8 @@ export interface AppEvent {
   isSaved: boolean
   waitlisted?: boolean
   invited?: boolean
+  /** When the event was created; the feed puts newer events first on ties. */
+  createdAt?: string
   lastMessageAt?: string
   unreadCount?: number
   joined?: boolean
