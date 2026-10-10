@@ -1,17 +1,23 @@
-import { BlurTargetView, BlurView, type BlurViewProps } from "expo-blur"
-import { createContext, useContext, useRef, type ReactNode, type RefObject } from "react"
-import { View } from "react-native"
+import { BlurView, type BlurViewProps } from "expo-blur"
+import { type ReactNode } from "react"
+import { Platform, View } from "react-native"
+import { palette } from "../theme/palette"
 
-const BlurTarget = createContext<RefObject<View | null> | undefined>(undefined)
-/** One capture surface serves all glass treatments, including Android's native blur. */
+/** Keep the native navigator outside Android's blur capture hierarchy. */
 export function BlurSurface({ children, overlay }: { children: ReactNode; overlay?: ReactNode }) {
-  const target = useRef<View | null>(null)
-  return <BlurTarget.Provider value={target}>
-    <BlurTargetView ref={target} collapsable={false} style={{ flex: 1 }}>{children}</BlurTargetView>
+  return <>
+    <View style={{ flex: 1 }}>{children}</View>
     {overlay}
-  </BlurTarget.Provider>
+  </>
 }
-export function SharedBlur(props: BlurViewProps) {
-  const target = useContext(BlurTarget)
-  return <BlurView {...props} blurTarget={target} blurMethod={target ? "dimezisBlurView" : "none"} blurReductionFactor={4} />
+export function SharedBlur({ style, children, tint = "dark", intensity = 50, ...props }: BlurViewProps) {
+  // Android fallback also avoids capturing a target from a different Modal window.
+  // Re-enable native capture only after verifying navigation on a physical device.
+  if (Platform.OS === "android") {
+    return <View pointerEvents="none" style={[style, {
+      backgroundColor: tint === "light" || tint === "extraLight" ? palette.text : palette.surface,
+      opacity: Math.min(0.9, Math.max(0, intensity) / 100),
+    }]}>{children}</View>
+  }
+  return <BlurView {...props} style={style} tint={tint} intensity={intensity}>{children}</BlurView>
 }

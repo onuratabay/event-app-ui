@@ -98,7 +98,7 @@ Module._load = function (id, parent, isMain) {
   if (id === "expo-haptics") return { impactAsync: async () => {}, ImpactFeedbackStyle: { Light: "light" } }
   if (id === "expo-image") return { Image: "Image" }
   if (id === "expo-linear-gradient") return { LinearGradient: "LinearGradient" }
-  if (id === "expo-blur") return { BlurView: "BlurView", BlurTargetView: "View" }
+  if (id === "expo-blur") return { BlurView: "BlurView", BlurTargetView: "BlurTargetView" }
   if (id === "react-native-safe-area-context") return { SafeAreaView: "View" }
   if (id === "@react-native-community/datetimepicker")
     return { __esModule: true, default: "DateTimePicker" }
@@ -258,6 +258,7 @@ async function tap(tree, label) {
   await assert.rejects(() => api.register({}), error => api.getApiErrorMessage(error).includes("Sunucuya bağlanılamadı"))
   storage.clear()
   global.fetch = originalFetch
+  await require("./check-blur.cjs")()
   await require("./check-map.cjs")({ mount, tap, act, text, storage })
   await require("./check-session.cjs")({ mount, tap, act, text, storage })
   await require("./check-access.cjs")({ mount, tap, act, text, storage })
