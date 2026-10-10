@@ -2,14 +2,13 @@ import ActivityIndicator from "../components/LoadingSpinner";
 import { palette } from "../theme/palette";
 import { CategoryIcon } from "../components/Icons";
 import { favoriteEvent, getApiErrorMessage } from "../api/client";
-import { Alert, FlatList, Platform } from "react-native";
+import { Alert, FlatList, Platform, RefreshControl } from "react-native";
 import { useState } from "react";
 import { Line, Path, Polyline } from "react-native-svg";
 import RecommendationsSheet from "../recommendations/RecommendationsSheet";
 import { BrandWordmark } from "../components/Brand";
 import FeedHeaderBackdrop from "../components/FeedHeaderBackdrop";
 import HeaderIconButton from "../components/HeaderIconButton";
-import BottomNav from "../components/BottomNav";
 import { HeartButton, RippleButton, SpringButton } from "../components/Expressive";
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
 import { BellIcon, SearchIcon, SparklesIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
@@ -18,6 +17,8 @@ import { participantCount, useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
+import * as Location from "expo-location";
+import { sortFeed, type SortOption } from "../discover/sort";
 interface Props {
   navigate: NavigateFn;
 }
@@ -45,7 +46,6 @@ const FILTERS = [{
 }, {
   label: "Konser"
 }];
-type SortOption = "recommended" | "time-asc" | "time-desc" | "distance-near" | "distance-far";
 const SORT_OPTIONS: {
   value: SortOption;
   label: string;
@@ -377,7 +377,7 @@ function EventCard({
             borderWidth: 1,
             borderColor: energy.border
           }]}>
-              {energy.label} · {event.level}
+              {energy.label}{event.level ? ` · ${event.level}` : ""}
             </Label>
           </Box>
 
@@ -428,6 +428,18 @@ export default function DiscoverScreen({
   const [recommendationsOpen, setRecommendationsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("Sana Özel");
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
+  // Distance sorts use where the user is right now; asked only when such a sort is chosen.
+  const [deviceLocation, setDeviceLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const chooseSort = async (next: SortOption) => {
+    if (next !== "distance-near" && next !== "distance-far") { setSortBy(next); return; }
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (!permission.granted) { Alert.alert("Konum izni gerekli", "Mesafeye göre sıralamak için konum iznine ihtiyacımız var."); return; }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setDeviceLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+      setSortBy(next);
+    } catch { Alert.alert("Konum alınamadı", "Konum servislerini açıp tekrar dene."); }
+  };
   const [sortOpen, setSortOpen] = useState(false);
   const [shareEvent, setShareEvent] = useState<AppEvent | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -442,13 +454,18 @@ export default function DiscoverScreen({
     if (activeFilter === "Bu Hafta") return day >= today && day.getTime() < today.getTime() + 7 * 86400000;
     if (activeFilter === "Yakınımda") return parseFloat(e.distance.replace(",", ".")) <= 5;
     return true;
-  }).sort((a, b) => {
-    const distance = (e: AppEvent) => parseFloat(e.distance.replace(",", "."));
-    const time = (e: AppEvent) => { const [d,m,y] = e.date.split("/").map(Number); return new Date(y,m-1,d,Number(e.time.slice(0,2)),Number(e.time.slice(3))).getTime(); };
-    return sortBy === "distance-near" ? distance(a) - distance(b) : sortBy === "distance-far" ? distance(b) - distance(a) : sortBy === "time-asc" ? time(a) - time(b) : sortBy === "time-desc" ? time(b) - time(a) : 0;
   });
+  const sortedEvents = sortFeed(visibleEvents, sortBy, { interests: store.user.interests, location: deviceLocation });
   const sortLabel = SORT_OPTIONS.find(o => o.value === sortBy)?.label ?? "Önerilen";
   const isCustomSort = sortBy !== "recommended";
+  // Pull down on the feed to reload user, preferences and events from the server.
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const pullToRefresh = async () => {
+    if (pullRefreshing) return;
+    setPullRefreshing(true);
+    try { await refreshEvents(); } catch { /* The store already shows a retryable error notice. */ }
+    finally { setPullRefreshing(false); }
+  };
   const handleLoadMore = async () => {
     if (loadingMore || !moreFeedEvents) return;
     setLoadingMore(true);
@@ -463,13 +480,14 @@ export default function DiscoverScreen({
         <EventList
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingTop: isCustomSort ? 160 : 112, paddingHorizontal: 20, paddingBottom: 112, flexGrow: visibleEvents.length ? 0 : 1 }}
-          data={visibleEvents}
+          data={sortedEvents}
           keyExtractor={event => event.id}
           renderItem={({ item: event, index }) => <Box style={{ marginBottom: 16 }}><EventCard event={event} index={index} onPress={() => navigate("event-detail", {
             eventId: event.id
           })} onShare={() => setShareEvent(event)} /></Box>}
           ListEmptyComponent={<Box style={{ padding: 20, gap: 12 }}><Label>Henüz gösterilecek etkinlik yok.</Label><Touch onPress={() => { void refreshEvents().catch(() => {}); }}><Label>Yenile</Label></Touch></Box>}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 20 }} /> : null}
+          refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={() => { void pullToRefresh(); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={isCustomSort ? 160 : 112} />}
           onEndReached={() => { void handleLoadMore(); }}
           onEndReachedThreshold={0.45}
           initialNumToRender={4}
@@ -523,12 +541,11 @@ export default function DiscoverScreen({
       </Box>
 
       {/* Sort sheet */}
-      {sortOpen && <SortSheet current={sortBy} onChange={setSortBy} onClose={() => setSortOpen(false)} />}
+      {sortOpen && <SortSheet current={sortBy} onChange={next => { void chooseSort(next); }} onClose={() => setSortOpen(false)} />}
 
       {/* Share sheet — z above everything */}
       {shareEvent && <ShareSheet event={shareEvent} onClose={() => setShareEvent(null)} />}
 
-      <BottomNav active="discover" navigate={navigate} />
       {recommendationsOpen && <RecommendationsSheet navigate={navigate} onClose={() => setRecommendationsOpen(false)} />}
     </Box>;
 }

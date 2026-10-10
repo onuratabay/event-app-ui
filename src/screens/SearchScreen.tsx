@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import { useBottomNavInset } from "../components/BottomNav";
 import { CloseIcon } from "../components/Icons";
 import { useEffect, useRef, useState } from "react";
 import { TextInput } from "react-native";
@@ -44,6 +45,7 @@ function EventRow({
 export default function SearchScreen({
   navigate
 }: Props) {
+  const navInset = useBottomNavInset();
   const {
     data: store
   } = useStore();
@@ -76,7 +78,7 @@ export default function SearchScreen({
         </Box>
       </Box>
 
-      <Scroll style={[[ui.flex1, ui.px5, ui.pb10]]}>
+      <Scroll style={[[ui.flex1, ui.px5, ui.pb10], { paddingBottom: 40 + navInset }]}>
         {/* No query — recent + suggestions */}
         {!query.trim() && <Box style={[[ui.spaceY6]]} enter>
             {/* Recent */}

@@ -23,13 +23,24 @@ const initial: Data = { user: EMPTY_USER, events: [], messages: {}, onboarding: 
 export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
   if (!remoteUser || typeof remoteUser !== "object") return user
   const remote = remoteUser as import('../api/client').ApiUser
-  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0 }
+  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0, status: remote.status?.enum ?? user.status }
 
 }
 // Events without a participant cap are stored with the API's highest allowed capacity.
 export const UNLIMITED_PARTICIPANTS = 100000
 export const isUnlimitedCapacity = (max: number) => max >= UNLIMITED_PARTICIPANTS
 export const participantCount = (current: number, max: number) => `${current}/${isUnlimitedCapacity(max) ? "∞" : max}`
+// The event room (chat) opens once confirmed participants reach the minimum; the backend enforces the same rule.
+export const isRoomReady = (event: AppEvent) => event.status !== "cancelled" && event.currentParticipants >= event.minParticipants
+// The chat screen registers the room it shows so new messages there are not counted as unread.
+let openRoomId: string | null = null
+export const setOpenRoom = (eventId: string | null) => { openRoomId = eventId }
+// Rooms are named after the activity plus the date, so two Padel events stay distinguishable.
+export const roomTitle = (event: AppEvent) => `${event.title} · ${event.date}`
+// Rooms with the newest message come first; rooms without messages keep their order at the end.
+// Compare instants, not strings: REST sends "+03:00" offsets while socket payloads use UTC "Z".
+export const byLatestMessage = (a: AppEvent, b: AppEvent) => (Date.parse(b.lastMessageAt || "") || 0) - (Date.parse(a.lastMessageAt || "") || 0)
+export const isEventMember = (event: AppEvent, userId: string) => event.host.id === userId || !!event.joined || event.participants.some(person => person.id === userId)
 export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"][number]): AppEvent {
   const host: AppUser = {
     id: event.owner.id,
@@ -54,7 +65,7 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     latitude: event.latitude,
     longitude: event.longitude,
     distance: "",
-    level: event.level.name,
+    level: event.level?.name || "",
     currentParticipants: event.confirmedParticipantCount,
     maxParticipants: event.maxParticipants,
     minParticipants: event.minParticipants,
@@ -63,6 +74,7 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
       ...host,
       id: participant.id,
       name: `${participant.firstName} ${participant.lastName}`.trim(),
+      avatar: participant.profilePhoto || "",
     })),
     coverImage: event.coverPhoto || defaultEventCover(event.interest.name),
     description: event.description,
@@ -72,6 +84,9 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     isSaved: event.isFavorite,
     waitlisted: event.viewerParticipationStatus === 'waitlisted',
     invited: event.viewerParticipationStatus === 'invited',
+    createdAt: event.createdAt,
+    lastMessageAt: event.lastMessageAt || undefined,
+    unreadCount: event.unreadCount || 0,
     joined: event.viewerParticipationStatus === "confirmed",
     duration: event.durationMinutes ? `${event.durationMinutes} dk` : undefined,
   }
@@ -79,7 +94,9 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
 /** Lightweight map/AI payloads omit photos; keep an already loaded real cover. */
 export function mapApiEventPreservingCover(event: Parameters<typeof mapApiEvent>[0], previous?: AppEvent): AppEvent {
   const mapped = mapApiEvent(event)
-  return { ...mapped, coverImage: event.coverPhoto || previous?.coverImage || mapped.coverImage }
+  // List payloads carry no participant photos; keep ones already loaded on the detail screen.
+  const avatars = new Map(previous?.participants.map(person => [person.id, person.avatar]) || [])
+  return { ...mapped, coverImage: event.coverPhoto || previous?.coverImage || mapped.coverImage, participants: mapped.participants.map(person => ({ ...person, avatar: person.avatar || avatars.get(person.id) || "" })) }
 }
 
 const Context = createContext<{
@@ -190,7 +207,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       ...(delta.userId === current.user.id && name === 'event:participant_left' ? { joined: false, waitlisted: false } : {}),
     }) })))
     const cleanups = ['event:waitlist_joined', 'event:summary', 'event:participant_count_changed', 'event:participant_joined', 'event:participant_left', 'event:started', 'event:cancelled', 'event:ended', 'event:updated'].map(patch)
-    return () => cleanups.forEach(cleanup => cleanup())
+    // Sent to every room member on each new message, even when they are not inside the room.
+    const roomMessage = onSocket('room:message', (delta: { eventId: string; at: string; userId?: string }) => setData(current => ({ ...current, events: current.events.map(event => event.id !== delta.eventId ? event : {
+      ...event,
+      lastMessageAt: delta.at,
+      unreadCount: delta.userId === current.user.id || delta.eventId === openRoomId ? event.unreadCount || 0 : (event.unreadCount || 0) + 1,
+    }) })))
+    return () => { cleanups.forEach(cleanup => cleanup()); roomMessage() }
   }, [])
   return <Context.Provider value={{ data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, resetSession: () => { stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
     {storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}

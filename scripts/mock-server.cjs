@@ -18,13 +18,14 @@ module.exports = function () {
     else if (path.startsWith('/users/me/preferences/')) { preferences[path.split('/').pop()] = body.value; result = body.value }
     else if (path === '/users/me/profile') { Object.assign(user, body); result = { ...user } }
     else if (path === '/users/me/interests') { if (body) interests = body.interestIds.map(id => ({ id, name: 'Padel' })); result = interests }
-    else if (path === '/interests') result = [{ id: 'padel', name: 'Padel', slug: 'padel' }]
+    else if (path === '/interests') result = [{ id: 'padel', name: 'Padel', slug: 'padel', levels: [{ id: 'beginner', enum: 'beginner', name: 'Başlangıç' }] }, { id: 'kahve', name: 'Kahve', slug: 'kahve', levels: [] }]
     else if (path === '/enum-values') result = new URL(url).searchParams.get('group') === 'event_level' ? [{ id: 'beginner', enum: 'beginner', name: 'Başlangıç' }] : [{ id: 'public', enum: 'public', name: 'Herkese Açık' }, { id: 'recommended', enum: 'recommended', name: 'Önerilenler' }, { id: 'invite_only', enum: 'invite_only', name: 'Sadece Davet' }]
     else if (path === '/events/can-create') result = { canCreate: !state.createBlocked, message: state.createBlocked ? 'Yeni etkinlik açma hakkınız kalmadı. Daha fazlası için dükkana gidin.' : null }
     else if (path === '/users/me/settings') result = { canCreateInviteOnly: true }
     else if (path === '/friends') { require('node:assert/strict').equal(new URL(url).searchParams.get('active'), 'true'); result = { items: [...friends] } }
     else if (path === '/events/invitations') result = { items: [...invitations], total: invitations.length }
     else if (path.startsWith('/events/invite-1/')) { const invite = invitations.splice(0, 1)[0]; result = { ...invite, viewerParticipationStatus: path.endsWith('/join') ? 'confirmed' : 'declined' } }
+    else if (path.endsWith('/messages/read')) result = { eventId: path.split('/')[2], unreadCount: 0 }
     else if (path.endsWith('/messages')) { if (body) messages.push({ id: String(messages.length), text: body.text, user, createdAt: new Date().toISOString() }); result = body ? messages.at(-1) : { items: [...messages] } }
     else if (path === '/events/mine/suggestions') { if (body) suggestions.splice(suggestions.indexOf(body.text), 1); result = { items: [...suggestions] } }
     else if (path === '/events' && body) { const event = { ...events[0], ...body, id: 'created-on-server', owner: user }; events.unshift(event); result = event }

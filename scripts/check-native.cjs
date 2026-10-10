@@ -42,11 +42,11 @@ class Value {
 const anim = () => ({ start() {}, stop() {} })
 const storage = new Map()
 Module._load = function (id, parent, isMain) {
-  if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]) }
+  if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]), usePathname: () => global.__testPathname || "/discover", useRootNavigationState: () => global.__testRootState, useRouter: () => ({ navigate: href => global.__testNavigations?.push(href.pathname ?? href), replace: href => global.__testNavigations?.push(href.pathname ?? href), push: href => global.__testNavigations?.push(href.pathname ?? href), back: () => global.__testNavigations?.push("back"), canGoBack: () => !!global.__testRootState && global.__testRootState.index > 0, canDismiss: () => true, dismissAll: () => global.__testNavigations?.push("dismissAll") }) }
   if (id === "socket.io-client") return require("./mock-socket.cjs")
   if (id === "expo-location") return {
     getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
-    Accuracy: { Balanced: 3 }, geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => [],
+    Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => ({ coords: { latitude: 39.92, longitude: 32.85 } }), geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => [],
   }
   if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker" }
   if (id === "expo-constants") return { __esModule: true, default: { expoConfig: { hostUri: "192.168.1.15:8081" } } }
@@ -55,6 +55,7 @@ Module._load = function (id, parent, isMain) {
       View: "View",
       ActivityIndicator: "ActivityIndicator",
       KeyboardAvoidingView: "KeyboardAvoidingView",
+      RefreshControl: "RefreshControl",
       Text: "Text",
       Pressable: "Pressable",
       ScrollView: "ScrollView",
@@ -63,6 +64,8 @@ Module._load = function (id, parent, isMain) {
       Platform: { OS: process.env.TEST_PLATFORM || "ios" },
       Alert: { alert() {} },
       AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) },
+      Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => { global.__testKeyboardDismissed = true } },
+      BackHandler: { addEventListener: (_name, handler) => { global.__testBackHandler = handler; return { remove() { global.__testBackHandler = undefined } } } },
       AccessibilityInfo: { isReduceMotionEnabled: async () => false, announceForAccessibility() {}, getRecommendedTimeoutMillis: async value => value },
       Easing: { linear: value => value, quad: value => value ** 2, cubic: value => value ** 3, out: easing => easing, inOut: easing => easing },
       Linking: { openURL: async () => {} },
@@ -96,7 +99,7 @@ Module._load = function (id, parent, isMain) {
   if (id === "expo-haptics") return { impactAsync: async () => {}, ImpactFeedbackStyle: { Light: "light" } }
   if (id === "expo-image") return { Image: "Image" }
   if (id === "expo-linear-gradient") return { LinearGradient: "LinearGradient" }
-  if (id === "expo-blur") return { BlurView: "BlurView", BlurTargetView: "View" }
+  if (id === "expo-blur") return { BlurView: "BlurView", BlurTargetView: "BlurTargetView" }
   if (id === "react-native-safe-area-context") return { SafeAreaView: "View" }
   if (id === "@react-native-community/datetimepicker")
     return { __esModule: true, default: "DateTimePicker" }
@@ -155,7 +158,7 @@ async function mount(name, props = {}) {
         null,
         React.createElement(Screen, { navigate: () => {}, ...props }),
       ),
-      { createNodeMock: () => ({ scrollToEnd() {}, focus() {} }) },
+      { createNodeMock: () => ({ scrollToEnd() {}, scrollTo() {}, focus() {} }) },
     )
   })
   audit(tree.toJSON())
@@ -203,6 +206,33 @@ async function tap(tree, label) {
   const existing = { ...mapApiEvent(photoFree), coverImage: actualCover }
   assert.equal(mapApiEventPreservingCover(photoFree, existing).coverImage, actualCover, "Photo-free map payload must preserve an existing cover")
   assert.equal(mapApiEvent({ ...photoFree, coverPhoto: actualCover }).coverImage, actualCover, "Real server photo takes priority over stock cover")
+  const withPhotos = { ...photoFree, participants: [{ id: "p1", firstName: "Ali", lastName: "Veli", profilePhoto: actualCover }, { id: "p2", firstName: "Ayşe", lastName: "Kaya", profilePhoto: null }] }
+  const detailed = mapApiEvent(withPhotos)
+  assert.equal(detailed.participants[0].avatar, actualCover, "Participant photo from event detail becomes the avatar")
+  assert.equal(detailed.participants[1].avatar, "", "Participants without a visible photo fall back to initials")
+  const listed = mapApiEventPreservingCover({ ...withPhotos, participants: withPhotos.participants.map(({ profilePhoto, ...rest }) => rest) }, detailed)
+  assert.equal(listed.participants[0].avatar, actualCover, "Photo-less list payload keeps participant photos loaded on detail")
+  const { byLatestMessage, roomTitle } = require("../src/native/Store.tsx")
+  const roomA = { ...mapApiEvent(photoFree), id: "a", lastMessageAt: "2026-10-06T13:00:00.000+03:00" }
+  const roomB = { ...mapApiEvent(photoFree), id: "b", lastMessageAt: "2026-10-06T10:30:00.000Z" }
+  const roomC = { ...mapApiEvent(photoFree), id: "c" }
+  assert.deepEqual([roomC, roomA, roomB].sort(byLatestMessage).map(room => room.id), ["b", "a", "c"], "Rooms sort by newest message across time zone formats; silent rooms last")
+  assert.equal(roomTitle(roomA), `${roomA.title} · ${roomA.date}`)
+  const { sortFeed } = require("../src/discover/sort.ts")
+  const feedEvent = (id, extra) => ({ ...mapApiEvent(photoFree), id, ...extra })
+  const feed = [
+    feedEvent("old-padel", { category: "Padel", createdAt: "2026-10-01T10:00:00Z", date: "20/10/2026", time: "18:00", latitude: 39.95, longitude: 32.85 }),
+    feedEvent("new-yoga", { category: "Yoga", createdAt: "2026-10-09T10:00:00Z", date: "20/10/2026", time: "18:00", latitude: 41.0, longitude: 29.0 }),
+    feedEvent("new-padel", { category: "Padel", createdAt: "2026-10-08T10:00:00Z", date: "25/10/2026", time: "09:00", latitude: undefined, longitude: undefined }),
+    feedEvent("soon-film", { category: "Film", createdAt: "2026-10-02T10:00:00Z", date: "15/10/2026", time: "20:00", latitude: 39.93, longitude: 32.86 }),
+  ]
+  const order = (sortBy, location) => sortFeed(feed, sortBy, { interests: ["Padel"], location }).map(event => event.id)
+  assert.deepEqual(order("recommended"), ["new-padel", "old-padel", "new-yoga", "soon-film"], "Recommended: user's interests first, newest first within")
+  assert.deepEqual(order("time-asc"), ["soon-film", "new-yoga", "old-padel", "new-padel"], "Nearest time first; same start time puts the newest first")
+  assert.deepEqual(order("time-desc"), ["new-padel", "new-yoga", "old-padel", "soon-film"], "Farthest time first; same start time puts the newest first")
+  const ankara = { latitude: 39.92, longitude: 32.85 }
+  assert.deepEqual(order("distance-near", ankara), ["soon-film", "old-padel", "new-yoga", "new-padel"], "Nearest to the user first; events without a location last")
+  assert.deepEqual(order("distance-far", ankara), ["new-yoga", "old-padel", "soon-film", "new-padel"], "Farthest from the user first; events without a location last")
   console.log("PASS: category cover fallback, real photo priority and image preservation across map/AI navigation.")
   global.fetch = server.fetch;
   const originalFetch = global.fetch
@@ -215,9 +245,23 @@ async function tap(tree, label) {
   let destination
   const registration = await mount("Onboarding", { step: 1, navigate: (route) => { destination = route } })
   const fields = registration.root.findAllByType("TextInput")
-  for (const [index, value] of ["Deniz", "Test", "deniz@example.com", "+90 532 123 45 67", "15061995", "Password1!"].entries()) {
+  for (const [index, value] of ["Deniz", "Test", "deniz@example.com", "+90 532 123 45 67", "Password1!"].entries()) {
     await act(async () => fields[index].props.onChangeText(value))
   }
+  // Birth date is chosen with the shared date picker (YYYY-MM-DD) and sent as dd/MM/yyyy.
+  const birthField = () => registration.root.findAll(n => n.props.mode === "date" && typeof n.props.onChangeText === "function")[0]
+  assert(birthField(), "Birth date opens the date picker")
+  assert.equal(birthField().props.defaultValue, "2000-01-01", "Picker starts at a plausible birth year")
+  const birthButton = registration.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Doğum Tarihi")
+  global.__testKeyboardDismissed = false
+  await act(async () => birthButton.props.onPress?.({ stopPropagation() {} }))
+  assert(global.__testKeyboardDismissed, "Opening the date picker closes the keyboard so it cannot hide the panel")
+  assert(registration.root.findAllByType("Modal").length > 0 && text(registration.toJSON()).includes("Tarih seç"), "Tapping birth date opens the date picker")
+  await tap(registration, "İptal")
+  await act(async () => birthField().props.onChangeText("2099-01-01"))
+  assert(text(registration.toJSON()).includes("Doğum tarihi gelecekte olamaz"), "Future birth dates are rejected")
+  await act(async () => birthField().props.onChangeText("1995-06-15"))
+  assert.equal(birthField().props.value, "1995-06-15")
   await tap(registration, "Topluluk ilkelerini okudum")
   await tap(registration, "Devam Et")
   assert.equal(destination, "onboarding-2")
@@ -230,8 +274,10 @@ async function tap(tree, label) {
   await assert.rejects(() => api.register({}), error => api.getApiErrorMessage(error).includes("Sunucuya bağlanılamadı"))
   storage.clear()
   global.fetch = originalFetch
+  await require("./check-blur.cjs")()
   await require("./check-map.cjs")({ mount, tap, act, text, storage })
   await require("./check-session.cjs")({ mount, tap, act, text, storage })
+  await require("./check-access.cjs")({ mount, tap, act, text, storage })
   await require("./check-recommendations.cjs")({ mount, tap, act, text, storage })
   await require("./check-password-reset.cjs")({ mount, tap, act, text, storage })
   await require("./check-server-state.cjs")({ mount, tap, act, text, storage })
@@ -267,13 +313,38 @@ async function tap(tree, label) {
   const detail = await mount("EventDetail", { eventId: EVENTS[0].id })
   await tap(detail, "Katıl")
   assert(text(detail.toJSON()).includes("Katıldın"))
+  assert(!text(detail.toJSON()).includes("Odaya Katıl"), "No room button below the minimum")
+  assert(text(detail.toJSON()).includes("minimum katılımcı sayısına ulaştığında oda açılacak"), "Explains when the room opens")
   await act(async () => detail.unmount())
+  server.events[0].confirmedParticipantCount = server.events[0].minParticipants
   const restored = await mount("EventDetail", { eventId: EVENTS[0].id })
+  await act(async () => { await new Promise(r=>setTimeout(r,20)) })
   assert(text(restored.toJSON()).includes("Katıldın"))
+  assert(text(restored.toJSON()).includes("Odaya Katıl"), "Room opens for members once the minimum is met")
+  storage.set("event-app:access-token", "rooms-test")
+  server.events[0].unreadCount = 3
+  const rooms = await mount("Rooms")
+  await act(async () => { await new Promise(r=>setTimeout(r,50)) })
+  assert(rooms.root.findAll(n => n.props.accessibilityLabel === "3 okunmamış mesaj").length > 0, "Rooms show their unread message count")
+  const liveSocket = require("./mock-socket.cjs").instances.at(-1)
+  await act(async () => liveSocket.receive("room:message", { eventId: EVENTS[0].id, at: new Date().toISOString(), userId: "someone-else" }))
+  assert(rooms.root.findAll(n => n.props.accessibilityLabel === "4 okunmamış mesaj").length > 0, "A new message from another member increments the badge live")
+  await act(async () => liveSocket.receive("room:message", { eventId: EVENTS[0].id, at: new Date().toISOString(), userId: server.user.id }))
+  assert(rooms.root.findAll(n => n.props.accessibilityLabel === "4 okunmamış mesaj").length > 0, "Own messages are never unread")
+  assert(text(rooms.toJSON()).includes("Sohbetler") && text(rooms.toJSON()).includes(`${EVENTS[0].category} · 01/10/2030`), "Open room is named after the activity and date")
+  await act(async () => rooms.unmount())
+  server.events[0].unreadCount = 0
+  const room = await mount("EventRoom", { eventId: EVENTS[0].id })
+  await act(async () => { await new Promise(r=>setTimeout(r,50)) })
+  assert(server.requests.some(r => r.path === `/events/${EVENTS[0].id}/messages/read` && r.method === "POST"), "Opening a room marks it as read")
+  await act(async () => room.unmount())
+  storage.delete("event-app:access-token")
+  server.events[0].confirmedParticipantCount = 1
   await tap(restored, "İptal Et")
   await act(async () => restored.unmount())
   global.__testLocationPermission = true
-  const createEvent = await mount("CreateEvent")
+  let createdNavigation
+  const createEvent = await mount("CreateEvent", { navigate: (route, opts) => { createdNavigation = { route, opts } } })
   await tap(createEvent, "Padel")
   await act(async () => {
     await new Promise((r) => setTimeout(r, 220))
@@ -286,16 +357,30 @@ async function tap(tree, label) {
     assert(field, `Missing ${mode} field`)
     await act(async()=>field.props.onChangeText(value))
   }
-  await tap(createEvent,"Devam Et")
+  const continueButton = () => createEvent.root.findAllByType("Pressable").find(n => text(n).includes("Devam Et"))
+  assert(text(createEvent.toJSON()).includes("Ne kadar sürecek"), "Duration is chosen on the date and time step")
+  assert.equal(continueButton().props.disabled, true, "A duration is required before continuing")
+  await tap(createEvent,"Özel süre")
+  const minutesField = createEvent.root.findAll(n => n.props.accessibilityLabel === "Dakika" && typeof n.props.onChangeText === "function")[0]
+  assert(minutesField, "Custom duration has a minutes field")
+  await act(async () => minutesField.props.onChangeText("75"))
+  assert.equal(createEvent.root.findAll(n => n.props.accessibilityLabel === "Dakika" && typeof n.props.onChangeText === "function")[0].props.value, "59", "Custom minutes are capped at 59")
   await tap(createEvent,"1 saat")
-  await act(async () => { await new Promise(r=>setTimeout(r,220)) })
+  assert.equal(continueButton().props.disabled, false, "Valid date, time and duration enable continue")
+  await tap(createEvent,"Devam Et")
   const location=createEvent.root.findByType("TextInput")
   await act(async()=>location.props.onChangeText("Native Test Mekanı"))
   await tap(createEvent,"Adresi bul")
   await tap(createEvent,"39.9200")
   await tap(createEvent,"Devam Et")
-  await tap(createEvent,"Devam Et")
-  await tap(createEvent,"Devam Et")
+  const maxCard = () => createEvent.root.findAllByType("Pressable").some(n => n.props.accessibilityLabel === "Maksimum artır")
+  assert(!maxCard(), "Max card is hidden while min is 2")
+  const pressLabel = async label => { const node = createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === label); assert(node, `Missing button: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })) }
+  await pressLabel("Minimum artır")
+  assert(maxCard(), "Max card appears once min is above 2")
+  await pressLabel("Minimum azalt")
+  assert(!maxCard(), "Max card hides again when min returns to 2")
+  assert(text(createEvent.toJSON()).includes("Hızlı ekle"), "Message to participants is on the participants step")
   const description = createEvent.root.findAllByType("TextInput")[0]
   await act(async () => description.props.onChangeText("Sunucuya kaydedilen test etkinliği"))
   await tap(createEvent,"Su getir.")
@@ -306,6 +391,7 @@ async function tap(tree, label) {
   assert.deepEqual(server.suggestions, ["Su getir."], "Dismissal is stored on the server")
   assert(!text(createEvent.toJSON()).includes("Raket gerekli."), "Dismissed suggestion disappears")
   await tap(createEvent,"Devam Et")
+  await tap(createEvent,"Devam Et")
   assert(!text(createEvent.toJSON()).includes("Önerilenler"), "Recommended visibility is not offered")
   await tap(createEvent,"Sadece Davet")
   await act(async () => { await new Promise(r=>setTimeout(r,20)) })
@@ -315,6 +401,7 @@ async function tap(tree, label) {
   assert(text(createEvent.toJSON()).includes("Önizleme"))
   await tap(createEvent,"Etkinliği Oluştur")
   assert.equal(server.events[0].id, 'created-on-server')
+  assert.deepEqual(createdNavigation, { route: 'event-detail', opts: { eventId: 'created-on-server', aboveHome: true } }, 'New event detail opens with only home below it')
   assert.equal(server.events[0].locationName, 'Native Test Mekanı')
   assert.equal(server.events[0].visibilityId, 'invite_only')
   assert.deepEqual(server.events[0].invitedUserIds, ['friend-1'], 'Selected friends are invited')
@@ -323,6 +410,14 @@ async function tap(tree, label) {
   assert.equal(server.events[0].maxParticipants, 100000, 'Closed max is sent as unlimited capacity')
   assert.equal(storage.has('event-app:v1'), false, 'No domain data is written to device storage')
   storage.set("event-app:access-token", "invite-test")
+  assert.equal(server.events[0].levelId, 'beginner', 'Interest level is sent when the interest has levels')
+  const levelless = await mount("CreateEvent")
+  await act(async () => { await new Promise(r=>setTimeout(r,20)) })
+  await tap(levelless, "Kahve")
+  await act(async () => { await new Promise(r=>setTimeout(r,220)) })
+  assert(!text(levelless.toJSON()).includes("Hangi seviyede"), "Interests without levels skip the level step")
+  assert(text(levelless.toJSON()).includes("Ne zaman"), "Level-less interest goes straight to date and time")
+  await act(async () => levelless.unmount())
   server.state.createBlocked = true
   const blockedCreate = await mount("CreateEvent")
   await act(async () => { await new Promise(r=>setTimeout(r,20)) })
@@ -345,7 +440,7 @@ async function tap(tree, label) {
   await require("./check-socket.cjs")({ storage })
   assert.equal(errors.length, 0, errors.join("\n"))
   console.log(
-    "PASS: 16 screens/states render as native hosts; search, server-backed join/cancel, no local domain persistence, all 10 creation steps and route coverage.",
+    "PASS: 16 screens/states render as native hosts; search, server-backed join/cancel, no local domain persistence, all 8 creation steps and route coverage.",
   )
 })()
   .catch((error) => {

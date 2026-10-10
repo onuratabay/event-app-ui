@@ -1,13 +1,15 @@
 import { palette } from "../theme/palette";
 import { CloseIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
+import SignOutButton from "../components/SignOutButton";
+import { gatedScreen } from "../native/access";
 import { useEffect, useState } from "react";
 import { AtmoBackground, InterestChip } from "../components/GlassUI";
 import { CameraIcon, ImageIcon } from "../components/Icons";
 import { Alert } from "react-native";
-import { getMapInterests, setUserInterests, setProfilePhoto, getApiErrorMessage } from "../api/client";
+import { completeProfile, getMapInterests, setUserInterests, setProfilePhoto, getApiErrorMessage } from "../api/client";
 import { selectPhoto } from "../native/media";
-import { useStore } from "../native/Store";
+import { updateStoreUser, useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
@@ -19,7 +21,8 @@ export default function InterestsScreen({
 }: Props) {
   const {
     data: store,
-    setData: setStore
+    setData: setStore,
+    refreshEvents
   } = useStore();
   const [catalog, setCatalog] = useState<Array<{ id: string; name: string }>>([]);
   const [saving, setSaving] = useState(false);
@@ -32,7 +35,14 @@ export default function InterestsScreen({
       const interests = await setUserInterests(catalog.filter(i => selected.has(i.name)).map(i => i.id));
       if ((photo || '') !== store.user.avatar) await setProfilePhoto(photo || '');
       setStore(p => ({ ...p, user: { ...p.user, interests: interests.map(i => i.name), avatar: photo || '' } }));
-      navigate('discover');
+      // Completing the profile (at least one interest) approves the account; only then the app opens.
+      if (store.user.status === 'profile_incomplete') {
+        const me = await completeProfile();
+        setStore(p => ({ ...p, user: updateStoreUser(p.user, me) }));
+        if (me.status?.enum !== 'approved') { Alert.alert('Profilin kaydedildi', 'Hesabın onaylandığında uygulamaya girebilirsin.'); return; }
+        void refreshEvents().catch(() => {});
+      } else if (gatedScreen(store.user.status)) { Alert.alert('Profilin kaydedildi', 'Hesabın onaylandığında uygulamaya girebilirsin.'); return; }
+      navigate('discover', { reset: true });
     } catch (error) { Alert.alert('Profil kaydedilemedi', getApiErrorMessage(error)); }
     finally { setSaving(false); }
   };
@@ -52,7 +62,7 @@ export default function InterestsScreen({
   };
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
-      <TopNavBar navigate={navigate} fallback="approval" onBack={() => navigate("approval", { back: true })} title="Profilini Tamamla" />
+      <TopNavBar navigate={navigate} fallback="discover" onBack={gatedScreen(store.user.status) ? undefined : () => navigate("discover", { back: true })} title="Profilini Tamamla" right={gatedScreen(store.user.status) ? <SignOutButton navigate={navigate} /> : undefined} />
 
       <Box style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull]]}>
         {/* Header */}
@@ -61,7 +71,7 @@ export default function InterestsScreen({
             Neler seni{"\n"}heyecanlandırır?
           </Label>
           <Label style={[[ui.textSm, ui.textWhite45, ui.mt2]]}>
-            Sana en uygun etkinlikleri bulmak için seç.
+            Sana en uygun etkinlikleri bulmak için en az bir ilgi alanı seç.
           </Label>
         </Box>
 

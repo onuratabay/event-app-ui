@@ -12,7 +12,6 @@ import DiscoveryFilterSheet from "../map/DiscoveryFilterSheet"
 import { apiDate, applyDiscoveryFilters, categoryVisual, dateRange, placeBounds, DEFAULT_FILTERS, filterError, type DiscoveryFilters, type MapPlace } from "../map/filters"
 import MapView, { Marker, type Region } from "react-native-maps"
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg"
-import BottomNav from "../components/BottomNav"
 import { FilterChip } from "../components/GlassUI"
 import { getApiErrorMessage, getMapEvents, getMapInterests, type ApiEvent } from "../api/client"
 import { mapApiEventPreservingCover, useStore } from "../native/Store"
@@ -244,7 +243,6 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
         {selected.length > 0 && <Scroll style={s.selection}>{selected.map(event => <Touch key={event.id} onPress={() => openEvent(event)} style={s.eventRow}><Box style={{ flex: 1 }}><Label style={s.panelTitle}>{event.interest.name}</Label><Label style={s.muted}>{event.date} · {event.startTime}</Label></Box><Label style={s.gold}>Detay →</Label></Touch>)}</Scroll>}
       </Box>
     </Box>
-    <BottomNav active="map" navigate={navigate} />
     {filterOpen && <DiscoveryFilterSheet value={filters} categories={categories} onApply={applyFilters} onClose={() => setFilterOpen(false)} />}
   </Box>
 }
