@@ -1,5 +1,6 @@
 import { palette } from "../theme/palette";
-import { StyleSheet } from "react-native"
+import { useEffect, useState } from "react"
+import { Keyboard, Platform, StyleSheet } from "react-native"
 import { useStore } from "../native/Store"
 import { Box, Label, Picture, Touch } from "../native/UI"
 import type { NavigateFn, Screen } from "../types"
@@ -11,6 +12,21 @@ const nav: [Screen, string][] = [
   ["rooms", "Odalar"],
   ["profile", "Profil"],
 ]
+/** Space the floating bar occupies above the bottom edge; content and sticky bars sit above it. */
+export const NAV_CLEARANCE = 74
+export function useKeyboardVisible() {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setVisible(true))
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setVisible(false))
+    return () => { show.remove(); hide.remove() }
+  }, [])
+  return visible
+}
+/** Bottom padding a screen needs so the global bar never covers its content (0 while typing). */
+export function useBottomNavInset() {
+  return useKeyboardVisible() ? 0 : NAV_CLEARANCE
+}
 export default function BottomNav({
   active,
   navigate,

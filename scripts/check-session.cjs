@@ -63,9 +63,25 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   assert.equal(search.length, 1, "Only the header has the search action")
   await act(async () => search[0].props.onPress())
   assert.equal(route, "search")
-  await tap(tree, "Harita")
-  assert.equal(route, "map")
   await act(async () => tree.unmount())
+  // The bar lives in the root layout: shown on app screens, hidden on sign-in/onboarding routes.
+  const React = require("react")
+  const { create } = require("react-test-renderer")
+  const { StoreProvider } = require("../src/native/Store.tsx")
+  const BottomNav = require("../src/components/BottomNav.tsx").default
+  const AppBottomNav = require("../src/components/AppBottomNav.tsx").default
+  let nav
+  await act(async () => { nav = create(React.createElement(StoreProvider, null, React.createElement(BottomNav, { active: "discover", navigate: next => { route = next } }))) })
+  await tap(nav, "Harita")
+  assert.equal(route, "map")
+  await act(async () => nav.unmount())
+  for (const [pathname, shown] of [["/event-detail", true], ["/search", true], ["/notifications", true], ["/event-room", true], ["/login", false], ["/onboarding-2", false], ["/", false]]) {
+    global.__testPathname = pathname
+    await act(async () => { nav = create(React.createElement(StoreProvider, null, React.createElement(AppBottomNav))) })
+    assert.equal(text(nav.toJSON()).includes("Keşfet"), shown, `Bottom bar on ${pathname} should be ${shown ? "shown" : "hidden"}`)
+    await act(async () => nav.unmount())
+  }
+  global.__testPathname = undefined
   storage.clear()
   global.fetch = oldFetch
   console.log("PASS: saved-session startup, hidden auth screens, refresh single-flight, logout race and navigation placement.")

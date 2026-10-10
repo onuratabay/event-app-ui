@@ -1,8 +1,9 @@
 import { palette } from "../theme/palette";
+import { useBottomNavInset } from "../components/BottomNav";
 import { CategoryIcon } from "../components/Icons";
 import { socketAction } from '../services/socket';
 import { participate, getApiErrorMessage, getEvent } from "../api/client";
-import { isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
+import { isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
@@ -22,6 +23,7 @@ export default function EventDetailScreen({
   navigate,
   eventId
 }: Props) {
+  const navInset = useBottomNavInset();
   const {
     data: store,
     setData: setStore
@@ -41,11 +43,12 @@ export default function EventDetailScreen({
     catch (error) { Alert.alert('Katılım güncellenemedi', getApiErrorMessage(error)); }
     finally { setJoining(false); }
   };
-  const isForming = !event.isActive;
   const isActive = event.isActive;
+  const roomReady = isRoomReady(event);
+  const isForming = !roomReady && !['cancelled', 'closed'].includes(event.status || '');
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <TopNavBar navigate={navigate} fallback="discover" title={event.title} subtitle={`${event.date} · ${event.time}`} floating right={<Touch accessibilityLabel="Paylaş" onPress={() => setShareOpen(true)} style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite80]]}><ShareIcon size={18} /></Touch>} />
-      <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol, ui.pb20]]}>
+      <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol, ui.pb20], { paddingBottom: 80 + navInset }]}>
         {/* Cover image header */}
         <Box style={[[ui.relative, ui.h72, ui.flexShrink0, ui.bgGray900]]}>
           <Picture uri={event.coverImage} accessibilityLabel={event.title} style={[[ui.wFull, ui.hFull]]} />
@@ -54,7 +57,7 @@ export default function EventDetailScreen({
           {/* Status */}
           <Box style={[[ui.fixed, ui.bottom4, ui.left5]]}>
             <Box style={[[ui.px3, ui.py15, ui.roundedFull, ui.textXs, ui.fontMedium, isActive ? [ui.bgEmerald50025, ui.border, ui.borderEmerald40040, ui.textEmerald300] : [ui.bgAmber50020, ui.border, ui.borderAmber40030, ui.textAmber300]]]}>
-              {event.status === "cancelled" ? "Etkinlik iptal edildi" : event.status === "closed" ? "Etkinlik sona erdi" : isActive ? "● Etkinlik Aktif" : "◌ Katılımcı Bekleniyor"}
+              {event.status === "cancelled" ? "Etkinlik iptal edildi" : event.status === "closed" ? "Etkinlik sona erdi" : isActive ? "● Etkinlik Aktif" : roomReady ? "● Oda açık" : "◌ Katılımcı Bekleniyor"}
             </Box>
           </Box>
         </Box>
@@ -87,11 +90,11 @@ export default function EventDetailScreen({
               icon: <StarIcon size={17} strokeWidth={1.75} />,
               label: "Mesafe",
               value: event.distance
-            }, {
+            }, ...(event.level ? [{
               icon: <CheckIcon size={17} strokeWidth={1.75} />,
               label: "Seviye",
               value: event.level
-            }].map((item, i) => <GlassCard key={i} style={[[ui.p3]]}>
+            }] : [])].map((item, i) => <GlassCard key={i} style={[[ui.p3]]}>
                   <Box style={[[ui.textWhite30, ui.mb1]]}>{item.icon}</Box>
                   <Label style={[[ui.text10px, ui.textWhite30, ui.uppercase, ui.trackingWider]]}>
                     {item.label}
@@ -290,17 +293,17 @@ export default function EventDetailScreen({
         </Sheet>}
 
       {/* Sticky CTA */}
-      <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40, ui.spaceY25], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up">
-        {/* Room entry — only when event is active AND user has joined */}
-        {isActive && joined ? <Touch onPress={() => navigate("event-room", {
+      <Box style={[[ui.fixed, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40, ui.spaceY25], { bottom: navInset }]} gradient={[palette.background, "transparent"]} gradientDirection="up">
+        {/* Room entry — only once the minimum is reached AND the user has joined */}
+        {roomReady && joined ? <Touch onPress={() => navigate("event-room", {
         eventId: event.id
       })} style={[[ui.wFull, ui.py35, ui.rounded2xl, ui.fontMedium, ui.textSm, ui.textEmerald300], {
         backgroundColor: "rgba(52,211,153,0.10)",
         borderWidth: 1,
         borderColor: "rgba(52,211,153,0.20)"
       }]}>
-            Etkinlik Odasına Gir →
-          </Touch> : isActive && !joined /* Active but not joined: show disabled room entry with hint */ ? <Box style={[[ui.wFull, ui.py35, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.gap2], {
+            Odaya Katıl →
+          </Touch> : roomReady && !joined /* Room open but not joined: show disabled room entry with hint */ ? <Box style={[[ui.wFull, ui.py35, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.gap2], {
         backgroundColor: "rgba(255,255,255,0.03)",
         borderWidth: 1,
         borderColor: "rgba(255,255,255,0.07)"
@@ -314,8 +317,8 @@ export default function EventDetailScreen({
             </Label>
           </Box> : !joined /* Forming event: not joined yet */ ? null : null}
 
-        {/* Forming event hint (not active + not joined) */}
-        {!event.isActive && !joined && <Box glass style={[[ui.rounded2xl, ui.px4, ui.py3, ui.flex, ui.itemsCenter, ui.gap25], {
+        {/* Below the minimum there is no room button; explain when it opens */}
+        {isForming && <Box glass style={[[ui.rounded2xl, ui.px4, ui.py3, ui.flex, ui.itemsCenter, ui.gap25], {
         backgroundColor: "rgba(251,191,36,0.11)",
         borderWidth: 1,
         borderColor: "rgba(251,191,36,0.22)"
@@ -326,7 +329,7 @@ export default function EventDetailScreen({
               <Line x1="12" y1="16" x2="12.01" y2="16" />
             </Vector>
             <Label style={[[ui.textXs, ui.textAmber30060]]}>
-              Etkinlik yeterli katılımcıya ulaştığında oda açılacak.
+              Etkinlik minimum katılımcı sayısına ulaştığında oda açılacak.
             </Label>
           </Box>}
 

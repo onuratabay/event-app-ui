@@ -15,7 +15,7 @@ Run the `vibe-us` backend on port 3000 with working MySQL credentials. In Expo G
 ## Structure
 
 - `app/`: 16 screen routes plus root layout and missing-route fallback.
-- `src/screens/`: welcome, three onboarding steps, approval, interests, discovery, event details, rooms/chat, map, ten-step event creation, search, notifications and profile.
+- `src/screens/`: welcome, three onboarding steps, approval, interests, discovery, event details, rooms/chat, map, eight-step event creation, search, notifications and profile.
 - `src/native/`: reusable native components, image picking, sharing, navigation and persisted state.
 - `src/theme/styles.ts`: StyleSheet tokens preserving the original dark/gold palette and spacing.
 - `assets/fonts/`: bundled Outfit and Fraunces fonts with OFL licenses.

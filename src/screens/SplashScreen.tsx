@@ -1,4 +1,6 @@
 import { palette } from "../theme/palette";
+import { gatedScreen } from "../native/access";
+import type { Screen } from "../types";
 import { CategoryIcon } from "../components/Icons";
 import { getCurrentUser, hasSession, logout } from "../api/client";
 import { useEffect, useRef } from "react";
@@ -20,11 +22,11 @@ export default function SplashScreen({
     let timer: ReturnType<typeof setTimeout> | undefined;
     const startedAt = Date.now();
     const resolveDestination = async () => {
-      let destination: "discover" | "login" | "welcome" = "welcome";
+      let destination: Screen = "welcome";
       try {
         if (await hasSession()) {
-          await getCurrentUser();
-          destination = "discover";
+          const me = await getCurrentUser();
+          destination = gatedScreen(me.status?.enum) ?? "discover";
         }
       } catch {
         // A stale local token must never open an empty authenticated feed.
@@ -32,7 +34,7 @@ export default function SplashScreen({
         destination = "login";
       }
       const wait = Math.max(0, 2850 - (Date.now() - startedAt));
-      timer = setTimeout(() => { if (active) navigate(destination); }, wait);
+      timer = setTimeout(() => { if (active) navigate(destination, { reset: true }); }, wait);
     };
     void resolveDestination();
     return () => { active = false; if (timer) clearTimeout(timer); };

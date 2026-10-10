@@ -5,7 +5,6 @@ import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
 import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getReferenceRequests, getGuestReferenceCredit, getApiErrorMessage, type ReferenceRequest } from "../api/client";
-import BottomNav from "../components/BottomNav";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
 import { InstagramIcon } from "../components/Icons";
@@ -75,7 +74,7 @@ export default function ProfileScreen({
     try {
       await logout();
       resetSession();
-      navigate("welcome");
+      navigate("welcome", { reset: true });
     } catch { Alert.alert("Çıkış yapılamadı", "Lütfen tekrar dene."); }
     finally { setLoggingOut(false); }
   };
@@ -337,7 +336,6 @@ export default function ProfileScreen({
 
       {/* Coming soon for profile */}
 
-      <BottomNav active="profile" navigate={navigate} />
     </Box>;
 }
 

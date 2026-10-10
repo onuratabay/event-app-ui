@@ -16,6 +16,9 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context"
 import { StoreProvider } from "../src/native/Store"
 import { ErrorNoticeProvider } from "../src/components/ErrorNotice"
 import ApiLoadingOverlay from "../src/components/ApiLoadingOverlay"
+import AppBottomNav from "../src/components/AppBottomNav"
+import AccessGuard from "../src/components/AccessGuard"
+import HardwareBack from "../src/components/HardwareBack"
 void SplashScreen.preventAutoHideAsync()
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -54,6 +57,9 @@ export default function RootLayout() {
                   animationDuration: 100,
                 }}
               />
+              <AppBottomNav />
+              <AccessGuard />
+              <HardwareBack />
             </StoreProvider></BlurSurface>
           </KeyboardAvoidingView>
         </ErrorNoticeProvider>

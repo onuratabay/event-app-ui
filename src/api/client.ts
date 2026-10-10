@@ -13,7 +13,7 @@ export interface ApiEvent {
   id: string
   owner: { id: string; firstName: string; lastName: string }
   interest: { id: string; slug: string; name: string }
-  level: { enum: string; name: string }
+  level: { enum: string; name: string } | null
   date: string
   startTime: string
   durationMinutes: number | null
@@ -26,9 +26,15 @@ export interface ApiEvent {
   description: string
   requirements: string | null
   confirmedParticipantCount: number
-  participants: Array<{ id: string; firstName: string; lastName: string }>
+  // profilePhoto is only filled on event detail, and only when the viewer has a photo.
+  participants: Array<{ id: string; firstName: string; lastName: string; profilePhoto?: string | null }>
   isFavorite: boolean
   status: { enum: string; name: string }
+  createdAt?: string
+  // Latest chat message time; only sent to room members.
+  lastMessageAt?: string | null
+  // Messages from others since the member last read the room.
+  unreadCount?: number
   viewerParticipationStatus?: string | null
 }
 
@@ -234,8 +240,10 @@ export function respondToReference(id: string, decision: "approved" | "declined"
 }
 export async function hasSession() { return Boolean((await AsyncStorage.getItem(ACCESS_TOKEN_KEY)) || (await AsyncStorage.getItem(REFRESH_TOKEN_KEY))) }
 
+// Each interest lists its own levels (managed in the interest_levels table); empty means no level step.
+export interface InterestLevel { id: string; enum: string; name: string }
 export function getMapInterests(signal?: AbortSignal) {
-  return request<Array<{ id: string; name: string; slug: string }>>("/interests", { signal, headers: { "Accept-Language": "tr" } })
+  return request<Array<{ id: string; name: string; slug: string; levels?: InterestLevel[] }>>("/interests", { signal, headers: { "Accept-Language": "tr" } })
 }
 
 export function forgotPassword(email: string) {
@@ -245,9 +253,11 @@ export function resetPassword(token: string, newPassword: string) {
   return request<{ message: string }>("/auth/reset-password", { method: "POST", body: JSON.stringify({ token: token.trim(), newPassword, language: "tr" }) }, false)
 }
 
-export interface ApiUser { id: string; firstName: string; lastName: string; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
+export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
 export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; recommendationProfile?: import('../recommendations/model').RecommendationProfile }
 export const getCurrentUser = () => request<ApiUser>('/auth/me', { method: 'POST' })
+// profile_incomplete → approved once at least one interest is saved (photo optional).
+export const completeProfile = () => request<ApiUser>('/users/me/profile/complete', { method: 'POST' })
 export const getUserInterests = () => request<Array<{ id: string; name: string }>>('/users/me/interests')
 export const setUserInterests = (interestIds: string[]) => request<Array<{ id: string; name: string }>>('/users/me/interests', { method: 'PUT', body: JSON.stringify({ interestIds }) })
 export const updateProfile = (value: Partial<ApiUser>) => request<ApiUser>('/users/me/profile', { method: 'PATCH', body: JSON.stringify(value) })
@@ -279,6 +289,7 @@ export const getEnums = (group: string) => request<Array<{ id: string; enum: str
 export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value) })
 export interface ApiMessage { kind?: 'message' | 'announcement'; id: string; text: string; createdAt: string; user: { id: string; firstName: string; lastName: string } }
 export const getMessages = (id: string, signal?: AbortSignal, cursor?: string) => request<{ items: ApiMessage[]; nextCursor?: string | null }>(`/events/${id}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}&limit=30` : '?limit=30'}`, { signal })
+export const markRoomRead = (id: string) => request<{ eventId: string; unreadCount: number }>(`/events/${id}/messages/read`, { method: 'POST' })
 export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text }) })
 export async function getMyEvents(page = 1) {
   const lists = await Promise.all(['mine', 'participating', 'favorites'].map(kind => request<EventListResponse>(`/events/${kind}?page=${page}&limit=30`)))
