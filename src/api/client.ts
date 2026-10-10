@@ -255,6 +255,8 @@ export function resetPassword(token: string, newPassword: string) {
 export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
 export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; recommendationProfile?: import('../recommendations/model').RecommendationProfile }
 export const getCurrentUser = () => request<ApiUser>('/auth/me', { method: 'POST' })
+// profile_incomplete → approved once at least one interest is saved (photo optional).
+export const completeProfile = () => request<ApiUser>('/users/me/profile/complete', { method: 'POST' })
 export const getUserInterests = () => request<Array<{ id: string; name: string }>>('/users/me/interests')
 export const setUserInterests = (interestIds: string[]) => request<Array<{ id: string; name: string }>>('/users/me/interests', { method: 'PUT', body: JSON.stringify({ interestIds }) })
 export const updateProfile = (value: Partial<ApiUser>) => request<ApiUser>('/users/me/profile', { method: 'PATCH', body: JSON.stringify(value) })

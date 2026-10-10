@@ -137,12 +137,13 @@ function Step1({
     if (creating) return;
     setCreating(true); setCreateError(null);
     try {
-      if (store.onboarding.accountId) { navigate("onboarding-2"); return; }
+      // profile_incomplete accounts go straight to photo + interests; others continue with references.
+      if (store.onboarding.accountId) { navigate(store.user.status === "profile_incomplete" ? "interests" : "onboarding-2"); return; }
       const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: `+90${phoneDigits(form.telefon)}`, password: form.sifre, birthDate: form.dogum });
       const id = String((response.user as { id: string }).id);
       const status = (response.user as { status?: { enum: string } }).status?.enum;
       setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}`, status } }));
-      if (mounted.current) navigate("onboarding-2");
+      if (mounted.current) navigate(status === "profile_incomplete" ? "interests" : "onboarding-2");
     } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
     finally { if (mounted.current) setCreating(false); }
   };

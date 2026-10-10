@@ -17,9 +17,11 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   global.fetch = async (url, options = {}) => {
     const path = new URL(url).pathname
     calls.push(path)
-    const body = path === "/auth/login" ? { user: user(current), tokens: { accessToken: "a", refreshToken: "r" } }
+    const body = path === "/auth/login" || path === "/auth/register" ? { user: user(current), tokens: { accessToken: "a", refreshToken: "r" } }
       : path === "/auth/me" ? user(current)
-      : path === "/users/me/interests" || path === "/interests" ? []
+      : path === "/users/me/profile/complete" ? (current = "approved", user(current))
+      : path === "/interests" ? [{ id: "padel", name: "Padel", slug: "padel", levels: [] }]
+      : path === "/users/me/interests" ? (options.body ? [{ id: "padel", name: "Padel" }] : [])
       : path === "/users/me/preferences" ? {}
       : { items: [], total: 0 }
     return { ok: true, status: 200, json: async () => body }
@@ -95,6 +97,34 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     global.__testPathname = undefined
     global.__testRootState = undefined
   }
+
+  // Registration: a profile_incomplete account goes straight to photo + interests.
+  storage.clear(); current = "profile_incomplete"
+  let registered
+  const registration = await mount("Onboarding", { step: 1, navigate: route => { registered = route } })
+  const inputs = registration.root.findAllByType("TextInput")
+  for (const [index, value] of ["Ada", "Yeni", "ada@example.com", "+90 532 000 00 00", "Password1!"].entries()) await act(async () => inputs[index].props.onChangeText(value))
+  await act(async () => registration.root.findAll(n => n.props.mode === "date" && typeof n.props.onChangeText === "function")[0].props.onChangeText("1995-06-15"))
+  await tap(registration, "Topluluk ilkelerini okudum")
+  await tap(registration, "Devam Et")
+  assert.equal(registered, "interests", "profile_incomplete registration opens profile completion")
+  await act(async () => registration.unmount())
+
+  // Profile completion: an interest is required, the photo is not; saving approves and opens the app.
+  storage.set("event-app:access-token", "a"); current = "profile_incomplete"; calls.length = 0
+  let completed
+  const profile = await mount("Interests", { navigate: (route, opts) => { completed = { route, opts } } })
+  await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+  const finish = () => profile.root.findAllByType("Pressable").find(n => text(n).includes("Kurulumu Tamamla"))
+  assert.equal(finish().props.disabled, true, "Interests are required before finishing")
+  await tap(profile, "Padel")
+  assert.equal(finish().props.disabled, false, "One interest is enough; the photo is optional")
+  await tap(profile, "Kurulumu Tamamla")
+  await act(() => new Promise(resolve => setTimeout(resolve, 20)))
+  assert(calls.includes("/users/me/profile/complete"), "Saving asks the server to approve the completed profile")
+  assert.equal(current, "approved")
+  assert.deepEqual(completed, { route: "discover", opts: { reset: true } }, "Approved account enters the app with a clean history")
+  await act(async () => profile.unmount())
 
   // Saved sessions resolve the same way on startup.
   storage.set("event-app:access-token", "a"); current = "profile_incomplete"
