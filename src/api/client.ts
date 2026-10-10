@@ -254,13 +254,17 @@ export function resetPassword(token: string, newPassword: string) {
 }
 
 export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
-export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; recommendationProfile?: import('../recommendations/model').RecommendationProfile }
+export interface NotificationPreferences { invites?: boolean; messages?: boolean; reminders?: boolean }
+export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; recommendationProfile?: import('../recommendations/model').RecommendationProfile; notifications?: NotificationPreferences; mutedRooms?: { ids: string[] } }
 export const getCurrentUser = () => request<ApiUser>('/auth/me', { method: 'POST' })
 // profile_incomplete → approved once at least one interest is saved (photo optional).
 export const completeProfile = () => request<ApiUser>('/users/me/profile/complete', { method: 'POST' })
 export const getUserInterests = () => request<Array<{ id: string; name: string }>>('/users/me/interests')
 export const setUserInterests = (interestIds: string[]) => request<Array<{ id: string; name: string }>>('/users/me/interests', { method: 'PUT', body: JSON.stringify({ interestIds }) })
 export const updateProfile = (value: Partial<ApiUser>) => request<ApiUser>('/users/me/profile', { method: 'PATCH', body: JSON.stringify(value) })
+// The server bumps the token version, so every session (this one too) must sign in again afterwards.
+export const changePassword = (oldPassword: string, newPassword: string) => request<{ message: string }>('/users/me/password', { method: 'PATCH', body: JSON.stringify({ oldPassword, newPassword, language: 'tr' }) })
+export const deleteAccount = (password: string) => request<{ message: string }>('/users/me', { method: 'DELETE', body: JSON.stringify({ password, language: 'tr' }) })
 export const setProfilePhoto = (photo: string) => request('/users/me/photo', { method: photo ? 'PUT' : 'DELETE', ...(photo ? { body: JSON.stringify({ photo }) } : {}) })
 export const getPreferences = () => request<Preferences>('/users/me/preferences')
 let preferenceWrites = Promise.resolve<unknown>(undefined)
@@ -287,7 +291,12 @@ export const getActiveFriends = () => request<{ items: Array<{ user: FriendUser 
 export const getInvitations = () => request<EventListResponse>('/events/invitations?limit=50')
 export const getEnums = (group: string) => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`)
 export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value) })
-export interface ApiMessage { kind?: 'message' | 'announcement'; id: string; text: string; createdAt: string; user: { id: string; firstName: string; lastName: string } }
+export interface ApiMessage { kind?: 'message' | 'announcement'; id: string; text: string; createdAt: string; editedAt?: string | null; deleted?: boolean; user: { id: string; firstName: string; lastName: string } }
+export const editMessage = (eventId: string, messageId: string, text: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ text }) })
+export const deleteMessage = (eventId: string, messageId: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'DELETE' })
+// When each other member last read the room ("görüldü").
+export const getMessageReads = (eventId: string) => request<{ items: Array<{ userId: string; readAt: string }> }>(`/events/${eventId}/messages/reads`)
+export const reportUser = (userId: string, description: string) => request<{ message: string }>(`/reports/users/${userId}`, { method: 'POST', body: JSON.stringify({ description, language: 'tr' }) })
 export const getMessages = (id: string, signal?: AbortSignal, cursor?: string) => request<{ items: ApiMessage[]; nextCursor?: string | null }>(`/events/${id}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}&limit=30` : '?limit=30'}`, { signal })
 export const markRoomRead = (id: string) => request<{ eventId: string; unreadCount: number }>(`/events/${id}/messages/read`, { method: 'POST' })
 export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text }) })
@@ -303,4 +312,4 @@ export async function getSocketToken(renew = false) {
   return AsyncStorage.getItem(ACCESS_TOKEN_KEY)
 }
 
-export const getEventActivity = (id: string) => request<{ waitlist: Array<{ userId: string }>; checkins: Array<{ userId: string }> }>(`/events/${id}/activity`)
+export const getEventActivity = (id: string) => request<{ waitlist: Array<{ userId: string; createdAt?: string }>; checkins: Array<{ userId: string; method?: string; createdAt?: string }> }>(`/events/${id}/activity`)

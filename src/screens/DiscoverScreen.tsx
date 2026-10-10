@@ -13,7 +13,7 @@ import { HeartButton, RippleButton, SpringButton } from "../components/Expressiv
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
 import { BellIcon, SearchIcon, SparklesIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
 import { copyEvent, shareEvent as shareNativeEvent } from "../native/media";
-import { participantCount, useStore } from "../native/Store";
+import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, participantCount, useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
@@ -148,8 +148,8 @@ function ShareSheet({
                   {event.date} · {event.time} · {event.location}
                 </Label>
               </Box>
-              <Box style={[[ui.fixed, ui.top3, ui.right3, ui.px2, ui.py05, ui.roundedFull, ui.text10px, ui.fontMedium, event.isActive ? [ui.bgEmerald50020, ui.border, ui.borderEmerald40030, ui.textEmerald300] : [ui.bgAmber50015, ui.border, ui.borderAmber40025, ui.textAmber300]]]}>
-                {event.isActive ? "● Aktif" : "◌ Bekleniyor"}
+              <Box style={[[ui.fixed, ui.top3, ui.right3, ui.px2, ui.py05, ui.roundedFull, ui.text10px, ui.fontMedium, isLivePhase(eventPhase(event)) ? [ui.bgEmerald50020, ui.border, ui.borderEmerald40030, ui.textEmerald300] : [ui.bgAmber50015, ui.border, ui.borderAmber40025, ui.textAmber300]]]}>
+                {eventPhase(event) === "forming" ? "◌ Bekleniyor" : EVENT_PHASE_LABEL[eventPhase(event)]}
               </Box>
             </Box>
           </Box>
@@ -306,12 +306,12 @@ function EventCard({
 
           {/* Status */}
           <Box style={[[ui.fixed, ui.top3, ui.left3]]}>
-            <Box style={[[ui.px25, ui.py1, ui.roundedFull, ui.textXs, ui.fontMedium, event.isActive ? [ui.textEmerald300] : [ui.textAmber300]], {
-            backgroundColor: event.isActive ? "rgba(52,211,153,0.15)" : "rgba(251,191,36,0.12)",
+            <Box style={[[ui.px25, ui.py1, ui.roundedFull, ui.textXs, ui.fontMedium, isLivePhase(eventPhase(event)) ? [ui.textEmerald300] : [ui.textAmber300]], {
+            backgroundColor: isLivePhase(eventPhase(event)) ? "rgba(52,211,153,0.15)" : "rgba(251,191,36,0.12)",
             borderWidth: 1,
-            borderColor: event.isActive ? "rgba(52,211,153,0.25)" : "rgba(251,191,36,0.2)"
+            borderColor: isLivePhase(eventPhase(event)) ? "rgba(52,211,153,0.25)" : "rgba(251,191,36,0.2)"
           }]} glass>
-              {event.isActive ? "● Aktif" : "◌ Katılımcı Bekleniyor"}
+              {EVENT_PHASE_LABEL[eventPhase(event)]}
             </Box>
           </Box>
 

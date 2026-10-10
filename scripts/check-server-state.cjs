@@ -13,11 +13,13 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   storage.set('event-app:v1', JSON.stringify(legacy))
   let tree = await mount('Profile')
   assert(text(tree.toJSON()).includes('Sunucu Kullanıcısı'))
-  assert(text(tree.toJSON()).includes('Sunucu profili'))
+  // The profile no longer shows a bio; the city proves server data was restored.
+  assert(text(tree.toJSON()).includes('Ankara'))
+  assert(!text(tree.toJSON()).includes('Sunucu profili'))
   assert.equal(storage.has('event-app:v1'), false)
   assert(server.preferences.recommendationProfile.equipmentByCity.izmir.includes('racket'))
   await act(async () => tree.unmount())
-  server.user.bio = 'Başka cihazda güncellendi'
+  server.user.city = 'Başka cihazda güncellendi'
   tree = await mount('Profile')
   assert(text(tree.toJSON()).includes('Başka cihazda güncellendi'))
   await act(async () => tree.unmount())
@@ -60,7 +62,7 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   tree = await mount('EventRoom', { eventId: server.events[0].id })
   assert(text(tree.toJSON()).includes('Sunucuda saklanan mesaj'))
   await act(async () => tree.unmount())
-  // An empty backend must render an empty feed, never demo events.
+  // An empty backend must render an empty feed.
   server.events.splice(0)
   tree = await mount('Discover')
   assert(!text(tree.toJSON()).includes('Padel After Work'))
@@ -68,7 +70,7 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   global.fetch = async () => { throw new Error('offline') }
   tree = await mount('Profile')
   assert(tree.root.findByType(require('../src/components/ErrorNotice.tsx').ErrorNotice).props.message.includes('Hesap verileri sunucudan yüklenemedi'))
-  assert(!text(tree.toJSON()).includes('Sunucu profili'))
+  assert(!text(tree.toJSON()).includes('Sunucu Kullanıcısı'))
   await act(async () => tree.unmount())
   assert([...storage.keys()].every(key => key.includes('token')), 'Only session tokens remain locally')
   storage.clear(); global.fetch = originalFetch

@@ -2,21 +2,52 @@ import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
 import { UsersIcon, LocationIcon, ClockIcon, StarIcon, SendIcon } from "../components/Icons";
 import { useScreenActive } from '../native/useScreenActive';
-import { EventActivity } from '../components/EventActivity';
-import { onSocket, retainEvent, socketAction } from '../services/socket';
+import { onSocket, retainEvent, socketAction, socketConnected } from '../services/socket';
 import TopNavBar from "../components/TopNavBar";
-import { useEffect, useRef, useState } from "react";
-import { ScrollView, Alert } from "react-native";
-import { AtmoBackground, GlassCard } from "../components/GlassUI";
-import { getMessages, getApiErrorMessage, getEvent, markRoomRead, type ApiMessage } from "../api/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import { AtmoBackground } from "../components/GlassUI";
+import { deleteMessage, editMessage, getApiErrorMessage, getEvent, getEventActivity, getMessageReads, getMessages, markRoomRead, putPreference, reportUser, sendMessage, type ApiMessage } from "../api/client";
 import { EMPTY_USER, mapApiEvent, participantCount, roomTitle, setOpenRoom } from "../native/Store";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
-import { NavigateFn } from "../types";
+import type { ChatMessage, NavigateFn } from "../types";
 interface Props {
   navigate: NavigateFn;
   eventId?: string;
+}
+// Same limit the backend enforces for chat messages and edits.
+const MAX_MESSAGE_LENGTH = 2000;
+const QUICK_REPLIES = ["Yoldayım 🚶", "5 dk gecikeceğim ⏱️", "Geldim 📍"];
+const REPORT_REASONS = ["Taciz veya hakaret", "Spam veya reklam", "Uygunsuz içerik", "Güvenliğimi tehdit ediyor"];
+type RoomMessage = ChatMessage & { announcement?: boolean; deleted?: boolean; edited?: boolean };
+type SheetOption = { label: string; onPress: () => void; danger?: boolean };
+const dayKey = (iso?: string) => (iso || "").slice(0, 10);
+function dayLabel(iso?: string) {
+  const date = new Date(iso || "");
+  if (isNaN(date.getTime())) return "";
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = new Date(date); day.setHours(0, 0, 0, 0);
+  const diff = Math.round((today.getTime() - day.getTime()) / 86400000);
+  if (diff === 0) return "Bugün";
+  if (diff === 1) return "Dün";
+  return date.toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
+}
+/** Same look on iOS and Android (Android alerts are limited to three buttons). */
+function ActionSheet({ title, options, onClose }: { title?: string; options: SheetOption[]; onClose: () => void }) {
+  return <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+    <Pressable accessibilityLabel="Menüyü kapat" style={s.sheetBackdrop} onPress={onClose}>
+      <Pressable style={s.sheet} onPress={() => {}}>
+        {title ? <Label style={s.sheetTitle} numberOfLines={2}>{title}</Label> : null}
+        {options.map(option => <Touch key={option.label} accessibilityLabel={option.label} onPress={() => { onClose(); option.onPress(); }} style={s.sheetOption}>
+          <Label style={[s.sheetLabel, option.danger && s.danger]}>{option.label}</Label>
+        </Touch>)}
+        <Touch accessibilityLabel="Vazgeç" onPress={onClose} style={[s.sheetOption, s.sheetCancel]}><Label style={s.sheetLabel}>Vazgeç</Label></Touch>
+      </Pressable>
+    </Pressable>
+  </Modal>;
 }
 export default function EventRoomScreen({
   navigate,
@@ -28,27 +59,59 @@ export default function EventRoomScreen({
     setData: setStore
   } = useStore();
   const screenActive = useScreenActive();
-  const EVENTS = store.events;
   const ME = store.user;
-  const event = EVENTS.find(e => e.id === eventId);
-  const [messages, setMessages] = useState<import('../types').ChatMessage[]>([]);
+  const event = store.events.find(e => e.id === eventId);
+  const [messages, setMessages] = useState<RoomMessage[]>([]);
+  const messagesRef = useRef<RoomMessage[]>([]);
+  messagesRef.current = messages;
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  // The backend decides whether the room is open (minimum participants, cancellation, membership).
+  const [closedReason, setClosedReason] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  const [typing, setTyping] = useState(false);
+  const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const typingExpiry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTyping = useRef(0);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const mapMessage = (message: ApiMessage) => ({ id: message.id, createdAt: message.createdAt, text: message.kind === 'announcement' ? `📣 ${message.text}` : message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}` } });
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [input, setInput] = useState("");
+  const [editing, setEditing] = useState<RoomMessage | null>(null);
+  const [sheet, setSheet] = useState<{ title?: string; options: SheetOption[] } | null>(null);
+  const [reads, setReads] = useState<Record<string, string>>({});
+  const [checkins, setCheckins] = useState<string[]>([]);
+  const [waitlist, setWaitlist] = useState<string[]>([]);
+  const [announcement, setAnnouncement] = useState("");
+  const [pinnedOpen, setPinnedOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const nearBottom = useRef(true);
+  const stickToEnd = useRef(true);
+  const mapMessage = (message: ApiMessage): RoomMessage => ({ id: message.id, createdAt: message.createdAt, announcement: message.kind === 'announcement', deleted: message.deleted === true, edited: Boolean(message.editedAt), text: message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}`.trim() } });
+  const upsert = (incoming: RoomMessage[]) => setMessages(prev => [...new Map([...prev, ...incoming].map(m => [m.id, m])).values()]);
+  const markSeen = (userId: string, at?: string) => {
+    if (!userId || userId === ME.id || !at) return;
+    setReads(prev => (Date.parse(prev[userId] || "") || 0) >= Date.parse(at) ? prev : { ...prev, [userId]: at });
+  };
   useEffect(() => {
     if (!eventId || !ME.id || !screenActive) return;
     let active = true;
     const controller = new AbortController();
     setLoading(true);
     const load = async () => {
-      try { const result = await getMessages(eventId, controller.signal); if (active) { setMessages(prev => [...new Map([...result.items.map(mapMessage), ...prev].map(m => [m.id, m])).values()]); setCursor(result.nextCursor || null); setError(''); } }
-      catch (cause) { if (active) setError(getApiErrorMessage(cause, 'Mesajlar yüklenemedi.')); }
+      try {
+        const result = await getMessages(eventId, controller.signal);
+        if (!active) return;
+        upsert(result.items.map(mapMessage)); setCursor(result.nextCursor || null); setError(''); setClosedReason(null);
+        // Secondary room data; failures here never block the chat.
+        void getMessageReads(eventId).then(r => { if (active) setReads(Object.fromEntries(r.items.map(item => [item.userId, item.readAt]))); }).catch(() => {});
+        void getEventActivity(eventId).then(r => { if (active) { setCheckins(r.checkins.map(c => c.userId)); setWaitlist(r.waitlist.map(w => w.userId)); } }).catch(() => {});
+      }
+      catch (cause) {
+        if (!active) return;
+        const message = getApiErrorMessage(cause, 'Mesajlar yüklenemedi.');
+        if (cause instanceof Error && /^API 403:/.test(cause.message)) setClosedReason(message); else setError(message);
+      }
       finally { if (active) setLoading(false); }
     };
     if (!event) void getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(() => {});
@@ -62,149 +125,323 @@ export default function EventRoomScreen({
       readTimer = setTimeout(() => { void markRoomRead(eventId).catch(() => {}); }, delay);
     };
     markRead();
-    const unsubscribe = onSocket('chat:message_created', payload => {
-      if (payload.eventId !== eventId) return;
-      setMessages(prev => [...prev.filter(m => m.id !== payload.message.id), mapMessage(payload.message)]);
-      void socketAction('chat:read', { eventId, messageId: payload.message.id }).catch(() => {});
-      markRead(1000);
-    });
-    const announced = onSocket('event:announcement', payload => { if (payload.eventId === eventId) setMessages(prev => [...prev.filter(m => m.id !== payload.message.id), mapMessage(payload.message)]); });
-    const typingListener = onSocket('chat:typing', payload => {
-      if (payload.eventId !== eventId || payload.userId === ME.id) return;
-      setTyping(payload.typing === true);
-      if (typingExpiry.current) clearTimeout(typingExpiry.current);
-      typingExpiry.current = setTimeout(() => setTyping(false), 3000);
-    });
-    const sync = onSocket('sync:required', () => { void load(); });
+    const listeners = [
+      onSocket('chat:message_created', payload => {
+        if (payload.eventId !== eventId) return;
+        upsert([mapMessage(payload.message)]);
+        void socketAction('chat:read', { eventId, messageId: payload.message.id }).catch(() => {});
+        markRead(1000);
+      }),
+      onSocket('event:announcement', payload => { if (payload.eventId === eventId) upsert([mapMessage(payload.message)]); }),
+      onSocket('chat:message_updated', payload => { if (payload.eventId === eventId) upsert([mapMessage(payload.message)]); }),
+      onSocket('chat:message_deleted', payload => { if (payload.eventId === eventId) upsert([mapMessage(payload.message)]); }),
+      // "Görüldü": REST reads carry a time, socket reads point at a message.
+      onSocket('chat:read', payload => {
+        if (payload.eventId !== eventId) return;
+        markSeen(payload.userId, payload.at || messagesRef.current.find(m => m.id === payload.messageId)?.createdAt);
+      }),
+      onSocket('event:checkin', payload => { if (payload.eventId === eventId) setCheckins(prev => prev.includes(payload.userId) ? prev : [...prev, payload.userId]); }),
+      onSocket('chat:typing', payload => {
+        if (payload.eventId !== eventId || payload.userId === ME.id) return;
+        setTypingUserId(payload.typing === true ? payload.userId : null);
+        if (typingExpiry.current) clearTimeout(typingExpiry.current);
+        typingExpiry.current = setTimeout(() => setTypingUserId(null), 3000);
+      }),
+      onSocket('sync:required', () => { void load(); }),
+    ];
     void load();
-    return () => { active = false; controller.abort(); release(); unsubscribe(); announced(); sync(); typingListener(); if (typingExpiry.current) clearTimeout(typingExpiry.current); if (readTimer) { clearTimeout(readTimer); void markRoomRead(eventId).catch(() => {}); } setOpenRoom(null); };
+    return () => { active = false; controller.abort(); release(); listeners.forEach(stop => stop()); if (typingExpiry.current) clearTimeout(typingExpiry.current); if (readTimer) { clearTimeout(readTimer); void markRoomRead(eventId).catch(() => {}); } setOpenRoom(null); };
   }, [eventId, reload, ME.id, screenActive]);
-  const [input, setInput] = useState("");
-  const messagesEnd = useRef<ScrollView>(null);
-  useEffect(() => {
-    messagesEnd.current?.scrollToEnd({
-      animated: true
-    });
-  }, [messages]);
-  const send = async () => {
-    if (!input.trim() || !eventId || sending) return;
-    setSending(true);
-    try { const saved = await socketAction<ApiMessage>('chat:message', { eventId, text: input.trim() }); setMessages(prev => [...prev.filter(m => m.id !== saved.id), mapMessage(saved)]); setInput(''); void socketAction('chat:typing', { eventId, typing: false }).catch(() => {}); }
-    catch (cause) { Alert.alert('Mesaj gönderilemedi', getApiErrorMessage(cause)); }
+  const sorted = useMemo(() => messages.slice().sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || "") || a.id.localeCompare(b.id)), [messages]);
+  const people = useMemo(() => new Map((event?.participants || []).concat(event ? [event.host] : []).map(person => [person.id, person])), [event]);
+  const firstName = (userId: string) => people.get(userId)?.name.split(" ")[0] || "Bir katılımcı";
+  const pinned = useMemo(() => [...sorted].reverse().find(m => m.announcement && !m.deleted), [sorted]);
+  const lastMine = useMemo(() => [...sorted].reverse().find(m => m.user.id === ME.id && !m.announcement && !m.deleted), [sorted, ME.id]);
+  const muted = !!eventId && (store.mutedRooms || []).includes(eventId);
+  const onScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+    nearBottom.current = nativeEvent.contentSize.height - nativeEvent.layoutMeasurement.height - nativeEvent.contentOffset.y < 120;
+  };
+  const loadOlder = async () => {
+    if (!eventId || !cursor || loading) return;
+    setLoading(true); stickToEnd.current = false;
+    try { const result = await getMessages(eventId, undefined, cursor); upsert(result.items.map(mapMessage)); setCursor(result.nextCursor || null); }
+    catch (cause) { setError(getApiErrorMessage(cause)); } finally { setLoading(false); }
+  };
+  const sendText = async (raw: string) => {
+    const text = raw.trim();
+    if (!text || !eventId || sending) return;
+    setSending(true); stickToEnd.current = true;
+    try {
+      if (editing) {
+        upsert([mapMessage(await editMessage(eventId, editing.id, text))]);
+        setEditing(null); setInput('');
+        return;
+      }
+      // Socket first; REST only when the realtime connection is down (never after a timeout, to avoid duplicates).
+      const saved = socketConnected() ? await socketAction<ApiMessage>('chat:message', { eventId, text }) : await sendMessage(eventId, text);
+      upsert([mapMessage(saved)]); setInput(''); setError('');
+      void socketAction('chat:typing', { eventId, typing: false }).catch(() => {});
+    }
+    catch (cause) { Alert.alert(editing ? 'Mesaj düzenlenemedi' : 'Mesaj gönderilemedi', getApiErrorMessage(cause)); }
     finally { setSending(false); }
   };
+  const send = () => sendText(input);
+  const removeMessage = (msg: RoomMessage) => Alert.alert("Mesaj silinsin mi?", "Mesaj herkes için “Bu mesaj silindi” olarak görünür.", [
+    { text: "Vazgeç", style: "cancel" },
+    { text: "Sil", style: "destructive", onPress: () => { if (eventId) void deleteMessage(eventId, msg.id).then(saved => upsert([mapMessage(saved)])).catch(cause => Alert.alert('Mesaj silinemedi', getApiErrorMessage(cause))); } },
+  ]);
+  const report = (msg: RoomMessage) => setSheet({
+    title: `${firstName(msg.user.id)} kullanıcısını neden şikayet ediyorsun?`,
+    options: REPORT_REASONS.map(reason => ({ label: reason, onPress: () => {
+      void reportUser(msg.user.id, `Sohbet şikayeti (${reason}) · ${event ? roomTitle(event) : ""}: "${msg.text.slice(0, 500)}"`)
+        .then(() => Alert.alert("Şikayetin alındı", "Ekibimiz inceleyecek. Teşekkürler."))
+        .catch(cause => Alert.alert("Şikayet gönderilemedi", getApiErrorMessage(cause)));
+    } })),
+  });
+  const openActions = (msg: RoomMessage) => {
+    if (msg.deleted || !event) return;
+    const mine = msg.user.id === ME.id;
+    const isOwner = event.host.id === ME.id;
+    const options: SheetOption[] = [{ label: "Kopyala", onPress: () => { void Clipboard.setStringAsync(msg.text).catch(() => {}); } }];
+    if (mine && !msg.announcement) options.push({ label: "Düzenle", onPress: () => { setEditing(msg); setInput(msg.text); } });
+    if (mine || isOwner) options.push({ label: "Sil", danger: true, onPress: () => removeMessage(msg) });
+    if (!mine) options.push({ label: "Şikayet et", danger: true, onPress: () => report(msg) });
+    setSheet({ title: msg.text.slice(0, 80), options });
+  };
+  const toggleMute = async (value: boolean) => {
+    if (!eventId) return;
+    const previous = store.mutedRooms || [];
+    const next = value ? [...new Set([...previous, eventId])] : previous.filter(id => id !== eventId);
+    setStore(p => ({ ...p, mutedRooms: next }));
+    try { await putPreference('mutedRooms', { ids: next }); }
+    catch (cause) { setStore(p => ({ ...p, mutedRooms: previous })); Alert.alert('Ayar kaydedilemedi', getApiErrorMessage(cause)); }
+  };
+  const runOwnerAction = async (name: string, payload: Record<string, unknown>) => {
+    if (!eventId || busy) return false;
+    setBusy(true);
+    try { await socketAction(name, { eventId, ...payload }); return true; }
+    catch (cause) { Alert.alert('İşlem yapılamadı', getApiErrorMessage(cause, cause instanceof Error ? cause.message : undefined)); return false; }
+    finally { setBusy(false); }
+  };
   if (!event) return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}><TopNavBar navigate={navigate} fallback="rooms" title="Etkinlik Odası" /><Box style={{ paddingTop: 96, paddingHorizontal: 20 }}><Label>{error || 'Etkinlik yükleniyor…'}</Label></Box></Box>;
+  const isOwner = event.host.id === ME.id;
+  const typingName = typingUserId ? firstName(typingUserId) : null;
+  const members = [...people.values()].filter(person => person.id !== event.host.id);
+  const seenBy = lastMine ? Object.entries(reads).filter(([userId, at]) => userId !== ME.id && Date.parse(at) >= Date.parse(lastMine.createdAt || "")).map(([userId]) => firstName(userId)) : [];
+  const refreshButton = <Touch accessibilityLabel="Mesajları yenile" disabled={loading || sending} onPress={() => { stickToEnd.current = true; setReload(value => value + 1); }} style={s.headerAction}><Label style={s.headerActionLabel}>↻</Label></Touch>;
+  const subtitle = `${muted ? "🔕 " : ""}${event.location ? `${event.time} · ${event.location}` : event.time}`;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
-      <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} title={roomTitle(event)} subtitle={event.location ? `${event.time} · ${event.location}` : event.time} />
-      {error && <Label>{error}</Label>}
-      <Touch accessibilityLabel="Mesajları yenile" disabled={loading || sending} onPress={() => setReload(value => value + 1)} style={{ padding: 12, marginTop: 76, backgroundColor: 'rgba(255,255,255,.08)' }}><Label>{loading ? 'Mesajlar yükleniyor…' : 'Mesajları eşitle'}</Label></Touch>
+      <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} title={roomTitle(event)} subtitle={subtitle}
+        right={<Box style={s.headerActions}>
+          {refreshButton}
+          <Touch accessibilityLabel={infoOpen ? "Oda bilgisini kapat" : "Oda bilgisini aç"} onPress={() => setInfoOpen(open => !open)} style={[s.headerAction, infoOpen && s.headerActionOn]}><UsersIcon size={18} style={{ color: palette.accent }} /></Touch>
+        </Box>} />
 
-      {/* Event info strip */}
-      <Box style={[[ui.px5, ui.pb3, ui.flexShrink0]]}>
-        <Scroll style={[[ui.flex, ui.gap2]]} horizontal>
-          {[{
-          icon: <UsersIcon size={16} />,
-          text: `${participantCount(event.currentParticipants, event.maxParticipants)} kişi`
-        }, {
-          icon: <LocationIcon size={16} />,
-          text: event.location
-        }, {
-          icon: <ClockIcon size={16} />,
-          text: event.time
-        }, ...(event.level ? [{
-          icon: <StarIcon size={16} />,
-          text: event.level
-        }] : [])].map((item, i) => <Box key={i} style={[[ui.flexShrink0, ui.flex, ui.itemsCenter, ui.gap15, ui.px3, ui.py15, ui.roundedFull, ui.textXs, ui.textWhite50], {
-          backgroundColor: "rgba(255,255,255,0.05)",
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.07)"
-        }]}>
-              <Box style={{ color: palette.muted }}>{item.icon}</Box>
-              <Label>{item.text}</Label>
-            </Box>)}
-        </Scroll>
-      </Box>
+      <Box style={s.body}>
+        {infoOpen && <Scroll style={s.info}>
+          <Scroll style={[[ui.flex, ui.gap2]]} horizontal>
+            {[{ icon: <UsersIcon size={15} />, text: `${participantCount(event.currentParticipants, event.maxParticipants)} kişi` },
+              ...(event.location ? [{ icon: <LocationIcon size={15} />, text: event.location }] : []),
+              { icon: <ClockIcon size={15} />, text: `${event.date} · ${event.time}` },
+              ...(event.level ? [{ icon: <StarIcon size={15} />, text: event.level }] : [])].map((item, i) => <Box key={i} style={s.chip}>
+                <Box style={{ color: palette.muted }}>{item.icon}</Box>
+                <Label style={s.chipLabel}>{item.text}</Label>
+              </Box>)}
+          </Scroll>
 
-      <EventActivity event={event} userId={ME.id} active={screenActive} />
-      {/* Participants row */}
-      <Box style={[[ui.px5, ui.pb4, ui.flexShrink0]]}>
-        <GlassCard style={[[ui.p3]]}>
-          <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-            <Box style={[[ui.flex]]}>
-              {event.participants.slice(0, 5).map(p => <Picture key={p.id} uri={p.avatar} accessibilityLabel={p.name} style={[[ui.w7, ui.h7, ui.roundedFull]]} />)}
-            </Box>
-            <Box style={[[ui.flex1]]}>
-              <Label style={[[ui.textXs, ui.textWhite50]]}>
-                {event.participants.slice(0, 2).map(p => p.name.split(" ")[0]).join(", ")}{" "}
-                ve diğerleri
-              </Label>
-            </Box>
-            <Touch style={[[ui.textXs, ui.px25, ui.py1, ui.roundedLg, ui.textWhite40, ui.border, ui.borderWhite8]]}>
-              Tümü
-            </Touch>
+          <Box style={s.panelRow}>
+            <Box style={s.panelCopy}><Label style={s.panelTitle}>Odayı sessize al</Label><Label style={s.panelDetail}>Bu odanın okunmamış mesaj rozeti gösterilmez.</Label></Box>
+            <Switch accessibilityLabel="Odayı sessize al" value={muted} onValueChange={value => void toggleMute(value)}
+              trackColor={{ false: palette.elevated, true: palette.violet }} thumbColor="#ffffff" ios_backgroundColor={palette.elevated} />
           </Box>
-        </GlassCard>
-      </Box>
 
-      <Box style={[[ui.hPx, ui.mx5, ui.flexShrink0], {
-      backgroundColor: "rgba(255,255,255,0.06)"
-    }]} />
+          <Label style={s.panelHeading}>Giriş onayı</Label>
+          {!event.isActive ? <Label style={s.panelDetail}>Giriş onayı etkinlik başladığında açılır.</Label>
+            : !isOwner ? <Label style={s.panelDetail}>{checkins.includes(ME.id) ? "Girişin onaylandı ✓" : "Vardığında “Geldim” yaz; organizatör girişini onaylayacak."}</Label>
+            : null}
+          <Box style={s.people}>
+            <Box style={s.person}>
+              <Picture uri={event.host.avatar} accessibilityLabel={event.host.name} style={s.personAvatar} />
+              <Label style={s.personName} numberOfLines={1}>{event.host.name.split(" ")[0]} · Organizatör</Label>
+            </Box>
+            {members.map(person => {
+              const checked = checkins.includes(person.id);
+              return <Box key={person.id} style={s.person}>
+                <Picture uri={person.avatar} accessibilityLabel={person.name} style={s.personAvatar} />
+                <Label style={s.personName} numberOfLines={1}>{person.name.split(" ")[0]}{checked ? " ✓" : ""}</Label>
+                {isOwner && event.isActive && !checked ? <Touch accessibilityLabel={`${person.name} girişini onayla`} disabled={busy} onPress={async () => { if (await runOwnerAction('event:checkin', { participantId: person.id })) setCheckins(prev => [...prev, person.id]); }} style={s.smallButton}><Label style={s.smallButtonLabel}>Onayla</Label></Touch> : null}
+              </Box>;
+            })}
+          </Box>
 
-      {cursor && <Touch disabled={loading} onPress={async () => {
-        if (!eventId) return;
-        setLoading(true);
-        try { const result = await getMessages(eventId, undefined, cursor); setMessages(prev => [...new Map([...result.items.map(mapMessage), ...prev].map(m => [m.id, m])).values()]); setCursor(result.nextCursor || null); }
-        catch (cause) { setError(getApiErrorMessage(cause)); } finally { setLoading(false); }
-      }}><Label>Önceki mesajları yükle</Label></Touch>}
-      {/* Chat */}
-      <Scroll ref={messagesEnd} onContentSizeChange={() => messagesEnd.current?.scrollToEnd({
-      animated: true
-    })} style={[[ui.flex1, ui.px5, ui.py4, ui.spaceY4]]}>
-        {messages.slice().sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || "") || a.id.localeCompare(b.id)).map(msg => {
-        const isMe = msg.user.id === store.user.id;
-        return <Box key={msg.id} style={[[ui.flex, ui.gap25, isMe ? [ui.flexRowReverse] : []]]}>
-              {!isMe && <Picture uri={msg.user.avatar} accessibilityLabel={msg.user.name} style={[[ui.w7, ui.h7, ui.roundedFull, ui.flexShrink0, ui.mt05]]} />}
-              <Box style={[[ui.maxW72, isMe ? [ui.itemsEnd] : [ui.itemsStart], ui.flex, ui.flexCol, ui.gap1]]}>
-                {!isMe && <Box style={[[ui.textXs, ui.textWhite30, ui.ml1, ui.flex, ui.itemsCenter, ui.gap15]]}>
-                    {msg.user.name.split(" ")[0]}
-                    {msg.isHost && <Label style={[[ui.textC8a44a, ui.text9px, ui.px1, ui.py05, ui.rounded], {
-                backgroundColor: "rgba(105,120,255,0.1)"
-              }]}>
-                        Organizatör
-                      </Label>}
+          {isOwner ? <>
+            <Label style={s.panelHeading}>Duyuru gönder</Label>
+            <Field value={announcement} onChangeText={setAnnouncement} placeholder="Tüm katılımcılara duyuru…" placeholderTextColor="rgba(255,255,255,.35)" maxLength={MAX_MESSAGE_LENGTH} style={s.panelInput} />
+            <Touch disabled={busy || !announcement.trim()} onPress={async () => { if (await runOwnerAction('event:announcement', { text: announcement.trim() })) setAnnouncement(''); }} style={s.panelButton}><Label style={s.panelButtonLabel}>📣 Duyuruyu sabitle ve gönder</Label></Touch>
+            {waitlist.length ? <>
+              <Label style={s.panelHeading}>Yedek liste</Label>
+              {waitlist.map((userId, index) => <Box key={userId} style={s.panelRow}>
+                <Label style={[s.panelTitle, { flex: 1 }]}>Yedek üye #{index + 1}</Label>
+                <Touch disabled={busy} onPress={async () => { if (await runOwnerAction('event:waitlist_promote', { participantId: userId })) setWaitlist(rows => rows.filter(row => row !== userId)); }} style={s.smallButton}><Label style={s.smallButtonLabel}>Kabul et</Label></Touch>
+              </Box>)}
+            </> : null}
+          </> : null}
+        </Scroll>}
+
+        {closedReason ? <Box style={s.closed}>
+          <Label style={s.closedIcon}>✦</Label>
+          <Label style={s.closedTitle}>{event.status === "cancelled" ? "Oda kapandı" : "Oda henüz açık değil"}</Label>
+          <Label style={s.closedText}>{closedReason}</Label>
+          {event.status !== "cancelled" && <Label style={s.closedText}>Onaylı katılımcı: {event.currentParticipants}/{event.minParticipants}</Label>}
+          <Touch onPress={() => navigate("event-detail", { eventId: event.id })} style={s.closedButton}><Label style={s.closedButtonLabel}>Etkinlik detayına dön</Label></Touch>
+        </Box> : <>
+          {pinned ? <Touch accessibilityLabel="Sabitlenmiş duyuru" onPress={() => setPinnedOpen(open => !open)} style={s.pinned}>
+            <Label style={s.pinnedTitle}>📌 Organizatör duyurusu · {pinned.time}</Label>
+            <Label style={s.pinnedText} numberOfLines={pinnedOpen ? undefined : 2}>{pinned.text}</Label>
+          </Touch> : null}
+          {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
+          <Scroll ref={scrollRef} onScroll={onScroll} scrollEventThrottle={64} maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            onContentSizeChange={() => { if (stickToEnd.current || nearBottom.current) scrollRef.current?.scrollToEnd({ animated: !stickToEnd.current }); stickToEnd.current = false; }}
+            style={s.list}>
+            {cursor ? <Touch disabled={loading} onPress={() => void loadOlder()} style={s.older}><Label style={s.olderLabel}>{loading ? "Yükleniyor…" : "Önceki mesajları göster"}</Label></Touch> : null}
+            {!sorted.length && !loading ? <Box style={s.empty}><Label style={s.emptyTitle}>Sohbet başladı</Label><Label style={s.emptyText}>İlk mesajı sen yaz; buluşma detaylarını burada konuşabilirsiniz.</Label></Box> : null}
+            {sorted.map((msg, index) => {
+              const previous = sorted[index - 1];
+              const newDay = !previous || dayKey(previous.createdAt) !== dayKey(msg.createdAt);
+              const separator = newDay ? <Label key={`day-${msg.id}`} style={s.day}>{dayLabel(msg.createdAt)}</Label> : null;
+              if (msg.announcement) return [separator, <Touch key={msg.id} onLongPress={() => openActions(msg)} style={s.announcement}>
+                <Label style={s.announcementTitle}>📣 Organizatör duyurusu</Label>
+                <Label style={msg.deleted ? s.deletedText : s.announcementText}>{msg.deleted ? "Bu duyuru silindi" : msg.text}</Label>
+                <Label style={s.time}>{msg.time}</Label>
+              </Touch>];
+              const isMe = msg.user.id === ME.id;
+              const isHost = msg.user.id === event.host.id;
+              // Consecutive messages from the same person are grouped; name and photo appear once.
+              const grouped = !newDay && previous && !previous.announcement && previous.user.id === msg.user.id;
+              const person = people.get(msg.user.id);
+              return [separator, <Box key={msg.id} style={[s.message, isMe && s.messageMine, grouped && s.messageGrouped]}>
+                {!isMe && (grouped ? <Box style={s.avatarSpacer} /> : <Picture uri={person?.avatar || ""} accessibilityLabel={msg.user.name} style={s.avatar} />)}
+                <Box style={[s.bubbleColumn, isMe ? s.alignEnd : s.alignStart]}>
+                  {!isMe && !grouped && <Box style={s.author}>
+                    <Label style={s.authorName}>{msg.user.name.split(" ")[0]}</Label>
+                    {isHost && <Label style={s.hostBadge}>Organizatör</Label>}
                   </Box>}
-                <Box style={[[ui.px4, ui.py25, ui.rounded2xl, ui.textSm, ui.leadingRelaxed, isMe ? [ui.roundedTrSm, ui.text1a1200] : [ui.roundedTlSm, ui.textWhite80]], isMe ? {} : {
-              backgroundColor: "rgba(255,255,255,0.07)",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.09)"
-            }]}>
-                  {msg.text}
+                  <Touch accessibilityLabel="Mesaj seçenekleri" accessibilityHint="Basılı tut" haptic={false} onLongPress={() => openActions(msg)} style={[s.bubble, msg.deleted ? s.bubbleDeleted : isMe ? s.bubbleMine : s.bubbleOther]}>
+                    <Label style={msg.deleted ? s.deletedText : isMe ? s.textMine : s.textOther}>{msg.deleted ? "Bu mesaj silindi" : msg.text}</Label>
+                  </Touch>
+                  <Label style={s.time}>{msg.time}{msg.edited && !msg.deleted ? " · düzenlendi" : ""}</Label>
+                  {lastMine && msg.id === lastMine.id ? <Label style={s.seen}>{seenBy.length ? `Görüldü · ${seenBy.slice(0, 2).join(", ")}${seenBy.length > 2 ? ` +${seenBy.length - 2}` : ""}` : "Gönderildi"}</Label> : null}
                 </Box>
-                <Label style={[[ui.text10px, ui.textWhite20, ui.mx1]]}>
-                  {msg.time}
-                </Label>
-              </Box>
-            </Box>;
-      })}
-      </Scroll>
+              </Box>];
+            })}
+          </Scroll>
 
-      {typing && <Label>Bir katılımcı yazıyor…</Label>}
-      {/* Input */}
-      <Box style={[[ui.px5, ui.pb8, ui.pt3, ui.flexShrink0], { paddingBottom: 32 + navInset }]}>
-        <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.rounded2xl, ui.px3, ui.py2], {
-        backgroundColor: "rgba(255,255,255,0.06)",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.10)"
-      }]} glass>
-          <Field value={input} onChangeText={value => {
-            setInput(value);
-            if (eventId && Date.now() - lastTyping.current > 1000) { lastTyping.current = Date.now(); void socketAction('chat:typing', { eventId, typing: Boolean(value) }).catch(() => {}); }
-          }} onSubmitEditing={send} placeholder="Bir mesaj yaz..." style={[[ui.flex1, ui.bgTransparent, ui.textSm, ui.textWhite, ui.py15]]} />
-          <Touch onPress={send} accessibilityLabel="Mesaj gönder" disabled={sending || !input.trim()} style={[[ui.w11, ui.h11, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0], {}]} gradient={["#4d5bcb", "#6651c9"]}>
-            <SendIcon size={20} style={{ color: palette.text }} />
-          </Touch>
-        </Box>
+          {typingName && <Label style={s.typing}>{typingName} yazıyor…</Label>}
+          <Box style={[s.composerWrap, { paddingBottom: 12 + navInset }]}>
+            {editing ? <Box style={s.editBar}>
+              <Label style={s.editLabel} numberOfLines={1}>✎ Mesajı düzenliyorsun</Label>
+              <Touch accessibilityLabel="Düzenlemeyi iptal et" onPress={() => { setEditing(null); setInput(''); }} style={s.editCancel}><Label style={s.editCancelLabel}>Vazgeç</Label></Touch>
+            </Box> : <Scroll horizontal style={s.quickRow}>
+              {QUICK_REPLIES.map(reply => <Touch key={reply} accessibilityLabel={`Hızlı mesaj: ${reply}`} disabled={sending} onPress={() => void sendText(reply)} style={s.quick}><Label style={s.quickLabel}>{reply}</Label></Touch>)}
+            </Scroll>}
+            <Box style={s.composer} glass>
+              <Field value={input} onChangeText={value => {
+                setInput(value);
+                if (eventId && !editing && Date.now() - lastTyping.current > 1000) { lastTyping.current = Date.now(); void socketAction('chat:typing', { eventId, typing: Boolean(value) }).catch(() => {}); }
+              }} placeholder={editing ? "Mesajı düzenle..." : "Bir mesaj yaz..."} placeholderTextColor="rgba(255,255,255,.35)" multiline maxLength={MAX_MESSAGE_LENGTH} style={s.input} />
+              <Touch onPress={send} accessibilityLabel={editing ? "Düzenlemeyi kaydet" : "Mesaj gönder"} disabled={sending || !input.trim()} style={s.send} gradient={["#4d5bcb", "#6651c9"]}>
+                {editing ? <Label style={s.sendCheck}>✓</Label> : <SendIcon size={20} style={{ color: palette.text }} />}
+              </Touch>
+            </Box>
+            {input.length > MAX_MESSAGE_LENGTH - 200 && <Label style={s.counter}>{input.length}/{MAX_MESSAGE_LENGTH}</Label>}
+          </Box>
+        </>}
       </Box>
+      {sheet ? <ActionSheet title={sheet.title} options={sheet.options} onClose={() => setSheet(null)} /> : null}
     </Box>;
 }
+const s = StyleSheet.create({
+  body: { flex: 1, paddingTop: 68 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  headerAction: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  headerActionOn: { backgroundColor: "rgba(105,120,255,.18)" },
+  headerActionLabel: { color: palette.accent, fontSize: 20, lineHeight: 24 },
+  info: { flexGrow: 0, maxHeight: "55%", gap: 12, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border, backgroundColor: "rgba(17,22,42,.96)" },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: "rgba(255,255,255,.05)", borderWidth: 1, borderColor: "rgba(255,255,255,.07)" },
+  chipLabel: { color: "rgba(255,255,255,.6)", fontSize: 12, lineHeight: 16 },
+  panelRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  panelCopy: { flex: 1, gap: 3 },
+  panelTitle: { color: palette.text, fontFamily: "Outfit-Medium", fontSize: 14, lineHeight: 19 },
+  panelDetail: { color: palette.muted, fontSize: 12, lineHeight: 17 },
+  panelHeading: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 12, lineHeight: 16, marginTop: 4 },
+  panelInput: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.background, paddingHorizontal: 12, color: palette.text, fontSize: 14 },
+  panelButton: { minHeight: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(105,120,255,.18)", borderWidth: 1, borderColor: "rgba(183,197,255,.35)" },
+  panelButtonLabel: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 13 },
+  people: { gap: 8 },
+  person: { flexDirection: "row", alignItems: "center", gap: 8 },
+  personAvatar: { width: 26, height: 26, borderRadius: 13 },
+  personName: { flex: 1, color: "rgba(255,255,255,.75)", fontSize: 13, lineHeight: 17 },
+  smallButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: "rgba(111,208,182,.14)", borderWidth: 1, borderColor: "rgba(111,208,182,.35)" },
+  smallButtonLabel: { color: palette.success, fontFamily: "Outfit-SemiBold", fontSize: 12, lineHeight: 16 },
+  pinned: { marginHorizontal: 16, marginTop: 10, gap: 3, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: "rgba(105,120,255,.14)", borderWidth: 1, borderColor: "rgba(183,197,255,.3)" },
+  pinnedTitle: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 11, lineHeight: 15 },
+  pinnedText: { color: palette.text, fontSize: 13, lineHeight: 18 },
+  list: { flex: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 },
+  older: { alignSelf: "center", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: "rgba(255,255,255,.06)", marginBottom: 8 },
+  olderLabel: { color: palette.accent, fontSize: 12, lineHeight: 16 },
+  empty: { alignItems: "center", gap: 6, paddingVertical: 48, paddingHorizontal: 24 },
+  emptyTitle: { color: palette.text, fontFamily: "Fraunces", fontSize: 20, lineHeight: 26 },
+  emptyText: { color: palette.muted, fontSize: 13, lineHeight: 19, textAlign: "center" },
+  day: { alignSelf: "center", color: "rgba(255,255,255,.45)", fontSize: 11, lineHeight: 14, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(255,255,255,.05)", marginVertical: 12 },
+  message: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 10 },
+  messageMine: { flexDirection: "row-reverse" },
+  messageGrouped: { marginTop: 3 },
+  avatar: { width: 28, height: 28, borderRadius: 14 },
+  avatarSpacer: { width: 28 },
+  bubbleColumn: { maxWidth: "78%", gap: 3 },
+  alignEnd: { alignItems: "flex-end" }, alignStart: { alignItems: "flex-start" },
+  author: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 4 },
+  authorName: { color: "rgba(255,255,255,.45)", fontSize: 12, lineHeight: 16 },
+  hostBadge: { color: palette.accent, fontSize: 10, lineHeight: 14, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, backgroundColor: "rgba(105,120,255,.14)" },
+  bubble: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18 },
+  bubbleMine: { backgroundColor: "#4d5bcb", borderBottomRightRadius: 6 },
+  bubbleOther: { backgroundColor: "rgba(255,255,255,.07)", borderWidth: 1, borderColor: "rgba(255,255,255,.09)", borderBottomLeftRadius: 6 },
+  bubbleDeleted: { backgroundColor: "transparent", borderWidth: 1, borderColor: "rgba(255,255,255,.12)", borderStyle: "dashed" },
+  textMine: { color: "#ffffff", fontSize: 15, lineHeight: 21 },
+  textOther: { color: "rgba(255,255,255,.85)", fontSize: 15, lineHeight: 21 },
+  deletedText: { color: "rgba(255,255,255,.4)", fontSize: 14, lineHeight: 20, fontStyle: "italic" },
+  time: { color: "rgba(255,255,255,.3)", fontSize: 10, lineHeight: 13, marginHorizontal: 4 },
+  seen: { color: palette.accent, fontSize: 10, lineHeight: 13, marginHorizontal: 4 },
+  announcement: { alignSelf: "stretch", gap: 4, marginTop: 12, padding: 14, borderRadius: 16, backgroundColor: "rgba(105,120,255,.12)", borderWidth: 1, borderColor: "rgba(183,197,255,.3)" },
+  announcementTitle: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 12, lineHeight: 16 },
+  announcementText: { color: palette.text, fontSize: 15, lineHeight: 21 },
+  typing: { color: palette.muted, fontSize: 12, lineHeight: 16, paddingHorizontal: 20, paddingBottom: 4 },
+  composerWrap: { paddingHorizontal: 16, paddingTop: 6, gap: 8 },
+  quickRow: { flexGrow: 0, gap: 8 },
+  quick: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: "rgba(255,255,255,.06)", borderWidth: 1, borderColor: "rgba(255,255,255,.1)" },
+  quickLabel: { color: "rgba(255,255,255,.8)", fontSize: 13, lineHeight: 17 },
+  editBar: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: "rgba(105,120,255,.14)" },
+  editLabel: { flex: 1, color: palette.accent, fontSize: 13, lineHeight: 17 },
+  editCancel: { paddingHorizontal: 8, paddingVertical: 2 },
+  editCancelLabel: { color: palette.text, fontSize: 13, lineHeight: 17 },
+  composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingLeft: 14, paddingRight: 6, paddingVertical: 6, borderRadius: 22, backgroundColor: "rgba(255,255,255,.06)", borderWidth: 1, borderColor: "rgba(255,255,255,.1)" },
+  input: { flex: 1, minHeight: 40, maxHeight: 120, paddingVertical: 9, color: palette.text, fontSize: 15, backgroundColor: "transparent" },
+  send: { width: 42, height: 42, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  sendCheck: { color: palette.text, fontSize: 20, lineHeight: 24 },
+  counter: { alignSelf: "flex-end", color: palette.muted, fontSize: 11, lineHeight: 14, marginRight: 8 },
+  error: { color: palette.error, fontSize: 13, lineHeight: 19, paddingHorizontal: 20, paddingTop: 8 },
+  danger: { color: palette.error },
+  sheetBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.55)" },
+  sheet: { gap: 4, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.border },
+  sheetTitle: { color: palette.muted, fontSize: 13, lineHeight: 18, textAlign: "center", paddingHorizontal: 12, paddingBottom: 8 },
+  sheetOption: { minHeight: 50, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,.04)" },
+  sheetCancel: { marginTop: 6, backgroundColor: "rgba(255,255,255,.08)" },
+  sheetLabel: { color: palette.text, fontFamily: "Outfit-Medium", fontSize: 15, lineHeight: 20 },
+  closed: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 32 },
+  closedIcon: { color: "#f4d47d", fontFamily: "Fraunces", fontSize: 32, lineHeight: 40 },
+  closedTitle: { color: palette.text, fontFamily: "Fraunces", fontSize: 22, lineHeight: 28, textAlign: "center" },
+  closedText: { color: palette.muted, fontSize: 14, lineHeight: 20, textAlign: "center" },
+  closedButton: { marginTop: 8, minHeight: 46, paddingHorizontal: 20, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(105,120,255,.16)", borderWidth: 1, borderColor: "rgba(183,197,255,.35)" },
+  closedButtonLabel: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 14 },
+})

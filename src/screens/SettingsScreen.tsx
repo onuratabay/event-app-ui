@@ -1,106 +1,192 @@
-import { enablePush,disablePush } from "../native/push";
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Alert, Linking, StyleSheet, Switch } from "react-native"
 import Constants from "expo-constants"
-import Screen from "../native/Screen"
-import { Box, Label, Scroll, Touch, openExternal } from "../native/UI"
+import { Box, Field, Label, Scroll, Touch, openExternal } from "../native/UI"
 import { DEFAULT_PREFERENCES, usePreferences, type AppPreferences } from "../native/preferences"
 import { useStore } from "../native/Store"
-import { logout } from "../api/client"
+import { changePassword, deleteAccount, getApiErrorMessage, getPreferences, logout, putPreference, type NotificationPreferences } from "../api/client"
 import TopNavBar from "../components/TopNavBar"
-import StoryNote from "../components/StoryNote"
 import { AtmoBackground } from "../components/GlassUI"
 import { BRAND_NAME, BRAND_URL } from "../components/Brand"
 import { palette } from "../theme/palette"
+import { ui } from "../theme/styles"
 import type { NavigateFn } from "../types"
+
+const DEFAULT_NOTIFICATIONS: Required<NotificationPreferences> = { invites: true, messages: true, reminders: true }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return <Box style={s.section}><Label accessibilityRole="header" style={s.sectionTitle}>{title}</Label><Box style={s.card}>{children}</Box></Box>
 }
-function Row({ title, detail, onPress, danger = false }: { title: string; detail: string; onPress?: () => void; danger?: boolean }) {
-  const content = <><Box style={s.copy}><Label style={[s.title, danger && s.danger]}>{title}</Label><Label style={s.detail}>{detail}</Label></Box>{onPress && <Label style={s.chevron}>›</Label>}</>
+function Row({ title, detail, onPress, danger = false, open }: { title: string; detail: string; onPress?: () => void; danger?: boolean; open?: boolean }) {
+  const content = <><Box style={s.copy}><Label style={[s.title, danger && s.danger]}>{title}</Label><Label style={s.detail}>{detail}</Label></Box>{onPress && <Label style={s.chevron}>{open === undefined ? "›" : open ? "▴" : "▾"}</Label>}</>
   return onPress ? <Touch accessibilityLabel={title} onPress={onPress} style={s.row}>{content}</Touch> : <Box style={s.row}>{content}</Box>
 }
+function Toggle({ title, detail, value, disabled, onChange }: { title: string; detail: string; value: boolean; disabled?: boolean; onChange: (value: boolean) => void }) {
+  return <Box style={s.row}>
+    <Box style={s.copy}><Label style={s.title}>{title}</Label><Label style={s.detail}>{detail}</Label></Box>
+    <Switch accessibilityLabel={title} value={value} disabled={disabled} onValueChange={onChange}
+      trackColor={{ false: palette.elevated, true: palette.violet }} thumbColor="#ffffff" ios_backgroundColor={palette.elevated} />
+  </Box>
+}
+function Password({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return <Field accessibilityLabel={label} placeholder={label} placeholderTextColor={palette.muted} value={value} onChangeText={onChange}
+    secureTextEntry autoCapitalize="none" autoCorrect={false} style={s.input} />
+}
+
 export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
   const { values, ready, update } = usePreferences()
   const { data, resetSession } = useStore()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const save = async (patch: Partial<AppPreferences>) => {
-    if (busy || !ready) return
-    setBusy(true); setError(null)
+  const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS)
+  const [notificationsReady, setNotificationsReady] = useState(false)
+  const [passwordOpen, setPasswordOpen] = useState(false)
+  const [oldPassword, setOldPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [repeatPassword, setRepeatPassword] = useState("")
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deletePassword, setDeletePassword] = useState("")
+
+  useEffect(() => {
+    let active = true
+    getPreferences()
+      .then(result => { if (active) setNotifications({ ...DEFAULT_NOTIFICATIONS, ...result.notifications }) })
+      .catch(() => {})
+      .finally(() => { if (active) setNotificationsReady(true) })
+    return () => { active = false }
+  }, [])
+
+  const savePreference = async (patch: Partial<AppPreferences>) => {
+    if (!ready) return
+    setError(null)
     try { await update(patch) } catch { setError("Tercihin kaydedilemedi. Lütfen tekrar dene.") }
-    finally { setBusy(false) }
   }
-  const permissions = () => { void Linking.openSettings().catch(() => Alert.alert("Ayarlar açılamadı", "Telefonunun Ayarlar uygulamasından ewent.app’i seçebilirsin.")) }
+  const saveNotification = async (key: keyof NotificationPreferences, value: boolean) => {
+    const previous = notifications
+    const next = { ...notifications, [key]: value }
+    setNotifications(next); setError(null)
+    try { await putPreference("notifications", next) } catch (e) { setNotifications(previous); setError(getApiErrorMessage(e, "Bildirim tercihin kaydedilemedi.")) }
+  }
+  const openSystemSettings = () => { void Linking.openSettings().catch(() => Alert.alert("Ayarlar açılamadı", `Telefonunun Ayarlar uygulamasından ${BRAND_NAME}’i seçebilirsin.`)) }
+  const endSession = async (target: "welcome" | "login") => {
+    await logout()
+    resetSession()
+    navigate(target, { reset: true })
+  }
   const signOut = () => Alert.alert("Çıkış yapılsın mı?", "Tekrar giriş yaparak hesabına dönebilirsin.", [
     { text: "Vazgeç", style: "cancel" },
     { text: "Çıkış yap", style: "destructive", onPress: () => {
       if (busy) return
       setBusy(true)
-      void logout().then(() => { resetSession(); navigate("welcome") }).catch(() => { setError("Çıkış yapılamadı. Lütfen tekrar dene."); setBusy(false) })
+      void endSession("welcome").catch(() => { setError("Çıkış yapılamadı. Lütfen tekrar dene."); setBusy(false) })
     } },
   ])
-  const toggle = (key: keyof AppPreferences, title: string, detail: string) => <Box style={s.row}>
-    <Box style={s.copy}><Label style={s.title}>{title}</Label><Label style={s.detail}>{detail}</Label></Box>
-    <Switch accessibilityLabel={title} value={values[key]} disabled={!ready || busy} onValueChange={value => void save({ [key]: value })}
-      trackColor={{ false: palette.elevated, true: palette.violet }} thumbColor="#ffffff" ios_backgroundColor={palette.elevated} />
-  </Box>
-  return <Screen background={<AtmoBackground variant="violet" />}>
-    <TopNavBar navigate={navigate} fallback="profile" title="Ayarlar" />
+  const submitPassword = async () => {
+    if (busy) return
+    if (!oldPassword || !newPassword) { setError("Mevcut ve yeni şifreni gir."); return }
+    if (newPassword !== repeatPassword) { setError("Yeni şifreler birbiriyle aynı değil."); return }
+    setBusy(true); setError(null)
+    try {
+      await changePassword(oldPassword, newPassword)
+      setOldPassword(""); setNewPassword(""); setRepeatPassword(""); setPasswordOpen(false)
+      // The server signs out every session after a password change.
+      Alert.alert("Şifren güncellendi", "Güvenliğin için yeni şifrenle tekrar giriş yap.", [{ text: "Tamam", onPress: () => { void endSession("login") } }])
+    } catch (e) { setError(getApiErrorMessage(e, "Şifre değiştirilemedi.")) }
+    finally { setBusy(false) }
+  }
+  const submitDelete = () => {
+    if (busy) return
+    if (!deletePassword) { setError("Hesabını silmek için şifreni gir."); return }
+    Alert.alert("Hesabın kalıcı olarak silinsin mi?", "Profilin, etkinliklerin, katılımların ve mesajların silinir. Bu işlem geri alınamaz.", [
+      { text: "Vazgeç", style: "cancel" },
+      { text: "Hesabımı sil", style: "destructive", onPress: () => {
+        setBusy(true); setError(null)
+        void deleteAccount(deletePassword)
+          .then(() => endSession("welcome"))
+          .then(() => Alert.alert("Hesabın silindi", "Seni tekrar görmek isteriz."))
+          .catch(e => { setError(getApiErrorMessage(e, "Hesap silinemedi.")); setBusy(false) })
+      } },
+    ])
+  }
+
+  return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
+    <AtmoBackground variant="violet" />
+    <TopNavBar navigate={navigate} fallback="profile" backLabel="Geri" title="Ayarlar" />
     <Scroll style={s.page}>
-      <StoryNote scene="settings" />
-      {error && <Label accessibilityRole="alert" style={s.danger}>{error}</Label>}
-      <Section title="Hesap ve güvenlik">
-        <Row title={data.user.name || "Profilim"} detail="Profil fotoğrafı, kişisel bilgiler ve ilgi alanları" onPress={() => navigate("profile")} />
-        <Row title="Şifremi değiştir" detail="Mevcut şifreni doğrulayarak yeni bir şifre belirle" onPress={() => navigate("account", {mode:"password"})} />
+      {error && <Label accessibilityRole="alert" style={s.error}>{error}</Label>}
+
+      <Section title="Hesap">
+        <Row title={data.user.name || "Profilim"} detail="Profil fotoğrafı, ad, şehir ve Instagram" onPress={() => navigate("profile")} />
+        <Row title="İlgi alanlarım" detail="Önerilen etkinlikleri belirleyen ilgi alanlarını düzenle" onPress={() => navigate("interests")} />
+        <Row title="Şifremi değiştir" detail="Mevcut şifreni doğrulayarak yeni bir şifre belirle" open={passwordOpen} onPress={() => { setPasswordOpen(!passwordOpen); setError(null) }} />
+        {passwordOpen && <Box style={s.form}>
+          <Password label="Mevcut şifre" value={oldPassword} onChange={setOldPassword} />
+          <Password label="Yeni şifre (en az 8 karakter, 1 özel karakter)" value={newPassword} onChange={setNewPassword} />
+          <Password label="Yeni şifre tekrar" value={repeatPassword} onChange={setRepeatPassword} />
+          <Touch disabled={busy} onPress={() => void submitPassword()} style={s.primary}><Label style={s.primaryLabel}>{busy ? "Kaydediliyor…" : "Şifreyi güncelle"}</Label></Touch>
+        </Box>}
       </Section>
+
       <Section title="Bildirimler">
-        <Row title="Telefon bildirimlerini etkinleştir" detail="Davet, yeni mesaj ve etkinlik hatırlatmaları" onPress={()=>{if(busy)return;setBusy(true);void enablePush().then(()=>Alert.alert('Bildirimler açık','Bu cihaz kaydedildi.')).catch(e=>setError(e instanceof Error?e.message:'Bildirimler açılamadı.')).finally(()=>setBusy(false))}}/>
-        <Row title="Bu cihazda bildirimleri durdur" detail="Uygulama içi bildirimlerin saklanır" onPress={()=>{if(busy)return;setBusy(true);void disablePush().then(()=>Alert.alert('Bildirimler kapalı','Bu cihaza bildirim gönderimi durduruldu.')).catch(()=>setError('Tercih kaydedilemedi.')).finally(()=>setBusy(false))}}/>
+        <Toggle title="Etkinlik davetleri" detail="Biri seni bir etkinliğe davet ettiğinde" value={notifications.invites} disabled={!notificationsReady} onChange={v => void saveNotification("invites", v)} />
+        <Toggle title="Yeni mesajlar" detail="Katıldığın etkinlik odalarındaki mesajlar" value={notifications.messages} disabled={!notificationsReady} onChange={v => void saveNotification("messages", v)} />
+        <Toggle title="Etkinlik hatırlatmaları" detail="Katılacağın etkinlik yaklaştığında" value={notifications.reminders} disabled={!notificationsReady} onChange={v => void saveNotification("reminders", v)} />
         <Row title="Uygulama içi bildirimler" detail="Davetlerini ve topluluktan gelen haberleri görüntüle" onPress={() => navigate("notifications")} />
-        <Row title="Telefon bildirim ayarları" detail="Sistem tarafından sunulan bildirim izinlerini yönet" onPress={permissions} />
+        <Row title="Telefon bildirim izinleri" detail="Sistem bildirim iznini telefon ayarlarından yönet" onPress={openSystemSettings} />
       </Section>
+
       <Section title="Görünüm ve etkileşim">
-        {toggle("haptics", "Dokunsal geri bildirim", "Butonlara dokunduğunda hafif titreşim kullan")}
-        {toggle("reduceTransparency", "Saydamlığı azalt", "Cam ve bulanıklık efektleri yerine düz zeminler kullan")}
+        <Toggle title="Dokunsal geri bildirim" detail="Butonlara dokunduğunda hafif titreşim" value={values.haptics} disabled={!ready} onChange={v => void savePreference({ haptics: v })} />
+        <Toggle title="Saydamlığı azalt" detail="Cam ve bulanıklık efektleri yerine düz zeminler kullan" value={values.reduceTransparency} disabled={!ready} onChange={v => void savePreference({ reduceTransparency: v })} />
         <Row title="Tema" detail="Gece mavisi · Bu sürümde koyu tema kullanılıyor" />
         <Row title="Dil" detail="Türkçe · Diğer diller henüz desteklenmiyor" />
-        <Row title="Metin boyutu" detail="Uygulama telefonunun sistem yazı boyutunu izler. Telefonunun Ekran veya Erişilebilirlik ayarlarından değiştirebilirsin." />
+        <Row title="Metin boyutu" detail="Uygulama her cihazda aynı görünmesi için sabit yazı boyutu kullanır." />
       </Section>
+
       <Section title="Gizlilik ve izinler">
-        <Row title="Şikâyetlerim" detail="Gönderdiğin şikâyetlerin durumunu takip et" onPress={()=>navigate('reports')}/>
-        <Row title="Gizlilik ve kullanım koşulları" detail="Yayımlanmış belgeler ve hesap hakları" onPress={()=>navigate('legal')}/>
-        <Row title="Verilerimi indir" detail="Hesap verilerinin JSON kopyasını kaydet" onPress={()=>navigate('account',{mode:'export'})}/>
-        <Row title="Hesabımı sil" detail="Hesabını ve ilişkili verilerini kalıcı olarak kaldır" danger onPress={()=>navigate('account',{mode:'delete'})}/>
-        <Row title="Konum erişimi" detail="Yakındaki etkinlikler için konum iznini yönet" onPress={permissions} />
-        <Row title="Kamera ve fotoğraflar" detail="Profil ve etkinlik görselleri için erişimi yönet" onPress={permissions} />
-        <Row title="Kişiler" detail="Referans seçimi için verdiğin rehber erişimini yönet" onPress={permissions} />
-        <Row title="Bu cihazdaki tercihler" detail="Titreşim ve görünüm tercihleri yalnızca bu cihazda saklanır; hesabını veya etkinliklerini değiştirmez." />
+        <Row title="Konum erişimi" detail="Yakındaki etkinlikler ve harita için" onPress={openSystemSettings} />
+        <Row title="Kamera ve fotoğraflar" detail="Profil ve etkinlik görselleri için" onPress={openSystemSettings} />
+        <Row title="Kişiler" detail="Referans seçimi için rehber erişimi" onPress={openSystemSettings} />
       </Section>
+
       <Section title="Yardım ve hakkında">
         <Row title="Nasıl çalışır?" detail="Keşfet, katıl ve birlikte plan yap" onPress={() => Alert.alert("İlk buluşmana doğru", "Keşfet veya Harita’dan bir etkinlik seç. Ayrıntılardan katılım durumunu takip et. Katıldığın etkinliğin odası açıldığında katılımcılarla sohbet edebilirsin. Kendi planını paylaşmak için Oluştur’u kullan.")} />
-        <Row title="Bir sorun yaşıyorum" detail="Bağlantı, izin ve hesap sorunları için yardım" onPress={() => Alert.alert("Yardım", "Bağlantı sorunu varsa internet erişimini kontrol edip yeniden dene. Konum veya fotoğraf erişimi için Gizlilik ve izinler bölümünü kullan. Hesabına erişemiyorsan Şifremi yenile seçeneğinden ilerle.")} />
+        <Row title="Bir sorun yaşıyorum" detail="Bağlantı, izin ve hesap sorunları için yardım" onPress={() => Alert.alert("Yardım", "Bağlantı sorunu varsa internet erişimini kontrol edip yeniden dene. Konum veya fotoğraf erişimi için Gizlilik ve izinler bölümünü kullan. Şifreni unuttuysan giriş ekranındaki Şifremi unuttum seçeneğinden ilerle.")} />
         <Row title="Web sitesi" detail={BRAND_NAME} onPress={() => void openExternal(BRAND_URL)} />
         <Row title="Uygulama sürümü" detail={`${BRAND_NAME} · ${Constants.expoConfig?.version || "1.0.0"}`} />
       </Section>
-      <Section title="Tercihler ve oturum">
+
+      <Section title="Oturum">
         <Row title="Cihaz tercihlerini sıfırla" detail="Titreşimi açar, saydamlığı azalt seçeneğini kapatır" onPress={() => {
-          if (busy || !ready) return
-          Alert.alert("Tercihler sıfırlansın mı?", "Hesabın, fotoğrafların ve etkinliklerin silinmez.", [{ text: "Vazgeç", style: "cancel" }, { text: "Sıfırla", onPress: () => void save(DEFAULT_PREFERENCES) }])
+          if (!ready) return
+          Alert.alert("Tercihler sıfırlansın mı?", "Hesabın, fotoğrafların ve etkinliklerin silinmez.", [{ text: "Vazgeç", style: "cancel" }, { text: "Sıfırla", onPress: () => void savePreference(DEFAULT_PREFERENCES) }])
         }} />
-        <Row title={busy ? "İşlem sürüyor…" : "Çıkış yap"} detail="Bu cihazdaki hesap oturumunu kapat" danger onPress={busy ? undefined : signOut} />
+        <Row title={busy ? "İşlem sürüyor…" : "Çıkış yap"} detail="Bu cihazdaki oturumu kapat" onPress={busy ? undefined : signOut} />
       </Section>
-      <Label style={s.footer}>Engellenen kullanıcı yönetimi bu sürümde henüz sunulmuyor.</Label>
+
+      <Section title="Hesabı sil">
+        <Row title="Hesabımı sil" detail="Hesabını ve ilişkili tüm verilerini kalıcı olarak kaldır" danger open={deleteOpen} onPress={() => { setDeleteOpen(!deleteOpen); setError(null) }} />
+        {deleteOpen && <Box style={s.form}>
+          <Label style={s.detail}>Profilin, oluşturduğun etkinlikler, katılımların ve mesajların silinir. Bu işlem geri alınamaz.</Label>
+          <Password label="Şifreni gir" value={deletePassword} onChange={setDeletePassword} />
+          <Touch disabled={busy} onPress={submitDelete} style={s.destructive}><Label style={s.destructiveLabel}>{busy ? "Siliniyor…" : "Hesabımı kalıcı olarak sil"}</Label></Touch>
+        </Box>}
+      </Section>
     </Scroll>
-  </Screen>
+  </Box>
 }
 const s = StyleSheet.create({
-  page: { paddingTop: 80, paddingHorizontal: 20, paddingBottom: 32 },
+  page: { paddingTop: 80, paddingHorizontal: 20, paddingBottom: 120 },
   section: { marginTop: 20, gap: 10 }, sectionTitle: { fontSize: 13, fontFamily: "Outfit-SemiBold", color: palette.accent },
   card: { borderRadius: 20, backgroundColor: "rgba(17,22,42,.9)", borderWidth: 1, borderColor: palette.border, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, minHeight: 72, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border },
   copy: { flex: 1, minWidth: 0, gap: 5 }, title: { color: palette.text, fontFamily: "Outfit-Medium", fontSize: 15 },
-  detail: { color: palette.muted, fontSize: 12, lineHeight: 18 }, chevron: { color: palette.accent, fontSize: 25 },
-  danger: { color: palette.error }, footer: { color: palette.muted, fontSize: 12, lineHeight: 19, marginTop: 24 },
+  detail: { color: palette.muted, fontSize: 12, lineHeight: 18 }, chevron: { color: palette.accent, fontSize: 20 },
+  danger: { color: palette.error }, error: { color: palette.error, fontSize: 13, lineHeight: 19, marginTop: 12 },
+  form: { gap: 10, padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border },
+  input: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.background, paddingHorizontal: 14, color: palette.text, fontSize: 15 },
+  primary: { minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#4d5bcb" },
+  primaryLabel: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15 },
+  destructive: { minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(243,155,175,.14)", borderWidth: 1, borderColor: "rgba(243,155,175,.4)" },
+  destructiveLabel: { color: palette.error, fontFamily: "Outfit-SemiBold", fontSize: 15 },
 })

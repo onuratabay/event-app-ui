@@ -106,15 +106,6 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
         >
           {busy ? "Bağlanıyor..." : "Giriş Yap"}
         </Touch>
-        <Touch
-          onPress={() => { setErrorMessage(null); navigate("discover") }}
-          disabled={busy}
-          accessibilityRole="button"
-          style={styles.demoButton}
-        >
-          Demo olarak devam et
-        </Touch>
-        <Label style={styles.demoHint}>Örnek verilerle uygulamayı keşfet.</Label>
         <Touch onPress={() => navigate("welcome")} style={[[ui.p3, ui.textCenter, ui.textWhite50]]}>
           Vazgeç
         </Touch>
@@ -124,8 +115,6 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
   )
 }
 const styles = StyleSheet.create({
-  demoButton: { minHeight: 50, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: "rgba(105,120,255,0.25)", backgroundColor: "rgba(105,120,255,0.05)", color: "#927dff", textAlign: "center", justifyContent: "center", fontFamily: "Outfit-Medium" },
-  demoHint: { color: "#89838a", fontSize: 11, textAlign: "center" },
   page: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 28, paddingTop: 88, paddingBottom: 36 },
   form: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 10 },
   heading: { gap: 12, marginBottom: 28 },

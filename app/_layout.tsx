@@ -14,6 +14,7 @@ import {
 } from "react-native"
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context"
 import { StoreProvider } from "../src/native/Store"
+import { PreferencesProvider } from "../src/native/preferences"
 import { ErrorNoticeProvider } from "../src/components/ErrorNotice"
 import ApiLoadingOverlay from "../src/components/ApiLoadingOverlay"
 import AppBottomNav from "../src/components/AppBottomNav"
@@ -41,6 +42,7 @@ export default function RootLayout() {
     )
   return (
     <SafeAreaProvider>
+      <PreferencesProvider>
       <SafeAreaView style={s.root} edges={["top", "bottom"]}>
         <StatusBar style="light" />
         <ErrorNoticeProvider>
@@ -64,6 +66,7 @@ export default function RootLayout() {
           </KeyboardAvoidingView>
         </ErrorNoticeProvider>
       </SafeAreaView>
+      </PreferencesProvider>
     </SafeAreaProvider>
   )
 }

@@ -6,7 +6,7 @@ import { TextInput } from "react-native";
 import { AtmoBackground } from "../components/GlassUI";
 import { ClockIcon, SearchIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
-import { useStore } from "../native/Store";
+import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
@@ -37,8 +37,8 @@ function EventRow({
           </Label>
         </Box>
       </Box>
-      <Label style={[[ui.text10px, ui.flexShrink0, event.isActive ? [ui.textEmerald400] : [ui.textAmber400]]]}>
-        {event.isActive ? "● Aktif" : "◌ Bekleniyor"}
+      <Label style={[[ui.text10px, ui.flexShrink0, isLivePhase(eventPhase(event)) ? [ui.textEmerald400] : [ui.textAmber400]]]}>
+        {eventPhase(event) === "forming" ? "◌ Bekleniyor" : EVENT_PHASE_LABEL[eventPhase(event)]}
       </Label>
     </Touch>;
 }

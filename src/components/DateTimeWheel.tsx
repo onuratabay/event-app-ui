@@ -30,7 +30,7 @@ function Wheel({ values, labels, value, onChange, label }: { values: number[]; l
       }}>
       {values.map((item, i) => <Pressable key={item} accessibilityRole="button" accessibilityLabel={`${label}: ${labels?.[i] || pad(item)}`}
         accessibilityState={{ selected: item === value }} onPress={() => { onChange(item); ref.current?.scrollTo({ y: i * ROW, animated: true }) }} style={s.option}>
-        <Text numberOfLines={1} style={[s.text, item === value && s.active]}>{labels?.[i] || pad(item)}</Text>
+        <Text allowFontScaling={false}numberOfLines={1} style={[s.text, item === value && s.active]}>{labels?.[i] || pad(item)}</Text>
       </Pressable>)}
     </ScrollView>
   </View>
@@ -58,16 +58,16 @@ export default function DateTimeWheel({ mode, value, onConfirm, onClose }: { mod
       <Pressable accessibilityLabel="Seçimi kapat" onPress={onClose} style={StyleSheet.absoluteFill} />
       <SafeAreaView edges={["bottom"]} style={s.panel}>
         <View style={s.toolbar}>
-          <Pressable onPress={onClose} accessibilityRole="button" style={s.action}><Text style={s.cancel}>İptal</Text></Pressable>
-          <Text style={s.title}>{mode === "time" ? "Saat seç" : "Tarih seç"}</Text>
+          <Pressable onPress={onClose} accessibilityRole="button" style={s.action}><Text allowFontScaling={false}style={s.cancel}>İptal</Text></Pressable>
+          <Text allowFontScaling={false}style={s.title}>{mode === "time" ? "Saat seç" : "Tarih seç"}</Text>
           <Pressable accessibilityRole="button" onPress={() => {
             onConfirm(mode === "time" ? `${pad(hour)}:${pad(minute)}` : `${year}-${pad(month)}-${pad(Math.min(day, dayCount))}`); onClose()
-          }} style={s.action}><Text style={s.done}>Tamam</Text></Pressable>
+          }} style={s.action}><Text allowFontScaling={false}style={s.done}>Tamam</Text></Pressable>
         </View>
         <View style={s.row}>
           {mode === "time" ? <>
             <Wheel label="Saat" values={Array.from({ length: 24 }, (_, i) => i)} value={hour} onChange={setHour} />
-            <Text style={s.separator}>:</Text>
+            <Text allowFontScaling={false}style={s.separator}>:</Text>
             <Wheel label="Dakika" values={Array.from({ length: 60 }, (_, i) => i)} value={minute} onChange={setMinute} />
           </> : <>
             <Wheel label="Gün" values={Array.from({ length: dayCount }, (_, i) => i + 1)} value={Math.min(day, dayCount)} onChange={setDay} />

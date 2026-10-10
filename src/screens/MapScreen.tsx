@@ -235,7 +235,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
         </Box>
         <Touch onPress={() => setFilterOpen(true)}><Label style={s.gold}>{filters.place ? `${filters.place.name} · ${filters.radiusKm} km` : "Her yerde"} · {filters.datePreset === "all" ? "Yaklaşan" : `${range.from}${range.to && range.to !== range.from ? ` → ${range.to}` : ""}`}{filters.timeFrom ? ` · ${filters.timeFrom}–${filters.timeTo}` : ""}  Düzenle</Label></Touch>
         {locationError && <Touch onPress={() => { setLocationError(null); setFilterOpen(true) }}><Label style={s.error}>{locationError}</Label></Touch>}
-        {loading ? <Box style={s.legendItem}><ActivityIndicator color="#b9c3ff" /><Label style={s.muted}>Etkinlikler yükleniyor…</Label></Box>
+        {loading ? <Box style={s.legendItem}><ActivityIndicator color="#b9c3ff" /></Box>
           : error ? <Touch onPress={() => setRetry(value => value + 1)}><Label style={s.error}>{error} Yenile ↻</Label></Touch>
           : !filtered.length ? <Label style={s.muted}>Bu filtrelerde konumu kayıtlı etkinlik bulunamadı.</Label>
           : <Label style={s.muted}>{mode === "heat" ? "Yakınlaşarak kümeleri keşfet. Renkler bu görünümdeki göreli yoğunluğu gösterir." : mode === "cluster" ? "Sayılar etkinlik adedidir. Kümeye dokunarak yakınlaş." : "Noktaya dokunarak etkinliği seç. Aynı konumdakiler sayılı gösterilir."}</Label>}

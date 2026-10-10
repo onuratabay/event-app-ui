@@ -1,10 +1,18 @@
-import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
+import { isRunningInExpoGo } from "expo";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { registerPushDevice, removePushDevice } from "../api/client";
 export const PUSH_TOKEN_KEY = "event-app:push-token";
+// Expo Go on Android (SDK 53+) throws as soon as expo-notifications is imported,
+// so the module is loaded only when push is actually enabled.
+function loadNotifications(): typeof import("expo-notifications") {
+  if (Platform.OS === "android" && isRunningInExpoGo())
+    throw new Error("Telefon bildirimleri Expo Go'da desteklenmiyor. Uygulamanın geliştirme sürümünü kullan.");
+  return require("expo-notifications");
+}
 export async function enablePush() {
+  const Notifications = loadNotifications();
   const projectId =
     Constants.easConfig?.projectId ||
     Constants.expoConfig?.extra?.eas?.projectId;

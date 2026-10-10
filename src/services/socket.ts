@@ -70,6 +70,8 @@ export function retainEvent(eventId: string) {
     else { rooms.delete(eventId); if (socket?.connected) void socketAction('event:leave', { eventId }).catch(() => {}) }
   }
 }
+/** True while the realtime connection can carry actions right now. */
+export const socketConnected = () => Boolean(socket?.connected)
 export function socketAction<T = unknown>(name: string, payload: unknown): Promise<T> {
   const current = socket
   const version = generation

@@ -1,12 +1,27 @@
-import ActivityIndicator from "./LoadingSpinner";
-import { CategoryIcon } from "./Icons";
-import { palette } from "../theme/palette";
 import { usePathname } from "expo-router"
 import { useEffect, useRef, useState } from "react"
 import { Animated, Easing, StyleSheet, View } from "react-native"
 import { SharedBlur } from "../native/SharedBlur"
 import { apiLoading } from "../api/loading"
 import { Label } from "../native/UI"
+
+/** The splash screen's ✦ mark, spinning inside the same tile. */
+function SplashMarkSpinner() {
+  const progress = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    // The lightweight native-host test shim does not implement animation loops.
+    if (typeof Animated.loop !== "function") return
+    const animation = Animated.loop(Animated.timing(progress, { toValue: 1, duration: 1400, easing: Easing.linear, useNativeDriver: true }))
+    animation.start()
+    return () => animation.stop()
+  }, [progress])
+  const rotate = progress.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] })
+  return <View style={styles.tile}>
+    <Animated.View style={{ transform: [{ rotate }] }}>
+      <Label style={styles.mark}>✦</Label>
+    </Animated.View>
+  </View>
+}
 
 export default function ApiLoadingOverlay() {
   const [visible, setVisible] = useState(false)
@@ -16,20 +31,6 @@ export default function ApiLoadingOverlay() {
   const appear = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const hide = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const shownAt = useRef(0)
-  const pulse = useRef(new Animated.Value(0)).current
-  const orbit = useRef(new Animated.Value(0)).current
-
-  useEffect(() => {
-    if (typeof Animated.loop !== "function") return
-    const animation = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-    ]))
-    const orbitAnimation = Animated.loop(Animated.timing(orbit, { toValue: 1, duration: 2800, easing: Easing.linear, useNativeDriver: true }))
-    animation.start()
-    orbitAnimation.start()
-    return () => { animation.stop(); orbitAnimation.stop() }
-  }, [orbit, pulse])
 
   useEffect(() => {
     const unsubscribe = apiLoading.subscribe(count => {
@@ -59,31 +60,16 @@ export default function ApiLoadingOverlay() {
   }, [])
 
   if (!visible || onSplash) return null
-  const spin = orbit.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] })
-  const counterSpin = orbit.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "-360deg"] })
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [.9, 1.08] })
-  return <View pointerEvents="none" style={styles.layer} accessibilityRole="progressbar" accessibilityLabel="Etkinlikler hazırlanıyor">
+  // Only the spinner is shown: no caption or decorations around it.
+  return <View pointerEvents="none" style={styles.layer} accessibilityRole="progressbar" accessibilityLabel="Yükleniyor">
     <SharedBlur intensity={9} tint="dark" style={StyleSheet.absoluteFill} />
-    <Animated.View style={[styles.orbit, { transform: [{ rotate: spin }] }]}>
-      {[["Doğa", -64, -52], ["Sanat", 64, -45], ["Kahve", 54, 66], ["Müzik", -66, 52]].map(([icon, x, y]) => <Animated.View key={String(icon)} style={[styles.event, { transform: [{ translateX: x as number }, { translateY: y as number }, { rotate: counterSpin }] }]}><CategoryIcon name={String(icon)} size={21} style={{ color: palette.accent }} /></Animated.View>)}
-      <View style={styles.orbitRing} />
-    </Animated.View>
-    <Animated.View style={[styles.core, { transform: [{ scale }] }]}>
-      <Label style={styles.spark}>✦</Label>
-    </Animated.View>
-    <Label style={styles.title}>Etkinlikler hazırlanıyor</Label>
-    <ActivityIndicator color="#b9c3ff" style={styles.spinner} />
+    <SplashMarkSpinner />
   </View>
 }
 
 const styles = StyleSheet.create({
   layer: { ...StyleSheet.absoluteFill, zIndex: 900, elevation: 900, alignItems: "center", justifyContent: "center" },
-  orbit: { width: 184, height: 184, alignItems: "center", justifyContent: "center" },
-  event: { position: "absolute", width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,.10)", borderWidth: 1, borderColor: "rgba(226,200,117,.32)" },
-  eventIcon: { fontSize: 21, lineHeight: 28, textShadowColor: "rgba(0,0,0,.55)", textShadowRadius: 8 },
-  orbitRing: { position: "absolute", width: 128, height: 128, borderRadius: 64, borderWidth: 1, borderColor: "rgba(255,255,255,.08)" },
-  core: { position: "absolute", marginTop: -71, width: 80, height: 80, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(105,120,255,.16)", borderWidth: 1, borderColor: "rgba(183,197,255,.42)" },
-  spark: { color: "#f4d47d", fontSize: 32, lineHeight: 38, textShadowColor: "rgba(105,120,255,.75)", textShadowRadius: 14 },
-  title: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 13, lineHeight: 19, marginTop: 4, textShadowColor: "rgba(0,0,0,.75)", textShadowRadius: 7 },
-  spinner: { marginTop: 7 },
+  // Same tile as the splash screen's core mark.
+  tile: { width: 80, height: 80, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(105,120,255,.16)", borderWidth: 1, borderColor: "rgba(183,197,255,.42)" },
+  mark: { fontFamily: "Fraunces", fontSize: 24, lineHeight: 31, color: "rgba(255,255,255,.9)", textAlign: "center" },
 })

@@ -34,14 +34,14 @@ export function ErrorNoticeProvider({ children }: { children: ReactNode }) {
       {children}
       {notice && <View pointerEvents="box-none" style={[styles.layer, { top: insets.top + 12 }]}>
         <View style={styles.card} accessibilityRole="alert">
-          <Text style={styles.icon}>!</Text>
+          <Text allowFontScaling={false}style={styles.icon}>!</Text>
           <View style={styles.content}>
-            <Text style={styles.title} numberOfLines={1}>{notice.title}</Text>
-            <Text style={styles.message} numberOfLines={2}>{notice.message}</Text>
+            <Text allowFontScaling={false}style={styles.title} numberOfLines={1}>{notice.title}</Text>
+            <Text allowFontScaling={false}style={styles.message} numberOfLines={2}>{notice.message}</Text>
             {notice.onRetry && <Pressable accessibilityRole="button" onPress={() => {
               hide(notice.id)
               notice.onRetry?.()
-            }} style={styles.retry}><Text style={styles.retryText}>Tekrar dene</Text></Pressable>}
+            }} style={styles.retry}><Text allowFontScaling={false}style={styles.retryText}>Tekrar dene</Text></Pressable>}
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel="Bildirimi kapat" onPress={() => {
             hide(notice.id)

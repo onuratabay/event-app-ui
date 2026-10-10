@@ -18,8 +18,10 @@ interface Data {
   events: AppEvent[]
   messages: Record<string, ChatMessage[]>
   onboarding: Record<string, string>
+  /** Rooms the user silenced; their unread badge is hidden. Stored server-side (preference "mutedRooms"). */
+  mutedRooms: string[]
 }
-const initial: Data = { user: EMPTY_USER, events: [], messages: {}, onboarding: {} }
+const initial: Data = { user: EMPTY_USER, events: [], messages: {}, onboarding: {}, mutedRooms: [] }
 export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
   if (!remoteUser || typeof remoteUser !== "object") return user
   const remote = remoteUser as import('../api/client').ApiUser
@@ -32,6 +34,17 @@ export const isUnlimitedCapacity = (max: number) => max >= UNLIMITED_PARTICIPANT
 export const participantCount = (current: number, max: number) => `${current}/${isUnlimitedCapacity(max) ? "∞" : max}`
 // The event room (chat) opens once confirmed participants reach the minimum; the backend enforces the same rule.
 export const isRoomReady = (event: AppEvent) => event.status !== "cancelled" && event.currentParticipants >= event.minParticipants
+// One meaning of "aktif" everywhere: the minimum is reached and the room is open.
+// A started event is shown separately as "Başladı".
+export type EventPhase = "cancelled" | "closed" | "started" | "active" | "forming"
+export function eventPhase(event: AppEvent): EventPhase {
+  if (event.status === "cancelled") return "cancelled"
+  if (event.status === "closed") return "closed"
+  if (event.isActive) return "started"
+  return isRoomReady(event) ? "active" : "forming"
+}
+export const EVENT_PHASE_LABEL: Record<EventPhase, string> = { cancelled: "İptal edildi", closed: "Sona erdi", started: "● Başladı", active: "● Aktif", forming: "◌ Katılımcı Bekleniyor" }
+export const isLivePhase = (phase: EventPhase) => phase === "started" || phase === "active"
 // The chat screen registers the room it shows so new messages there are not counted as unread.
 let openRoomId: string | null = null
 export const setOpenRoom = (eventId: string | null) => { openRoomId = eventId }
@@ -129,7 +142,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     try {
       const [remote, interests, preferences, events, mine] = await Promise.all([getCurrentUser(), getUserInterests(), getPreferences(), getEvents(), getMyEvents()])
       if (generation !== sessionGeneration.current) return
-      // Migrate only preferences belonging to this authenticated account, never demo events or users.
+      // Migrate only preferences belonging to this authenticated account, never another account's data.
       const legacy = await AsyncStorage.getItem('event-app:v1')
       let old: { user?: { id?: string; recommendationProfile?: import('../recommendations/model').RecommendationProfile }; events?: unknown[]; messages?: Record<string, unknown> } | null = null
       try { old = legacy ? JSON.parse(legacy) : null } catch { /* A malformed legacy cache must not block server data. */ }
@@ -149,7 +162,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (generation !== sessionGeneration.current) return
       if (!old?.user?.id || old.user.id === 'me' || old.user.id === remote.id) await AsyncStorage.multiRemove(['event-app:v1', 'event-app:map-filters'])
       const all = [...new Map([...events.items, ...mine.items].map(event => [event.id, event])).values()]
-      setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), interests: interests.map(i => i.name), recommendationProfile: preferences.recommendationProfile }, events: all.map(mapApiEvent) }))
+      setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), interests: interests.map(i => i.name), recommendationProfile: preferences.recommendationProfile }, events: all.map(mapApiEvent), mutedRooms: preferences.mutedRooms?.ids || [] }))
       page.current = 1; setMoreEvents(mine.hasMore)
       feedPage.current = 1; setMoreFeedEvents(events.items.length < events.total)
       setStorageError(null)
@@ -211,7 +224,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const roomMessage = onSocket('room:message', (delta: { eventId: string; at: string; userId?: string }) => setData(current => ({ ...current, events: current.events.map(event => event.id !== delta.eventId ? event : {
       ...event,
       lastMessageAt: delta.at,
-      unreadCount: delta.userId === current.user.id || delta.eventId === openRoomId ? event.unreadCount || 0 : (event.unreadCount || 0) + 1,
+      unreadCount: delta.userId === current.user.id || delta.eventId === openRoomId || (current.mutedRooms || []).includes(delta.eventId) ? event.unreadCount || 0 : (event.unreadCount || 0) + 1,
     }) })))
     return () => { cleanups.forEach(cleanup => cleanup()); roomMessage() }
   }, [])

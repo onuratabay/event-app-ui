@@ -111,7 +111,7 @@ export default function ProfileScreen({
         right={isOwn ? <Box style={profileNavStyles.actions}>
           <Touch
             accessibilityLabel="Ayarları aç"
-            onPress={() => Alert.alert("Ayarlar", "Bu bölüm yakında kullanıma açılacak.")}
+            onPress={() => navigate("settings")}
             style={profileNavStyles.action}
           >
             <Label style={profileNavStyles.actionLabel}>Ayarlar</Label>
@@ -171,15 +171,6 @@ export default function ProfileScreen({
             <Label style={profileInstagramStyles.external}>↗</Label>
             {isOwn ? <Label style={profileInstagramStyles.private}>Özel</Label> : null}
           </Touch>
-
-          {/* Bio */}
-          <Box style={[[ui.mt4]]}>
-            {isOwn ? <Box style={[[ui.textSm, ui.textWhite55, ui.leadingRelaxed]]}>
-                <InlineEditField value={user.bio} onSave={v => update("bio", v)} multiline />
-              </Box> : <Label style={[[ui.textSm, ui.textWhite55, ui.leadingRelaxed]]}>
-                {user.bio}
-              </Label>}
-          </Box>
         </Box>
 
         {/* Stats */}

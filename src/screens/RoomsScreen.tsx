@@ -65,7 +65,7 @@ export default function RoomsScreen({
                         </Box>
                       </Box>
                       <Box style={[[ui.flex, ui.flexCol, ui.itemsEnd, ui.gap1]]}>
-                        {(event.unreadCount || 0) > 0 ? <Box accessibilityLabel={`${event.unreadCount} okunmamış mesaj`} style={{ minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: palette.accent }}>
+                        {(store.mutedRooms || []).includes(event.id) ? <Label accessibilityLabel="Sessize alındı" style={[[ui.text10px, ui.textWhite40]]}>🔕 Sessiz</Label> : (event.unreadCount || 0) > 0 ? <Box accessibilityLabel={`${event.unreadCount} okunmamış mesaj`} style={{ minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: palette.accent }}>
                             <Label style={{ fontFamily: "Outfit-SemiBold", fontSize: 11, lineHeight: 14, color: palette.background }}>
                               {(event.unreadCount || 0) > 99 ? "99+" : event.unreadCount}
                             </Label>

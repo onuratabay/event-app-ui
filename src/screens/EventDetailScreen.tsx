@@ -3,7 +3,7 @@ import { useBottomNavInset } from "../components/BottomNav";
 import { CategoryIcon } from "../components/Icons";
 import { socketAction } from '../services/socket';
 import { participate, getApiErrorMessage, getEvent } from "../api/client";
-import { isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
+import { eventPhase, isLivePhase, isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
@@ -43,7 +43,6 @@ export default function EventDetailScreen({
     catch (error) { Alert.alert('Katılım güncellenemedi', getApiErrorMessage(error)); }
     finally { setJoining(false); }
   };
-  const isActive = event.isActive;
   const roomReady = isRoomReady(event);
   const isForming = !roomReady && !['cancelled', 'closed'].includes(event.status || '');
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
@@ -56,8 +55,8 @@ export default function EventDetailScreen({
 
           {/* Status */}
           <Box style={[[ui.fixed, ui.bottom4, ui.left5]]}>
-            <Box style={[[ui.px3, ui.py15, ui.roundedFull, ui.textXs, ui.fontMedium, isActive ? [ui.bgEmerald50025, ui.border, ui.borderEmerald40040, ui.textEmerald300] : [ui.bgAmber50020, ui.border, ui.borderAmber40030, ui.textAmber300]]]}>
-              {event.status === "cancelled" ? "Etkinlik iptal edildi" : event.status === "closed" ? "Etkinlik sona erdi" : isActive ? "● Etkinlik Aktif" : roomReady ? "● Oda açık" : "◌ Katılımcı Bekleniyor"}
+            <Box style={[[ui.px3, ui.py15, ui.roundedFull, ui.textXs, ui.fontMedium, isLivePhase(eventPhase(event)) ? [ui.bgEmerald50025, ui.border, ui.borderEmerald40040, ui.textEmerald300] : [ui.bgAmber50020, ui.border, ui.borderAmber40030, ui.textAmber300]]]}>
+              {{ cancelled: "Etkinlik iptal edildi", closed: "Etkinlik sona erdi", started: "● Etkinlik başladı · Oda açık", active: "● Aktif · Oda açık", forming: "◌ Katılımcı Bekleniyor" }[eventPhase(event)]}
             </Box>
           </Box>
         </Box>
@@ -322,7 +321,7 @@ export default function EventDetailScreen({
               <Line x1="12" y1="16" x2="12.01" y2="16" />
             </Vector>
             <Label style={[[ui.textXs, ui.textAmber30060]]}>
-              Etkinlik minimum katılımcı sayısına ulaştığında oda açılacak.
+              Etkinlik henüz aktif değil. Etkinlik minimum katılımcı sayısına ulaştığında oda açılacak ({event.currentParticipants}/{event.minParticipants}).
             </Label>
           </Box>}
 

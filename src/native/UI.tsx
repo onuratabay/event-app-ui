@@ -1,6 +1,7 @@
 import { palette } from "../theme/palette";
 import DateTimeWheel from "../components/DateTimeWheel"
 import { SharedBlur } from "./SharedBlur"
+import { usePreferences } from "./preferences"
 import * as Haptics from "expo-haptics"
 import { Image } from "expo-image"
 import { LinearGradient, type LinearGradientProps } from "expo-linear-gradient"
@@ -128,8 +129,10 @@ function Content({
         <View
           key={React.isValidElement(c) ? (c.key ?? i) : i}
           style={{
+            // Floor so sub-pixel rounding (notably on Android) never pushes the
+            // last cell of a row onto the next line.
             width: width
-              ? Math.max(0, (width - (columns - 1) * gap) / columns)
+              ? Math.max(0, Math.floor((width - (columns - 1) * gap) / columns))
               : `${100 / columns}%`,
             flexGrow: 0,
             flexShrink: 0,
@@ -158,7 +161,8 @@ function Paint({
     >
       {glass && (
         <>
-          <SharedBlur intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
+          {/* Strong enough that copy scrolling behind glass buttons is blurred out. */}
+          <SharedBlur intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
           <LinearGradient
             colors={["rgba(183,197,255,.035)", "rgba(183,197,255,.01)", "rgba(146,125,255,.02)"]}
             start={{ x: 0, y: 0 }}
@@ -245,11 +249,13 @@ export function Label({
   if (ownTypography.fontSize !== undefined && ownTypography.lineHeight === undefined) {
     typography.lineHeight = Math.ceil(Number(ownTypography.fontSize) * 1.28)
   }
-  return <Typography.Provider value={typography}><Text {...props} style={[flat, font(typography)]}>{children}</Text></Typography.Provider>
+  // Fixed type size keeps every device on the same layout regardless of system font scale.
+  return <Typography.Provider value={typography}><Text allowFontScaling={false} {...props} style={[flat, font(typography)]}>{children}</Text></Typography.Provider>
 }
 
 export interface TouchProps extends LayoutProps {
   onPress?: (event: GestureResponderEvent) => void
+  onLongPress?: (event: GestureResponderEvent) => void
   disabled?: boolean
   rippleColor?: string
   haptic?: boolean
@@ -274,6 +280,7 @@ export function Touch({
 }: TouchProps) {
   const inherited = useContext(Typography),
     { text, view } = split(style)
+  const { values: preferences } = usePreferences()
   const scale = useRef(new Animated.Value(1)).current
   const animate = (toValue: number) =>
     Animated.spring(scale, {
@@ -301,7 +308,7 @@ export function Touch({
         onPress={onPress ? (event) => {
           if (disabled) return
           const now = Date.now()
-          if (haptic && now - lastHapticAt >= 80) {
+          if (haptic && preferences.haptics && now - lastHapticAt >= 80) {
             lastHapticAt = now
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
           }
@@ -421,7 +428,7 @@ export function Picture({
         },
       ]}
     >
-      <Text style={{ color: palette.accent, fontFamily: "Outfit-Medium", fontSize: 16, lineHeight: 22, includeFontPadding: false }}>
+      <Text allowFontScaling={false} style={{ color: palette.accent, fontFamily: "Outfit-Medium", fontSize: 16, lineHeight: 22, includeFontPadding: false }}>
         {accessibilityLabel?.slice(0, 1) || "✦"}
       </Text>
     </View>
@@ -474,6 +481,7 @@ export function Field({
     )
   return (
     <TextInput
+      allowFontScaling={false}
       {...props}
       ref={ref}
       value={value}

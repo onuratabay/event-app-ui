@@ -6,9 +6,9 @@ Expo SDK 57 + React Native + TypeScript application for iOS and Android.
 - `src/screens/`: Existing application screens. Preserve their Turkish copy and midnight navy visual design with restrained blue/violet accents from `src/theme/palette.ts`.
 - `src/components/`: Shared cards, controls, icons and bottom navigation.
 - `src/native/UI.tsx`: Native layout, typography, press feedback, scrolling, images and sheets.
+- `src/data.ts`: Sample users, events and messages served by the test mock server (not used by the app).
 - `src/native/Store.tsx`: AsyncStorage-backed local prototype state.
 - `src/theme/styles.ts`: React Native StyleSheet tokens.
-- `src/data.ts`: Original sample users, events and messages.
 - `assets/fonts/`: Bundled Outfit/Fraunces fonts and licenses.
 
 Use native components and StyleSheet. Do not introduce DOM elements, CSS, WebView or a web bundler.
