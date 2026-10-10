@@ -63,7 +63,7 @@ Module._load = function (id, parent, isMain) {
       Platform: { OS: process.env.TEST_PLATFORM || "ios" },
       Alert: { alert() {} },
       AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) },
-      Keyboard: { addListener: () => ({ remove() {} }) },
+      Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => { global.__testKeyboardDismissed = true } },
       BackHandler: { addEventListener: (_name, handler) => { global.__testBackHandler = handler; return { remove() { global.__testBackHandler = undefined } } } },
       AccessibilityInfo: { isReduceMotionEnabled: async () => false, announceForAccessibility() {}, getRecommendedTimeoutMillis: async value => value },
       Easing: { linear: value => value, quad: value => value ** 2, cubic: value => value ** 3, out: easing => easing, inOut: easing => easing },
@@ -157,7 +157,7 @@ async function mount(name, props = {}) {
         null,
         React.createElement(Screen, { navigate: () => {}, ...props }),
       ),
-      { createNodeMock: () => ({ scrollToEnd() {}, focus() {} }) },
+      { createNodeMock: () => ({ scrollToEnd() {}, scrollTo() {}, focus() {} }) },
     )
   })
   audit(tree.toJSON())
@@ -236,6 +236,12 @@ async function tap(tree, label) {
   const birthField = () => registration.root.findAll(n => n.props.mode === "date" && typeof n.props.onChangeText === "function")[0]
   assert(birthField(), "Birth date opens the date picker")
   assert.equal(birthField().props.defaultValue, "2000-01-01", "Picker starts at a plausible birth year")
+  const birthButton = registration.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Doğum Tarihi")
+  global.__testKeyboardDismissed = false
+  await act(async () => birthButton.props.onPress?.({ stopPropagation() {} }))
+  assert(global.__testKeyboardDismissed, "Opening the date picker closes the keyboard so it cannot hide the panel")
+  assert(registration.root.findAllByType("Modal").length > 0 && text(registration.toJSON()).includes("Tarih seç"), "Tapping birth date opens the date picker")
+  await tap(registration, "İptal")
   await act(async () => birthField().props.onChangeText("2099-01-01"))
   assert(text(registration.toJSON()).includes("Doğum tarihi gelecekte olamaz"), "Future birth dates are rejected")
   await act(async () => birthField().props.onChangeText("1995-06-15"))
