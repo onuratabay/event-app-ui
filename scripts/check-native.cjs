@@ -272,7 +272,7 @@ async function tap(tree, label) {
     feedEvent("soon-film", { category: "Film", createdAt: "2026-10-02T10:00:00Z", date: "15/10/2026", time: "20:00", latitude: 39.93, longitude: 32.86 }),
   ]
   const order = (sortBy, location) => sortFeed(feed, sortBy, { interests: ["Padel"], location }).map(event => event.id)
-  assert.deepEqual(order("recommended"), ["new-padel", "old-padel", "new-yoga", "soon-film"], "Recommended: user's interests first, newest first within")
+  assert.deepEqual(order("recommended"), ["old-padel", "new-padel", "soon-film", "new-yoga"], "Recommended: user's interests first, then the soonest start")
   assert.deepEqual(order("time-asc"), ["soon-film", "new-yoga", "old-padel", "new-padel"], "Nearest time first; same start time puts the newest first")
   assert.deepEqual(order("time-desc"), ["new-padel", "new-yoga", "old-padel", "soon-film"], "Farthest time first; same start time puts the newest first")
   const ankara = { latitude: 39.92, longitude: 32.85 }

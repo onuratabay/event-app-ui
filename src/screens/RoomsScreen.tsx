@@ -8,6 +8,8 @@ import { byLatestMessage, isEventMember, isRoomReady, roomTitle, useStore } from
 import { Box, Label, Picture, Scroll, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
+import { useEffect, useState } from "react";
+import { RefreshControl } from "react-native";
 interface Props {
   navigate: NavigateFn;
 }
@@ -21,8 +23,16 @@ export default function RoomsScreen({
   navigate
 }: Props) {
   const {
-    data: store, loadMoreEvents, moreEvents
+    data: store, loadMoreEvents, moreEvents, refreshMyEvents
   } = useStore();
+  // Own, joined and favourite events refresh when Rooms opens and on pull-to-refresh.
+  const [refreshing, setRefreshing] = useState(false);
+  const reloadMine = async (pulled = false) => {
+    if (pulled) setRefreshing(true);
+    try { await refreshMyEvents(); } catch { /* The store shows a retryable error notice. */ }
+    finally { if (pulled) setRefreshing(false); }
+  };
+  useEffect(() => { void reloadMine(); }, []);
   const EVENTS = store.events;
   // Each event whose room is open appears as a chat named after the event.
   const activeEvents = EVENTS.filter(e => isRoomReady(e) && isEventMember(e, store.user.id)).sort(byLatestMessage);
@@ -31,7 +41,7 @@ export default function RoomsScreen({
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="discover" onBack={() => navigate("discover")} title="Etkinliklerim" subtitle="Katıldığın ve düzenlediğin etkinlikler" />
 
-      <Scroll style={[[ui.relative, ui.hFull, ui.pb28], { paddingTop: 80 }]}>
+      <Scroll style={[[ui.relative, ui.hFull, ui.pb28], { paddingTop: 80 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void reloadMine(true); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={80} />}>
 
         {/* Active rooms */}
         <Box style={[[ui.px5, ui.mb6]]}>

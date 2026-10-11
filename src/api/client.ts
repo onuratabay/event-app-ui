@@ -67,8 +67,11 @@ export function getApiErrorMessage(error: unknown, fallback = "Lütfen tekrar de
 }
 
 export const apiRequestCounts: Record<string, number> = {}
-async function request<T>(path: string, options: RequestInit = {}, retryAuth = true): Promise<T> {
-  apiLoading.begin()
+/** `background`: the screen does not wait for this request, so the global loading overlay stays hidden. */
+type RequestOptions = RequestInit & { background?: boolean }
+async function request<T>(path: string, requestOptions: RequestOptions = {}, retryAuth = true): Promise<T> {
+  const { background = false, ...options } = requestOptions
+  if (!background) apiLoading.begin()
   const started = Date.now()
   const counterKey = `${options.method || 'GET'} ${path.split('?')[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ':id')}`
   if (__DEV__) apiRequestCounts[counterKey] = (apiRequestCounts[counterKey] || 0) + 1
@@ -103,7 +106,7 @@ async function request<T>(path: string, options: RequestInit = {}, retryAuth = t
   }
 
   if (response.status === 401 && retryAuth && !["/auth/login", "/auth/register", "/auth/refresh", "/auth/forgot-password", "/auth/reset-password"].includes(path)) {
-    if (await refreshSession()) return request<T>(path, options, false)
+    if (await refreshSession()) return request<T>(path, requestOptions, false)
   }
   if (!response.ok) {
     const body = await response.text()
@@ -116,7 +119,7 @@ async function request<T>(path: string, options: RequestInit = {}, retryAuth = t
   if (__DEV__) console.debug('[API REQUEST]', { endpoint: counterKey, durationMs: Date.now() - started, responseBytes: unescape(encodeURIComponent(JSON.stringify(result))).length, count: apiRequestCounts[counterKey] })
   return result
   } finally {
-    apiLoading.end()
+    if (!background) apiLoading.end()
   }
 }
 
@@ -207,6 +210,13 @@ export async function logout() {
 
 export async function getEvents(page = 1, limit = 20) {
   return request<EventListResponse>(`/events?page=${page}&limit=${limit}`)
+}
+
+/** Events between two dates (dd/mm/yyyy, inclusive) from the server, for search. */
+export function searchEventsByDate(dateFrom: string, dateTo?: string) {
+  const params = new URLSearchParams({ page: "1", limit: "100", dateFrom })
+  if (dateTo) params.set("dateTo", dateTo)
+  return request<EventListResponse>(`/events?${params.toString()}`)
 }
 
 export async function getMapEvents(signal?: AbortSignal, filters: { dateFrom?: string; dateTo?: string; interestIds?: string[]; minLat?: number; maxLat?: number; minLng?: number; maxLng?: number } = {}) {
@@ -309,7 +319,18 @@ export function putPreference<K extends keyof Preferences>(key: K, value: NonNul
   return write
 }
 export const getEvent = (id: string) => request<ApiEvent>(`/events/${id}`)
-export const favoriteEvent = (id: string, saved: boolean) => request(`/events/${id}/favorite`, { method: saved ? 'PUT' : 'DELETE' })
+export const favoriteEvent = (id: string, saved: boolean) => request(`/events/${id}/favorite`, { method: saved ? 'PUT' : 'DELETE', background: true })
+// Favourite taps run in the background, one after another per event, so the server ends on the last tap.
+const favoriteQueue = new Map<string, Promise<unknown>>()
+// Kept after the request settles, so a caller's error handler can still tell whether its tap was the last one.
+const latestFavorite = new Map<string, Promise<unknown>>()
+export function setFavorite(id: string, saved: boolean): { done: Promise<unknown>; isLatest: () => boolean } {
+  const done = (favoriteQueue.get(id) ?? Promise.resolve()).catch(() => {}).then(() => favoriteEvent(id, saved))
+  favoriteQueue.set(id, done)
+  latestFavorite.set(id, done)
+  void done.finally(() => { if (favoriteQueue.get(id) === done) favoriteQueue.delete(id) }).catch(() => {})
+  return { done, isLatest: () => latestFavorite.get(id) === done }
+}
 export const participate = (id: string, join: boolean) => request<ApiEvent>(`/events/${id}/${join ? 'join' : 'leave'}`, { method: 'POST' })
 // Most frequent lines from the user's own past event descriptions (dismissed ones excluded).
 export const getSuggestions = () => request<{ items: string[] }>('/events/mine/suggestions')

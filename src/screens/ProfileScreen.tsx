@@ -5,7 +5,7 @@ import TopNavBar from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
-import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getReferenceRequests, getApiErrorMessage, type ReferenceRequest } from "../api/client";
+import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getApiErrorMessage } from "../api/client";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
 import { InstagramIcon } from "../components/Icons";
@@ -138,7 +138,8 @@ export default function ProfileScreen({
   const {
     data: store,
     resetSession,
-    setData: setStore
+    setData: setStore,
+    loadReferences
   } = useStore();
   const EVENTS = store.events;
   const ME = store.user;
@@ -156,8 +157,9 @@ export default function ProfileScreen({
     } catch { Alert.alert("Çıkış yapılamadı", "Lütfen tekrar dene."); }
     finally { setLoggingOut(false); }
   };
-  const [references, setReferences] = useState<ReferenceRequest[]>([]);
-  useEffect(() => { getReferenceRequests().then(result => setReferences(result.items.filter(i => i.status === 'approved'))).catch(() => {}); }, []);
+  // References come from the store: fetched on the first visit, then kept current by socket events.
+  const references = (store.references || []).filter(item => item.status === 'approved');
+  useEffect(() => { void loadReferences().catch(() => {}); }, []);
   const update = async (key: string, value: string) => {
     try {
       if (key === 'avatar') await setProfilePhoto(value);

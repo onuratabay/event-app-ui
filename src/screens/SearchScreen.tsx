@@ -6,7 +6,10 @@ import { TextInput } from "react-native";
 import { AtmoBackground } from "../components/GlassUI";
 import { ClockIcon, SearchIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
-import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, useStore } from "../native/Store";
+import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, mapApiEvent, useStore } from "../native/Store";
+import { getApiErrorMessage, searchEventsByDate } from "../api/client";
+import { apiDate, localDate } from "../map/filters";
+import { GlassInput } from "../components/GlassUI";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
@@ -47,15 +50,48 @@ export default function SearchScreen({
 }: Props) {
   const navInset = useBottomNavInset();
   const {
-    data: store
+    data: store,
+    setData: setStore
   } = useStore();
-  const EVENTS = store.events;
   const [query, setQuery] = useState("");
-  const inputRef = useRef<TextInput>(null);
+  // Date range filter (YYYY-MM-DD). The start can never be before today; the end never before the start.
+  const today = localDate(new Date());
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [dateError, setDateError] = useState("");
+  const [dateResults, setDateResults] = useState<AppEvent[] | null>(null);
+  const [loadingDates, setLoadingDates] = useState(false);
+  const chooseFrom = (value: string) => {
+    if (value < today) { setDateError("Başlangıç tarihi bugünden önce olamaz."); return; }
+    setDateError(""); setDateFrom(value);
+    if (dateTo && dateTo < value) setDateTo("");
+  };
+  const chooseTo = (value: string) => {
+    if (value < (dateFrom || today)) { setDateError(dateFrom ? "Bitiş tarihi başlangıçtan önce olamaz." : "Bitiş tarihi bugünden önce olamaz."); return; }
+    setDateError(""); setDateTo(value);
+  };
+  const clearDates = () => { setDateFrom(""); setDateTo(""); setDateError(""); };
+  const dateActive = Boolean(dateFrom || dateTo);
+  // With a date range the server is asked (all events, not only the loaded ones).
   useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 80);
-  }, []);
-  const filtered = query.trim() ? EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase()) || e.category.toLowerCase().includes(query.toLowerCase()) || e.location.toLowerCase().includes(query.toLowerCase())) : [];
+    if (!dateActive) { setDateResults(null); return; }
+    let active = true;
+    setLoadingDates(true);
+    searchEventsByDate(apiDate(dateFrom || today), dateTo ? apiDate(dateTo) : undefined).then(result => {
+      if (!active) return;
+      const found = result.items.map(mapApiEvent);
+      // Keep them in the shared list so the detail screen can open them (not added to the Discover feed).
+      setStore(p => ({ ...p, events: [...new Map([...p.events, ...found].map(event => [event.id, event])).values()] }));
+      setDateResults(found);
+    }).catch(error => { if (active) setDateError(getApiErrorMessage(error, "Etkinlikler aranamadı.")); })
+      .finally(() => { if (active) setLoadingDates(false); });
+    return () => { active = false; };
+  }, [dateFrom, dateTo]);
+  const EVENTS = dateResults ?? store.events;
+  const searching = Boolean(query.trim()) || dateActive;
+  // No autofocus: the keyboard opens only when the user taps the search box.
+  const inputRef = useRef<TextInput>(null);
+  const filtered = !searching ? [] : !query.trim() ? EVENTS : EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase()) || e.category.toLowerCase().includes(query.toLowerCase()) || e.location.toLowerCase().includes(query.toLowerCase()));
   const suggestions = query.trim() ? SUGGESTED.filter(s => s.toLowerCase().includes(query.toLowerCase())) : SUGGESTED;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
@@ -78,9 +114,19 @@ export default function SearchScreen({
         </Box>
       </Box>
 
+      {/* Date range */}
+      <Box style={[[ui.px5, ui.pb3, ui.flexShrink0]]}>
+        <Box style={[[ui.flex, ui.gap3]]}>
+          <GlassInput label="Başlangıç" mode="date" value={dateFrom} defaultValue={today} onChangeText={chooseFrom} />
+          <GlassInput label="Bitiş" mode="date" value={dateTo} defaultValue={dateFrom || today} onChangeText={chooseTo} />
+        </Box>
+        {!!dateError && <Label style={[[ui.textXs, ui.mt15], { color: palette.error }]}>{dateError}</Label>}
+        {dateActive && <Touch accessibilityLabel="Tarih filtresini temizle" onPress={clearDates} style={[[ui.textXs, ui.textWhite40, ui.mt15], { alignSelf: "flex-start", minHeight: 32, textAlign: "left" }]}>Tarih filtresini temizle</Touch>}
+      </Box>
+
       <Scroll style={[[ui.flex1, ui.px5, ui.pb10], { paddingBottom: 40 + navInset }]}>
         {/* No query — recent + suggestions */}
-        {!query.trim() && <Box style={[[ui.spaceY6]]} enter>
+        {!searching && <Box style={[[ui.spaceY6]]} enter>
             {/* Recent */}
             <Box>
               <Label style={[[ui.textXs, ui.textWhite25, ui.uppercase, ui.trackingWider, ui.mb3]]}>
@@ -155,7 +201,8 @@ export default function SearchScreen({
           </Box>}
 
         {/* Results */}
-        {query.trim() && <Box style={[[]]} enter>
+        {searching && <Box style={[[]]} enter>
+            {loadingDates && <Label style={[[ui.textXs, ui.textWhite35, ui.mb3]]}>Etkinlikler aranıyor…</Label>}
             {filtered.length > 0 ? <Box>
                 <Label style={[[ui.textXs, ui.textWhite25, ui.uppercase, ui.trackingWider, ui.mb3]]}>
                   {filtered.length} etkinlik bulundu
@@ -182,10 +229,10 @@ export default function SearchScreen({
                   </Box>}
                 <Box style={[[ui.textCenter, ui.py10]]}>
                   <Label style={[[ui.textSm, ui.textWhite25]]}>
-                    "{query}" için sonuç bulunamadı
+                    {query.trim() ? `"${query}" için sonuç bulunamadı` : "Bu tarih aralığında etkinlik yok"}
                   </Label>
                   <Label style={[[ui.textXs, ui.textWhite15, ui.mt1]]}>
-                    Farklı bir kelime dene
+                    {query.trim() ? "Farklı bir kelime dene" : "Farklı tarihler seç"}
                   </Label>
                 </Box>
               </Box>}

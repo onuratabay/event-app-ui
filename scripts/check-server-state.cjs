@@ -35,8 +35,12 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   tree = await mount('Discover')
   const HeartButton = require('../src/components/Expressive.tsx').HeartButton
   const heart = tree.root.findAllByType(HeartButton)[0]
-  global.fetch = async (url, options) => url.endsWith('/favorite') ? { ok: false, status: 500, text: async () => 'failed' } : online(url, options)
+  global.fetch = async (url, options) => url.endsWith('/favorite') ? new Promise(resolve => setTimeout(() => resolve({ ok: false, status: 500, text: async () => 'failed' }), 10)) : online(url, options)
   await act(async () => heart.props.onChange(true))
+  // The heart flips at once (optimistic) while the request runs in the background...
+  assert.equal(tree.root.findAllByType(HeartButton)[0].props.saved, true, 'Favourite flips immediately without waiting for the server')
+  // ...and returns to its previous state once the background request fails.
+  await act(() => new Promise(resolve => setTimeout(resolve, 40)))
   assert.equal(tree.root.findAllByType(HeartButton)[0].props.saved, false)
   await act(async () => tree.unmount())
   global.fetch = online

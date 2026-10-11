@@ -9,7 +9,7 @@ import React, {
   useRef,
   useState,
 } from "react"
-import { getEvents, getCurrentUser, getUserInterests, getPreferences, getMyEvents, hasSession, putPreference, archiveLegacyData } from "../api/client"
+import { getEvents, getCurrentUser, getReferenceRequests, getUserInterests, getPreferences, getMyEvents, hasSession, putPreference, archiveLegacyData } from "../api/client"
 import { ErrorNotice } from "../components/ErrorNotice"
 export const EMPTY_USER: AppUser = { id: '', name: '', avatar: '', city: '', bio: '', instagram: '', interests: [], score: 0, scores: { punctuality: 0, communication: 0, community: 0 }, stats: { attended: 0, connections: 0, organized: 0 } }
 import type { AppEvent, AppUser, ChatMessage } from "../types"
@@ -20,8 +20,15 @@ interface Data {
   onboarding: Record<string, string>
   /** Rooms the user silenced; their unread badge is hidden. Stored server-side (preference "mutedRooms"). */
   mutedRooms: string[]
+  /** Ids of events that came from the Discover feed (/events). Discover shows only these;
+   *  the shared `events` list also holds the user's own, joined and favourite events. */
+  feedIds: string[]
+  /** Reference requests, loaded once per session and kept current by socket events; null until loaded. */
+  references: import('../api/client').ReferenceRequest[] | null
 }
-const initial: Data = { user: EMPTY_USER, events: [], messages: {}, onboarding: {}, mutedRooms: [] }
+const initial: Data = { user: EMPTY_USER, events: [], messages: {}, onboarding: {}, mutedRooms: [], feedIds: [], references: null }
+// Incoming server copies replace older ones; events not in the response are kept.
+const mergeEvents = (current: AppEvent[], incoming: AppEvent[]) => [...new Map([...current, ...incoming].map(event => [event.id, event])).values()]
 export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
   if (!remoteUser || typeof remoteUser !== "object") return user
   const remote = remoteUser as import('../api/client').ApiUser
@@ -116,6 +123,12 @@ const Context = createContext<{
   data: Data
   setData: React.Dispatch<React.SetStateAction<Data>>
   refreshEvents: () => Promise<void>
+  /** Discover pull-to-refresh: only the feed's first page (/events). */
+  refreshFeed: () => Promise<void>
+  /** Rooms: only the user's own, joined and favourite events. */
+  refreshMyEvents: () => Promise<void>
+  /** Loads reference requests once; later calls reuse the stored list unless forced. */
+  loadReferences: (force?: boolean) => Promise<void>
   loadMoreEvents: () => Promise<void>
   moreEvents: boolean
   loadMoreFeedEvents: () => Promise<void>
@@ -162,12 +175,50 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (generation !== sessionGeneration.current) return
       if (!old?.user?.id || old.user.id === 'me' || old.user.id === remote.id) await AsyncStorage.multiRemove(['event-app:v1', 'event-app:map-filters'])
       const all = [...new Map([...events.items, ...mine.items].map(event => [event.id, event])).values()]
-      setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), interests: interests.map(i => i.name), recommendationProfile: preferences.recommendationProfile }, events: all.map(mapApiEvent), mutedRooms: preferences.mutedRooms?.ids || [] }))
+      setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), interests: interests.map(i => i.name), recommendationProfile: preferences.recommendationProfile }, events: all.map(mapApiEvent), mutedRooms: preferences.mutedRooms?.ids || [], feedIds: events.items.map(event => event.id) }))
       page.current = 1; setMoreEvents(mine.hasMore)
       feedPage.current = 1; setMoreFeedEvents(events.items.length < events.total)
       setStorageError(null)
     } catch (error) {
       if (generation === sessionGeneration.current) setStorageError('Hesap verileri sunucudan yüklenemedi. Bağlantını kontrol edip tekrar dene.')
+      throw error
+    }
+  }
+  const refreshFeed = async () => {
+    const generation = sessionGeneration.current
+    try {
+      const result = await getEvents(1)
+      if (generation !== sessionGeneration.current) return
+      setData(current => ({ ...current, events: mergeEvents(current.events, result.items.map(mapApiEvent)), feedIds: result.items.map(event => event.id) }))
+      feedPage.current = 1; setMoreFeedEvents(result.items.length < result.total)
+      setStorageError(null)
+    } catch (error) {
+      if (generation === sessionGeneration.current) setStorageError('Etkinlikler yüklenemedi. Bağlantını kontrol edip tekrar dene.')
+      throw error
+    }
+  }
+  const refreshMyEvents = async () => {
+    const generation = sessionGeneration.current
+    try {
+      const result = await getMyEvents(1)
+      if (generation !== sessionGeneration.current) return
+      setData(current => ({ ...current, events: mergeEvents(current.events, result.items.map(mapApiEvent)) }))
+      page.current = 1; setMoreEvents(result.hasMore)
+    } catch (error) {
+      if (generation === sessionGeneration.current) setStorageError('Etkinliklerin yüklenemedi. Bağlantını kontrol edip tekrar dene.')
+      throw error
+    }
+  }
+  const referencesLoaded = useRef(false)
+  const loadReferences = async (force = false) => {
+    if (referencesLoaded.current && !force) return
+    const generation = sessionGeneration.current
+    referencesLoaded.current = true
+    try {
+      const result = await getReferenceRequests()
+      if (generation === sessionGeneration.current) setData(current => ({ ...current, references: result.items }))
+    } catch (error) {
+      referencesLoaded.current = false
       throw error
     }
   }
@@ -195,7 +246,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setMoreFeedEvents(nextPage * 20 < result.total)
       setData(current => ({
         ...current,
-        events: [...new Map([...current.events, ...result.items.map(mapApiEvent)].map(event => [event.id, event])).values()],
+        events: mergeEvents(current.events, result.items.map(mapApiEvent)),
+        feedIds: [...new Set([...current.feedIds, ...result.items.map(event => event.id)])],
       }))
     } catch {
       setStorageError('Sonraki etkinlikler yüklenemedi.')
@@ -221,14 +273,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }) })))
     const cleanups = ['event:waitlist_joined', 'event:summary', 'event:participant_count_changed', 'event:participant_joined', 'event:participant_left', 'event:started', 'event:cancelled', 'event:ended', 'event:updated'].map(patch)
     // Sent to every room member on each new message, even when they are not inside the room.
+    // Both sides of a reference get these events, so the stored list never needs a refetch.
+    const referenceCreated = onSocket('reference:created', (row: import('../api/client').ReferenceRequest) => setData(current => current.references ? { ...current, references: [row, ...current.references.filter(item => item.id !== row.id)] } : current))
+    const referenceUpdated = onSocket('reference:updated', (patch: { id: string; status: import('../api/client').ReferenceRequest['status'] }) => setData(current => current.references ? { ...current, references: current.references.map(item => item.id === patch.id ? { ...item, status: patch.status } : item) } : current))
     const roomMessage = onSocket('room:message', (delta: { eventId: string; at: string; userId?: string }) => setData(current => ({ ...current, events: current.events.map(event => event.id !== delta.eventId ? event : {
       ...event,
       lastMessageAt: delta.at,
       unreadCount: delta.userId === current.user.id || delta.eventId === openRoomId || (current.mutedRooms || []).includes(delta.eventId) ? event.unreadCount || 0 : (event.unreadCount || 0) + 1,
     }) })))
-    return () => { cleanups.forEach(cleanup => cleanup()); roomMessage() }
+    return () => { cleanups.forEach(cleanup => cleanup()); roomMessage(); referenceCreated(); referenceUpdated() }
   }, [])
-  return <Context.Provider value={{ data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, resetSession: () => { stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
+  return <Context.Provider value={{ data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, refreshFeed, refreshMyEvents, loadReferences, resetSession: () => { referencesLoaded.current = false; stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
     {storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}
     {children}
   </Context.Provider>
