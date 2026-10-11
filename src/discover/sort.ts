@@ -31,7 +31,7 @@ const hasCoordinates = (event: AppEvent) => Number.isFinite(event.latitude) && N
 
 /**
  * Feed order. Every option breaks ties with the most recently added event first:
- * - recommended: events in the user's interests first
+ * - recommended: events in the user's interests first, then the soonest start
  * - time-asc / time-desc: by start time
  * - distance-near / distance-far: by distance from the device; events without coordinates last
  */
@@ -41,7 +41,7 @@ export function sortFeed(events: AppEvent[], sortBy: SortOption, context: SortCo
   const distance = (event: AppEvent) => location && hasCoordinates(event) ? distanceKm(location, { latitude: event.latitude!, longitude: event.longitude! }) : Infinity
   const primary = (a: AppEvent, b: AppEvent) => {
     switch (sortBy) {
-      case "recommended": return Number(interests.has(b.category)) - Number(interests.has(a.category))
+      case "recommended": return Number(interests.has(b.category)) - Number(interests.has(a.category)) || startTime(a) - startTime(b)
       case "time-asc": return startTime(a) - startTime(b)
       case "time-desc": return startTime(b) - startTime(a)
       case "distance-near":

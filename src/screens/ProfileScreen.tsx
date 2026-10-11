@@ -1,10 +1,11 @@
 import { palette } from "../theme/palette";
+import CityPicker from "../components/CityPicker";
 import { CalendarIcon, StarIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
-import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getReferenceRequests, getApiErrorMessage, type ReferenceRequest } from "../api/client";
+import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getApiErrorMessage } from "../api/client";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
 import { InstagramIcon } from "../components/Icons";
@@ -49,9 +50,86 @@ function InlineEditField({
         </Box>
       </Box>;
   }
-  return <Touch onPress={() => setEditing(true)} accessibilityLabel="Düzenle" style={[[ui.relative, ui.flex, ui.itemsCenter]]}>
-      <Label style={[[]]}>{value}</Label>
+  // Touch centres its content by default; keep the value left-aligned with the line below it.
+  return <Touch onPress={() => setEditing(true)} accessibilityLabel="Düzenle" style={[[ui.relative, ui.flex, ui.itemsCenter], { justifyContent: "flex-start", alignSelf: "flex-start", minHeight: 0 }]}>
+      <Label style={[[]]} numberOfLines={1}>{value}</Label>
     </Touch>;
+}
+function InstagramField({ handle, onSave }: { handle: string; onSave: (handle: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(handle);
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try { await onSave(draft.replace(/^@/, "").trim()); setEditing(false); } catch { /* update() already alerted */ } finally { setSaving(false); }
+  };
+  if (editing) return <Box style={[[ui.mt3, ui.flex, ui.itemsCenter, ui.gap2]]}>
+      <Label style={profileInstagramStyles.handle}>@</Label>
+      <Field value={draft} onChangeText={value => setDraft(value.replace(/^@/, "").replace(/\s/g, ""))} autoFocus autoCapitalize="none" autoCorrect={false} placeholder="kullanici_adi" accessibilityLabel="Instagram kullanıcı adı" style={[[ui.flex1, ui.bgWhite8, ui.border, ui.borderC8a44a40, ui.roundedXl, ui.px3, ui.py25, ui.textSm, ui.textWhite80]]} />
+      <Touch onPress={save} disabled={saving} style={[[ui.textXs, ui.px3, ui.py1, ui.roundedLg, ui.text1a1200, ui.fontMedium], { backgroundColor: "#4d5bcb" }]}>Kaydet</Touch>
+      <Touch onPress={() => { setDraft(handle); setEditing(false); }} style={[[ui.textXs, ui.px3, ui.py1, ui.roundedLg, ui.textWhite40, ui.border, ui.borderWhite10]]}>İptal</Touch>
+    </Box>;
+  // A saved handle can no longer be edited here; tapping it opens Instagram.
+  if (handle) return <Touch accessibilityRole="link" accessibilityLabel={`Instagram profilini aç: @${handle}`} onPress={() => openExternal(`https://instagram.com/${handle}`)} style={profileInstagramStyles.link}>
+      <InstagramIcon size={19} strokeWidth={1.8} style={profileInstagramStyles.icon} />
+      <Label style={profileInstagramStyles.handle}>{`@${handle}`}</Label>
+      <Label style={profileInstagramStyles.private}>Özel</Label>
+    </Touch>;
+  return <Touch accessibilityLabel="Instagram kullanıcı adı ekle" onPress={() => { setDraft(""); setEditing(true); }} style={profileInstagramStyles.link}>
+      <InstagramIcon size={19} strokeWidth={1.8} style={profileInstagramStyles.icon} />
+      <Label style={profileInstagramStyles.empty}>@ kullanıcı adını ekle</Label>
+    </Touch>;
+}
+const ABOUT_LIMIT = 280;
+// Counted and cut by characters (code points) so an emoji is never split in half at the limit.
+const limitAbout = (text: string) => Array.from(text).slice(0, ABOUT_LIMIT).join("");
+const QUICK_EMOJIS = ["😄", "😎", "🤩", "🎾", "🏃", "🚴", "⛰️", "☕", "🍕", "🎶", "🎨", "📸", "🐶", "✈️", "❤️", "✨"];
+/** "About me" (stored as bio): a few fun facts other members read before meeting you. */
+function AboutMe({ bio, isOwn, onSave }: { bio: string; isOwn: boolean; onSave: (bio: string) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(bio);
+  const [saving, setSaving] = useState(false);
+  if (!isOwn && !bio.trim()) return null;
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try { await onSave(draft.trim()); setEditing(false); } catch { /* update() already alerted */ } finally { setSaving(false); }
+  };
+  return <Box style={[[ui.px5, ui.mb4]]}>
+      <GlassCard style={[[ui.p4]]}>
+        <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider]]}>
+          Benimle Tanışmadan Önce Bil ✦
+        </Label>
+        {editing ? <Box style={[[ui.mt3]]}>
+            <Field value={draft} onChangeText={value => setDraft(limitAbout(value))} multiline autoFocus accessibilityLabel="Hakkımda" placeholder="Örn. Pazar kahvaltısı uzmanıyım, padelde backhand'im efsane, kedim Pamuk'un tek fan kulübüyüm." style={[[ui.wFull, ui.bgWhite8, ui.border, ui.borderC8a44a40, ui.roundedXl, ui.px3, ui.py25, ui.textSm, ui.textWhite80]]} />
+            {/* Quick emoji row: keyboards often hide the emoji key, so one tap adds one here. */}
+            <Scroll horizontal style={[[ui.mt2]]} keyboardShouldPersistTaps="always">
+              <Box style={[[ui.flex, ui.gap1]]}>
+                {QUICK_EMOJIS.map(emoji => <Touch key={emoji} accessibilityLabel={`${emoji} ekle`} onPress={() => setDraft(current => limitAbout(current + emoji))} style={{ width: 40, height: 40, minHeight: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.05)" }}>
+                    <Label style={{ fontSize: 20 }}>{emoji}</Label>
+                  </Touch>)}
+              </Box>
+            </Scroll>
+            <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mt15]]}>
+              <Box style={[[ui.flex, ui.gap2]]}>
+                <Touch onPress={save} disabled={saving} style={[[ui.textXs, ui.px3, ui.py1, ui.roundedLg, ui.text1a1200, ui.fontMedium], { backgroundColor: "#4d5bcb" }]}>Kaydet</Touch>
+                <Touch onPress={() => { setDraft(bio); setEditing(false); }} style={[[ui.textXs, ui.px3, ui.py1, ui.roundedLg, ui.textWhite40, ui.border, ui.borderWhite10]]}>İptal</Touch>
+              </Box>
+              <Label style={[[ui.textXs, ui.textWhite35]]}>{Array.from(draft).length}/{ABOUT_LIMIT}</Label>
+            </Box>
+          </Box> : bio.trim() ? isOwn
+            // Only the owner can edit: tapping the text itself opens the editor.
+            ? <Touch accessibilityLabel="Hakkımda yazısını düzenle" onPress={() => { setDraft(bio); setEditing(true); }} style={[[ui.mt2], { alignItems: "flex-start", justifyContent: "flex-start", minHeight: 0 }]}>
+                <Label style={[[ui.textSm, ui.textWhite75, ui.leadingRelaxed]]}>{bio}</Label>
+              </Touch>
+            : <Label style={[[ui.textSm, ui.textWhite75, ui.leadingRelaxed, ui.mt2]]}>{bio}</Label>
+          : <Touch accessibilityLabel="Hakkımda yazısı ekle" onPress={() => { setDraft(""); setEditing(true); }} style={[[ui.mt3, ui.p4, ui.roundedXl, ui.border, ui.borderDashed, ui.borderWhite15], { alignItems: "flex-start" }]}>
+            <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>Kendini birkaç eğlenceli cümleyle anlat</Label>
+            <Label style={[[ui.textXs, ui.textWhite40, ui.mt1, ui.leadingRelaxed]]}>Etkinlikte seninle tanışacak kişiler önce bunu okur. İlk izlenimi sen belirle.</Label>
+          </Touch>}
+      </GlassCard>
+    </Box>;
 }
 export default function ProfileScreen({
   navigate,
@@ -60,7 +138,8 @@ export default function ProfileScreen({
   const {
     data: store,
     resetSession,
-    setData: setStore
+    setData: setStore,
+    loadReferences
   } = useStore();
   const EVENTS = store.events;
   const ME = store.user;
@@ -78,8 +157,9 @@ export default function ProfileScreen({
     } catch { Alert.alert("Çıkış yapılamadı", "Lütfen tekrar dene."); }
     finally { setLoggingOut(false); }
   };
-  const [references, setReferences] = useState<ReferenceRequest[]>([]);
-  useEffect(() => { getReferenceRequests().then(result => setReferences(result.items.filter(i => i.status === 'approved'))).catch(() => {}); }, []);
+  // References come from the store: fetched on the first visit, then kept current by socket events.
+  const references = (store.references || []).filter(item => item.status === 'approved');
+  useEffect(() => { void loadReferences().catch(() => {}); }, []);
   const update = async (key: string, value: string) => {
     try {
       if (key === 'avatar') await setProfilePhoto(value);
@@ -133,7 +213,7 @@ export default function ProfileScreen({
         {/* Header */}
         <Box style={[[ui.pt4, ui.px5, ui.pb5]]}>
           {/* Profile header */}
-          <Box style={[[ui.flex, ui.itemsStart, ui.gap4]]}>
+          <Box style={[[ui.flex, ui.itemsCenter, ui.gap4]]}>
             <Touch style={[[ui.relative]]} onPress={async () => {
             if (isOwn) {
               const uri = await selectPhoto();
@@ -150,8 +230,8 @@ export default function ProfileScreen({
                   {user.name}
                 </Label>}
 
-              {isOwn ? <Box style={[[ui.textSm, ui.textWhite45, ui.mt05]]}>
-                  <InlineEditField value={user.city} onSave={v => update("city", v)} />
+              {isOwn ? <Box style={[[ui.mt05]]}>
+                  <CityPicker compact value={user.city} onChange={city => { void update("city", city).catch(() => {}); }} />
                 </Box> : <Label style={[[ui.textSm, ui.textWhite45, ui.mt05]]}>
                   {user.city}
                 </Label>}
@@ -159,8 +239,8 @@ export default function ProfileScreen({
             </Box>
           </Box>
 
-          {/* Instagram */}
-          <Touch
+          {/* Instagram: own profile can add a missing handle; a saved handle only opens Instagram */}
+          {isOwn ? <InstagramField handle={user.instagram.replace(/^@/, "")} onSave={handle => update("instagram", handle)} /> : user.instagram ? <Touch
             accessibilityRole="link"
             accessibilityLabel={`Instagram profilini aç: @${user.instagram.replace(/^@/, "")}`}
             onPress={() => openExternal(`https://instagram.com/${user.instagram.replace(/^@/, "")}`)}
@@ -169,8 +249,7 @@ export default function ProfileScreen({
             <InstagramIcon size={19} strokeWidth={1.8} style={profileInstagramStyles.icon} />
             <Label style={profileInstagramStyles.handle}>@{user.instagram.replace(/^@/, "")}</Label>
             <Label style={profileInstagramStyles.external}>↗</Label>
-            {isOwn ? <Label style={profileInstagramStyles.private}>Özel</Label> : null}
-          </Touch>
+          </Touch> : null}
         </Box>
 
         {/* Stats */}
@@ -225,6 +304,9 @@ export default function ProfileScreen({
             </Label>
           </GlassCard>
         </Box>
+
+        {/* About me (bio) */}
+        <AboutMe bio={user.bio || ""} isOwn={isOwn} onSave={bio => update("bio", bio)} />
 
         {/* Interests */}
         <Box style={[[ui.px5, ui.mb4]]}>
@@ -394,6 +476,7 @@ const profileInstagramStyles = StyleSheet.create({
     textDecorationLine: "underline",
   },
   external: { color: "rgba(183,197,255,.72)", fontSize: 14 },
+  empty: { color: "rgba(226,232,240,.55)", fontFamily: "Outfit-Medium", fontSize: 14, lineHeight: 19 },
   private: {
     marginLeft: 2,
     color: "rgba(226,232,240,.48)",

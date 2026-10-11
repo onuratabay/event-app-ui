@@ -49,6 +49,8 @@ export default function InterestsScreen({
   const ME = store.user;
   const [selected, setSelected] = useState<Set<string>>(new Set(ME.interests));
   const [photo, setPhoto] = useState<string | null>(ME.avatar);
+  // The account may finish loading after this screen opens (e.g. a saved session); show its photo then.
+  useEffect(() => { if (ME.avatar) setPhoto(current => current || ME.avatar); }, [ME.avatar]);
   const toggle = (interest: string) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -96,8 +98,8 @@ export default function InterestsScreen({
                 </Touch>}
             </Box>
 
-            {/* Text + actions */}
-            <Box style={[[ui.flex1, ui.minW0]]}>
+            {/* Text + actions, vertically centred with the photo */}
+            <Box style={[[ui.flex1, ui.minW0], { justifyContent: "center" }]}>
               <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite75]]}>
                 {photo ? "Profil fotoğrafın eklendi" : "Profil fotoğrafı ekle"}
               </Label>
@@ -126,7 +128,8 @@ export default function InterestsScreen({
                   </Touch>
                 </Box>}
 
-              {photo && <Touch onPress={() => pickPhoto()} style={[[ui.mt2, ui.textXs, ui.textWhite35, ui.underline]]}>
+              {/* Left-aligned with the texts above; Touch otherwise centres its label and adds 44px height. */}
+              {photo && <Touch accessibilityLabel="Fotoğrafı değiştir" onPress={() => pickPhoto()} style={[[ui.mt2, ui.textXs, ui.textWhite35, ui.underline], { alignSelf: "flex-start", alignItems: "flex-start", minHeight: 0, textAlign: "left" }]}>
                   Değiştir
                 </Touch>}
             </Box>

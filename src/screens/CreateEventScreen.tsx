@@ -173,7 +173,8 @@ export default function CreateEventScreen({
     try {
       const date = displayDate(data.date);
       const event = await createEvent({ interestId: interest.id, ...(level ? { levelId: level.id } : {}), visibilityId: visibility.id, date, startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: coordinate.latitude, longitude: coordinate.longitude, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(inviteOnly ? { invitedUserIds: invitedIds } : {}), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
-      setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)] }));
+      // The creator sees the new event at the top of Discover right away.
+      setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)], feedIds: [event.id, ...p.feedIds.filter(id => id !== event.id)] }));
       // The creation flow leaves history entirely; back from the new event's detail goes home.
       navigate('event-detail', { eventId: event.id, aboveHome: true });
     } catch (error) { Alert.alert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }

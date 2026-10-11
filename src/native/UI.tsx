@@ -106,8 +106,8 @@ function Content({
   columns?: number
   style: ViewStyle
 }) {
-  const [width, setWidth] = useState(0)
-  const gap = Number(style.gap || style.columnGap || 0)
+  const gap = Number(style.columnGap ?? style.gap ?? 0)
+  const rowGap = Number(style.rowGap ?? style.gap ?? 0)
   if (!columns)
     return (
       <>
@@ -120,25 +120,26 @@ function Content({
         )}
       </>
     )
+  // Explicit rows of equal flex cells instead of a wrapping row: nothing can wrap, so device
+  // pixel rounding (which pushed cells onto one per line on Android) cannot break the grid.
+  const items = React.Children.toArray(children)
+  const rows: ReactNode[][] = []
+  for (let index = 0; index < items.length; index += columns) rows.push(items.slice(index, index + columns))
   return (
-    <View
-      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-      style={{ width: "100%", flexDirection: "row", flexWrap: "wrap", gap }}
-    >
-      {React.Children.toArray(children).map((c, i) => (
-        <View
-          key={React.isValidElement(c) ? (c.key ?? i) : i}
-          style={{
-            // Floor the cell width: Android rounds layout to device pixels, and an exact
-            // fraction can overflow the row by a pixel, pushing cells onto one per line.
-            width: width
-              ? Math.max(0, Math.floor((width - (columns - 1) * gap) / columns))
-              : `${Math.floor(100 / columns) - 2}%`, // leaves room for the gap until measured
-            flexGrow: 0,
-            flexShrink: 0,
-          }}
-        >
-          {c}
+    <View style={{ width: "100%", gap: rowGap }}>
+      {rows.map((row, rowIndex) => (
+        <View key={rowIndex} style={{ flexDirection: "row", gap }}>
+          {Array.from({ length: columns }, (_, cellIndex) => {
+            const cell = row[cellIndex]
+            return (
+              <View
+                key={React.isValidElement(cell) && cell.key != null ? cell.key : `cell-${cellIndex}`}
+                style={{ flex: 1, minWidth: 0 }}
+              >
+                {cell ?? null}
+              </View>
+            )
+          })}
         </View>
       ))}
     </View>
@@ -249,6 +250,10 @@ export function Label({
   if (ownTypography.fontSize !== undefined && ownTypography.lineHeight === undefined) {
     typography.lineHeight = Math.ceil(Number(ownTypography.fontSize) * 1.28)
   }
+  // A size inherited from a parent box can still sit on the body line height; on Android
+  // (no font padding) that cut descenders off. Never let the line be shorter than the type needs.
+  const minimumLine = Math.ceil(Number(typography.fontSize ?? 0) * 1.28)
+  if (typography.lineHeight !== undefined && Number(typography.lineHeight) < minimumLine) typography.lineHeight = minimumLine
   // Fixed type size keeps every device on the same layout regardless of system font scale.
   return <Typography.Provider value={typography}><Text allowFontScaling={false} {...props} style={[flat, font(typography)]}>{children}</Text></Typography.Provider>
 }

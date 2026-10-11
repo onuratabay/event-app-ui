@@ -13,9 +13,9 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   storage.set('event-app:v1', JSON.stringify(legacy))
   let tree = await mount('Profile')
   assert(text(tree.toJSON()).includes('Sunucu Kullanıcısı'))
-  // The profile no longer shows a bio; the city proves server data was restored.
+  // City and the About me text (bio) prove server data was restored.
   assert(text(tree.toJSON()).includes('Ankara'))
-  assert(!text(tree.toJSON()).includes('Sunucu profili'))
+  assert(text(tree.toJSON()).includes('Sunucu profili'), 'Bio from the server is shown in About me')
   assert.equal(storage.has('event-app:v1'), false)
   assert(server.preferences.recommendationProfile.equipmentByCity.izmir.includes('racket'))
   await act(async () => tree.unmount())
@@ -35,8 +35,12 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   tree = await mount('Discover')
   const HeartButton = require('../src/components/Expressive.tsx').HeartButton
   const heart = tree.root.findAllByType(HeartButton)[0]
-  global.fetch = async (url, options) => url.endsWith('/favorite') ? { ok: false, status: 500, text: async () => 'failed' } : online(url, options)
+  global.fetch = async (url, options) => url.endsWith('/favorite') ? new Promise(resolve => setTimeout(() => resolve({ ok: false, status: 500, text: async () => 'failed' }), 10)) : online(url, options)
   await act(async () => heart.props.onChange(true))
+  // The heart flips at once (optimistic) while the request runs in the background...
+  assert.equal(tree.root.findAllByType(HeartButton)[0].props.saved, true, 'Favourite flips immediately without waiting for the server')
+  // ...and returns to its previous state once the background request fails.
+  await act(() => new Promise(resolve => setTimeout(resolve, 40)))
   assert.equal(tree.root.findAllByType(HeartButton)[0].props.saved, false)
   await act(async () => tree.unmount())
   global.fetch = online

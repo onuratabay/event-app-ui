@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import CityPicker from "../components/CityPicker";
 import SignOutButton from "../components/SignOutButton";
 import { updateProfile } from "../api/client";
 import TopNavBar from "../components/TopNavBar";
@@ -124,6 +125,7 @@ function Step1({
     email: store.onboarding.email || "",
     telefon: store.onboarding.telefon || "",
     dogum: formatBirthDate(store.onboarding.dogum || ""),
+    sehir: store.onboarding.sehir || "",
     sifre: store.onboarding.sifre || ""
   });
   const mounted = useRef(true);
@@ -139,7 +141,7 @@ function Step1({
     try {
       // profile_incomplete accounts go straight to photo + interests; others continue with references.
       if (store.onboarding.accountId) { navigate(store.user.status === "profile_incomplete" ? "interests" : "onboarding-2"); return; }
-      const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: `+90${phoneDigits(form.telefon)}`, password: form.sifre, birthDate: form.dogum });
+      const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: `+90${phoneDigits(form.telefon)}`, password: form.sifre, birthDate: form.dogum, city: form.sehir });
       const id = String((response.user as { id: string }).id);
       const status = (response.user as { status?: { enum: string } }).status?.enum;
       setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}`, status } }));
@@ -198,6 +200,9 @@ function Step1({
             {isFutureDate(form.dogum) && <Label style={[[ui.textXs], { color: palette.error }]}>
                 Doğum tarihi gelecekte olamaz.
               </Label>}
+            <Box>
+              <CityPicker value={form.sehir} onChange={sehir => setForm(p => ({ ...p, sehir }))} />
+            </Box>
             <GlassInput label="Şifre" placeholder="En az 8 karakter ve özel karakter" value={form.sifre} onChangeText={e => setForm(p => ({
             ...p,
             sifre: e

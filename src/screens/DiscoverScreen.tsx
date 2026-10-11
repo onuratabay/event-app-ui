@@ -1,7 +1,7 @@
 import ActivityIndicator from "../components/LoadingSpinner";
 import { palette } from "../theme/palette";
 import { CategoryIcon } from "../components/Icons";
-import { favoriteEvent, getApiErrorMessage } from "../api/client";
+import { getApiErrorMessage, setFavorite } from "../api/client";
 import { Alert, FlatList, Platform, RefreshControl, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { Line, Path, Polyline } from "react-native-svg";
@@ -13,7 +13,7 @@ import { HeartButton, RippleButton, SpringButton } from "../components/Expressiv
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
 import { BellIcon, CalendarIcon, SearchIcon, SparklesIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
 import { copyEvent, shareEvent as shareNativeEvent } from "../native/media";
-import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, participantCount, useStore } from "../native/Store";
+import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, isRoomReady, participantCount, useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
@@ -270,20 +270,20 @@ function EventCard({
     setData
   } = useStore();
   const saved = event.isSaved;
-  const [saving, setSaving] = useState(false);
-  const setSaved = async (value: boolean) => {
-    if (saving) return;
-    setSaving(true);
+  // Optimistic: the heart flips at once and the request runs in the background (no loader, taps never blocked).
+  const setSaved = (value: boolean) => {
     setData(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, isSaved: value } : e) }));
-    try { await favoriteEvent(event.id, value); }
-    catch (error) {
-      setData(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, isSaved: saved } : e) }));
+    const { done, isLatest } = setFavorite(event.id, value);
+    done.catch(error => {
+      // Only the newest tap decides; a failed older request is superseded by the later one.
+      if (!isLatest()) return;
+      setData(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, isSaved: !value } : e) }));
       Alert.alert('Favori kaydedilemedi', getApiErrorMessage(error));
-    }
-    finally { setSaving(false); }
+    });
   };
   const progress = event.currentParticipants / event.minParticipants;
-  const isForming = !event.isActive;
+  // Still gathering people only while below the minimum; status turns "started" later, at the start time.
+  const isForming = !isRoomReady(event) && !['cancelled', 'closed'].includes(event.status || '');
   const fillRate = event.maxParticipants ? event.currentParticipants / event.maxParticipants : 0;
   const excitement = event.isActive && fillRate >= .7 ? "high" : event.isActive || fillRate >= .45 ? "medium" : "low";
   const energy = excitement === "high"
@@ -389,7 +389,7 @@ function EventCard({
               </Box>
               <Label style={[[ui.textXs, ui.textAmber30060, ui.mt1]]}>
                 Aktif olmak için{" "}
-                {event.minParticipants - event.currentParticipants} kişi daha
+                {Math.max(0, event.minParticipants - event.currentParticipants)} kişi daha
                 gerekiyor
               </Label>
             </Box>}
@@ -425,9 +425,11 @@ export default function DiscoverScreen({
   const { width: screenWidth } = useWindowDimensions();
   const wordmarkWidth = Math.max(64, Math.min(104, screenWidth - 2 * (12 + 132)));
   const {
-    data: store, refreshEvents, loadMoreFeedEvents, moreFeedEvents
+    data: store, refreshFeed, loadMoreFeedEvents, moreFeedEvents
   } = useStore();
-  const EVENTS = store.events;
+  // Only the feed's own events; the shared list also holds joined/favourite events for Rooms.
+  const feedIds = new Set(store.feedIds);
+  const EVENTS = store.events.filter(event => feedIds.has(event.id));
   const [recommendationsOpen, setRecommendationsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("Sana Özel");
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
@@ -461,12 +463,12 @@ export default function DiscoverScreen({
   const sortedEvents = sortFeed(visibleEvents, sortBy, { interests: store.user.interests, location: deviceLocation });
   const sortLabel = SORT_OPTIONS.find(o => o.value === sortBy)?.label ?? "Önerilen";
   const isCustomSort = sortBy !== "recommended";
-  // Pull down on the feed to reload user, preferences and events from the server.
+  // Pull down reloads only the feed (/events); account and personal lists load elsewhere.
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const pullToRefresh = async () => {
     if (pullRefreshing) return;
     setPullRefreshing(true);
-    try { await refreshEvents(); } catch { /* The store already shows a retryable error notice. */ }
+    try { await refreshFeed(); } catch { /* The store already shows a retryable error notice. */ }
     finally { setPullRefreshing(false); }
   };
   const handleLoadMore = async () => {
@@ -488,7 +490,7 @@ export default function DiscoverScreen({
           renderItem={({ item: event, index }) => <Box style={{ marginBottom: 16 }}><EventCard event={event} index={index} onPress={() => navigate("event-detail", {
             eventId: event.id
           })} onShare={() => setShareEvent(event)} /></Box>}
-          ListEmptyComponent={<Box style={{ padding: 20, gap: 12 }}><Label>Henüz gösterilecek etkinlik yok.</Label><Touch onPress={() => { void refreshEvents().catch(() => {}); }}><Label>Yenile</Label></Touch></Box>}
+          ListEmptyComponent={<Box style={{ padding: 20, gap: 12 }}><Label>Henüz gösterilecek etkinlik yok.</Label><Touch onPress={() => { void refreshFeed().catch(() => {}); }}><Label>Yenile</Label></Touch></Box>}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 20 }} /> : null}
           refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={() => { void pullToRefresh(); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={isCustomSort ? 160 : 112} />}
           onEndReached={() => { void handleLoadMore(); }}

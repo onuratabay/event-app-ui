@@ -153,7 +153,7 @@ export default function EventDetailScreen({
                 </Box>
                 <Label style={[[ui.textXs, ui.textAmber30060, ui.mt15]]}>
                   Etkinliğin aktif olması için{" "}
-                  {event.minParticipants - event.currentParticipants} kişi daha
+                  {Math.max(0, event.minParticipants - event.currentParticipants)} kişi daha
                   gerekiyor
                 </Label>
               </Box>}
