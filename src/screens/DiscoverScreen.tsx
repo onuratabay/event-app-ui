@@ -2,7 +2,7 @@ import ActivityIndicator from "../components/LoadingSpinner";
 import { palette } from "../theme/palette";
 import { CategoryIcon } from "../components/Icons";
 import { favoriteEvent, getApiErrorMessage } from "../api/client";
-import { Alert, FlatList, Platform, RefreshControl } from "react-native";
+import { Alert, FlatList, Platform, RefreshControl, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { Line, Path, Polyline } from "react-native-svg";
 import RecommendationsSheet from "../recommendations/RecommendationsSheet";
@@ -11,7 +11,7 @@ import FeedHeaderBackdrop from "../components/FeedHeaderBackdrop";
 import HeaderIconButton from "../components/HeaderIconButton";
 import { HeartButton, RippleButton, SpringButton } from "../components/Expressive";
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
-import { BellIcon, SearchIcon, SparklesIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
+import { BellIcon, CalendarIcon, SearchIcon, SparklesIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
 import { copyEvent, shareEvent as shareNativeEvent } from "../native/media";
 import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, participantCount, useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
@@ -421,6 +421,9 @@ function SortIcon({
 export default function DiscoverScreen({
   navigate
 }: Props) {
+  // Three 44pt actions per side; the wordmark shrinks on narrow phones so it stays centered.
+  const { width: screenWidth } = useWindowDimensions();
+  const wordmarkWidth = Math.max(64, Math.min(104, screenWidth - 2 * (12 + 132)));
   const {
     data: store, refreshEvents, loadMoreFeedEvents, moreFeedEvents
   } = useStore();
@@ -502,16 +505,17 @@ export default function DiscoverScreen({
         <Box style={[[ui.fixed, ui.top0, ui.left0, ui.right0, ui.z40]]}>
         <FeedHeaderBackdrop />
         <Box style={{ height: 68, paddingHorizontal: 12, flexDirection: "row", alignItems: "center" }} enter>
-          <Box style={{ width: 88, flexDirection: "row" }}>
+          <Box style={{ width: 132, flexDirection: "row" }}>
             <HeaderIconButton plain label="Ara" onPress={() => navigate("search")}><SearchIcon size={20} strokeWidth={1.8} style={{ color: "#f4f5ff" }} /></HeaderIconButton>
             <HeaderIconButton plain label="Sıralama ve filtre" selected={isCustomSort} onPress={() => setSortOpen(true)}>
               <Box style={{ color: isCustomSort ? "#c7ceff" : "#f4f5ff" }}><SortIcon active={isCustomSort} /></Box>
             </HeaderIconButton>
           </Box>
           <Box pointerEvents="none" style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <BrandWordmark width={104} />
+            <BrandWordmark width={wordmarkWidth} />
           </Box>
-          <Box style={{ width: 88, flexDirection: "row" }}>
+          <Box style={{ width: 132, flexDirection: "row", justifyContent: "flex-end" }}>
+            <HeaderIconButton plain label="Etkinlik Takvimim" onPress={() => navigate("availability")}><CalendarIcon size={20} strokeWidth={1.8} style={{ color: "#f4f5ff" }} /></HeaderIconButton>
             <HeaderIconButton plain label="Sana özel öneriler" onPress={() => setRecommendationsOpen(true)}><SparklesIcon size={20} strokeWidth={1.8} style={{ color: "#c7ceff" }} /></HeaderIconButton>
             <HeaderIconButton plain label="Bildirimler" onPress={() => navigate("notifications")}><BellIcon size={20} strokeWidth={1.8} style={{ color: "#f4f5ff" }} /></HeaderIconButton>
           </Box>

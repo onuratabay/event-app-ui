@@ -1,4 +1,4 @@
-export type Screen = "splash" | "welcome" | "login" | "forgot-password" | "onboarding-1" | "onboarding-2" | "onboarding-3" | "approval" | "interests" | "discover" | "event-detail" | "event-room" | "map" | "create-event" | "rooms" | "search" | "notifications" | "profile" | "settings"
+export type Screen = "splash" | "welcome" | "login" | "forgot-password" | "onboarding-1" | "onboarding-2" | "onboarding-3" | "approval" | "interests" | "discover" | "event-detail" | "event-room" | "map" | "create-event" | "rooms" | "search" | "notifications" | "profile" | "settings" | "availability"
 
 export type NavigateFn = (screen: Screen, opts?: { eventId?: string; back?: boolean; reset?: boolean; aboveHome?: boolean }) => void
 
@@ -51,6 +51,8 @@ export interface AppEvent {
   isSaved: boolean
   waitlisted?: boolean
   invited?: boolean
+  /** Pool invitations only: server deadline for answering. */
+  invitationExpiresAt?: string
   /** When the event was created; the feed puts newer events first on ties. */
   createdAt?: string
   lastMessageAt?: string

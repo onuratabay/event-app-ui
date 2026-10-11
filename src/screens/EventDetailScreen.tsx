@@ -15,6 +15,8 @@ import { useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
+import InviteCandidatesSheet from "../availability/InviteCandidatesSheet";
+import { remainingLabel, useRemaining } from "../availability/countdown";
 interface Props {
   navigate: NavigateFn;
   eventId?: string;
@@ -33,6 +35,8 @@ export default function EventDetailScreen({
   const [shareOpen, setShareOpen] = useState(false);
   const [joining, setJoining] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const remaining = useRemaining(event?.invited ? event.invitationExpiresAt : null);
   useEffect(() => { let active = true; if (eventId) getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(error => { if (active) setLoadError(getApiErrorMessage(error, 'Etkinlik yüklenemedi.')); }); return () => { active = false; }; }, [eventId]);
   if (!event) return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}><TopNavBar navigate={navigate} fallback="discover" title="Etkinlik" /><Box style={{ paddingTop: 96, paddingHorizontal: 20 }}><Label>{loadError || 'Etkinlik yükleniyor…'}</Label></Box></Box>;
   const joined = event.host.id === store.user.id || event.joined || event.participants.some(p => p.id === store.user.id);
@@ -111,9 +115,14 @@ export default function EventDetailScreen({
               <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite70]]}>
                 Katılımcılar
               </Label>
-              <Label style={[[ui.textSm, ui.fontSemibold, ui.textWhite]]}>
-                {participantCount(event.currentParticipants, event.maxParticipants)}
-              </Label>
+              <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
+                <Label style={[[ui.textSm, ui.fontSemibold, ui.textWhite]]}>
+                  {participantCount(event.currentParticipants, event.maxParticipants)}
+                </Label>
+                {event.host.id === store.user.id && event.status === "waiting_participants" && <Touch accessibilityLabel="Kişi ekle" onPress={() => setInviteOpen(true)} style={[[ui.px3, ui.roundedXl, ui.textXs, ui.fontMedium, ui.border, ui.borderC8a44a30, ui.bgC8a44a10, ui.textC8a44a], { minHeight: 36 }]}>
+                    + Kişi ekle
+                  </Touch>}
+              </Box>
             </Box>
             <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.flexWrap]]}>
               {event.participants.filter(p => p.id !== store.user.id).map(p => <Box key={p.id} style={[[ui.flex, ui.flexCol, ui.itemsCenter, ui.gap1]]}>
@@ -325,8 +334,11 @@ export default function EventDetailScreen({
             </Label>
           </Box>}
 
+        {event.invited && !joined && remaining !== null && <Label accessibilityLiveRegion="polite" style={[[ui.textXs, ui.mb2], { color: remaining > 0 ? palette.accent : palette.error }]}>
+            {remaining > 0 ? `Davete yanıt için ${remainingLabel(remaining)}` : "Bu davetin süresi doldu."}
+          </Label>}
         {event.invited && !joined ? <Box style={[[ui.flex, ui.gap3]]} enter>
-            <Touch disabled={joining || ['cancelled', 'closed'].includes(event.status || '')} onPress={() => setJoined(true)} style={[[ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase], { flex: 1, color: palette.text }]} gradient={palette.actionGradient}>
+            <Touch disabled={joining || ['cancelled', 'closed'].includes(event.status || '') || remaining !== null && remaining <= 0} onPress={() => setJoined(true)} style={[[ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase], { flex: 1, color: palette.text }]} gradient={palette.actionGradient}>
               Daveti kabul et
             </Touch>
             <Touch disabled={joining} onPress={() => setJoined(false)} style={[[ui.py4, ui.rounded2xl, ui.textBase, ui.textWhite60, ui.border, ui.borderWhite8], { flex: 1 }]}>
@@ -350,5 +362,6 @@ export default function EventDetailScreen({
             {event.host.id === store.user.id ? "Bu etkinliği sen düzenliyorsun" : "Katıldın · İptal Et"}
           </Touch>}
       </Box>
+      {inviteOpen && <InviteCandidatesSheet eventId={event.id} onClose={() => setInviteOpen(false)} />}
     </Box>;
 }

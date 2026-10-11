@@ -36,6 +36,10 @@ export interface ApiEvent {
   // Messages from others since the member last read the room.
   unreadCount?: number
   viewerParticipationStatus?: string | null
+  // Pool invitations only: the server-side answer deadline (24 h or the event start, whichever is first).
+  viewerInvitationExpiresAt?: string | null
+  // Pending invitations list only: the viewer already joined another event at this time.
+  viewerHasTimeConflict?: boolean
 }
 
 interface EventListResponse {
@@ -313,3 +317,26 @@ export async function getSocketToken(renew = false) {
 }
 
 export const getEventActivity = (id: string) => request<{ waitlist: Array<{ userId: string; createdAt?: string }>; checkins: Array<{ userId: string; method?: string; createdAt?: string }> }>(`/events/${id}/activity`)
+
+// "Etkinlik Takvimim": the user's private availability records (never a public listing).
+export interface ApiAvailability {
+  id: string
+  status: "active" | "paused" | "expired"
+  dateFrom: string
+  dateTo: string
+  weekdays: number[]
+  timeWindows: Array<{ from: string; to: string }>
+  area: { mode: "city"; name: string; latitude: number; longitude: number } | { mode: "radius"; latitude: number; longitude: number; radiusKm: number }
+  activities: Array<{ interestId: string; ownLevelId?: string | null; anyPartnerLevel?: boolean; partnerLevelIds?: string[]; maxDurationMinutes: number | null }>
+}
+export const getAvailabilities = () => request<{ items: ApiAvailability[] }>('/users/me/availability')
+export const createAvailability = (value: import('../availability/model').AvailabilityPayload) => request<ApiAvailability>('/users/me/availability', { method: 'POST', body: JSON.stringify(value) })
+export const updateAvailability = (id: string, value: import('../availability/model').AvailabilityPayload) => request<ApiAvailability>(`/users/me/availability/${id}`, { method: 'PUT', body: JSON.stringify(value) })
+export const setAvailabilityPaused = (id: string, paused: boolean) => request<ApiAvailability>(`/users/me/availability/${id}/${paused ? 'pause' : 'resume'}`, { method: 'POST' })
+// Removes only the availability record; events and accepted participations are untouched server-side.
+export const deleteAvailability = (id: string) => request<{ message: string }>(`/users/me/availability/${id}`, { method: 'DELETE' })
+// Organizer only: people from the private pool who fit this event. No contact or location data is returned.
+export interface EventCandidate { user: { id: string; firstName: string; lastName: string; profilePhoto: string | null; rank: number }; match: { activity: string; level: string | null; summary: string[] } }
+export const getEventCandidates = (eventId: string) => request<{ capacity: { confirmed: number; max: number; spotsLeft: number }; items: EventCandidate[] }>(`/events/${eventId}/candidates`)
+// An invitation is not a seat: invitees still pass the capacity check when they accept.
+export const inviteEventCandidates = (eventId: string, userIds: string[]) => request<{ invited: number; expiresAt: string }>(`/events/${eventId}/invitations`, { method: 'POST', body: JSON.stringify({ userIds }) })

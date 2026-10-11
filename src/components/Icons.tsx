@@ -467,6 +467,9 @@ export function SparklesIcon({ size = 20, style, strokeWidth = 1.8 }: IconProps)
 export function CompassIcon({ size = 24, style, strokeWidth = 1.8 }: IconProps) {
   return <Vector width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}><Circle cx="12" cy="12" r="9" /><Path d="m16 8-2.5 5.5L8 16l2.5-5.5L16 8Z" /></Vector>
 }
+export function CalendarIcon({ size = 20, style, strokeWidth = 1.8 }: IconProps) {
+  return <Vector width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}><Rect x="3" y="5" width="18" height="16" rx="3" /><Path d="M3 10h18M8 3v4M16 3v4M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" /></Vector>
+}
 export function PlusIcon({ size = 24, style, strokeWidth = 1.8 }: IconProps) {
   return <Vector width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" style={style}><Path d="M12 5v14M5 12h14" /></Vector>
 }

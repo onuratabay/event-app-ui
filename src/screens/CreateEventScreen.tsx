@@ -14,6 +14,7 @@ import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import TopNavBar from "../components/TopNavBar";
 import { useBottomNavInset } from "../components/BottomNav";
+import { DURATIONS, MAX_DURATION_MINUTES, formatDuration } from "../events/duration";
 function StickyBar({
   children
 }: {
@@ -64,12 +65,6 @@ function isPastStart(date: string, time: string) {
 }
 const MIN_PARTICIPANTS = 2;
 const MAX_PARTICIPANTS = 100;
-const DURATIONS = [30, 60, 90, 120, 180];
-const MAX_DURATION_MINUTES = 1440;
-function formatDuration(minutes: number) {
-  const hours = Math.floor(minutes / 60), rest = minutes % 60;
-  return [hours && `${hours} saat`, rest && `${rest} dk`].filter(Boolean).join(" ");
-}
 // Custom duration minutes accept digits only and never exceed 59.
 const clampMinutes = (text: string) => {
   const digits = text.replace(/\D/g, "");

@@ -49,7 +49,7 @@ Module._load = function (id, parent, isMain) {
     getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
     Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => ({ coords: { latitude: 39.92, longitude: 32.85 } }), geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => [],
   }
-  if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker" }
+  if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker", Circle: "Circle" }
   if (id === "expo-constants") return { __esModule: true, default: { expoConfig: { hostUri: "192.168.1.15:8081" } } }
   if (id === "react-native")
     return {
@@ -63,6 +63,7 @@ Module._load = function (id, parent, isMain) {
       TextInput: "TextInput",
       Modal: "Modal",
       Platform: { OS: process.env.TEST_PLATFORM || "ios" },
+      useWindowDimensions: () => ({ width: global.__testWindowWidth || 390, height: 844, scale: 3, fontScale: 1 }),
       Alert: { alert() {} },
       AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) },
       Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => { global.__testKeyboardDismissed = true } },
@@ -307,6 +308,7 @@ async function tap(tree, label) {
   await require("./check-recommendations.cjs")({ mount, tap, act, text, storage })
   await require("./check-password-reset.cjs")({ mount, tap, act, text, storage })
   await require("./check-server-state.cjs")({ mount, tap, act, text, storage })
+  await require("./check-availability.cjs")({ mount, tap, act, text, storage })
   const names = [
     "Splash",
     "Welcome",
@@ -321,6 +323,7 @@ async function tap(tree, label) {
     "Rooms",
     "Search",
     "Notifications",
+    "Availability",
   ]
   for (const name of names) {
     const tree = await mount(name, { eventId: EVENTS[0].id })

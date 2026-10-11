@@ -1,5 +1,5 @@
 import { palette } from "../theme/palette";
-import { StarIcon } from "../components/Icons";
+import { CalendarIcon, StarIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
@@ -240,6 +240,30 @@ export default function ProfileScreen({
             </Box>
           </GlassCard>
         </Box>
+
+        {/* Availability calendar (own only) */}
+        {isOwn && <Box style={[[ui.px5, ui.mb4]]}>
+            <GlassCard onPress={() => navigate("availability")} accessibilityLabel="Etkinlik Takvimim" style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.justifyBetween, ui.p4]]}>
+              <Box style={[[ui.flex, ui.itemsCenter, ui.gap3, ui.flex1, ui.minW0]]}>
+                <Box style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
+              backgroundColor: "rgba(105,120,255,0.12)",
+              borderWidth: 1,
+              borderColor: "rgba(105,120,255,0.24)"
+            }]}>
+                  <CalendarIcon size={18} style={{ color: palette.accent }} />
+                </Box>
+                <Box style={[[ui.textLeft, ui.flex1, ui.minW0]]}>
+                  <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite80]]}>
+                    Etkinlik Takvimim
+                  </Label>
+                  <Label style={[[ui.textXs, ui.textWhite35]]}>
+                    Müsait olduğun zamanlar · uygun etkinliklere davet al
+                  </Label>
+                </Box>
+              </Box>
+              <Label style={[[ui.textWhite30, ui.textSm]]}>›</Label>
+            </GlassCard>
+          </Box>}
 
         {/* References (own only) */}
         {isOwn && <Box style={[[ui.px5, ui.mb4]]}>
