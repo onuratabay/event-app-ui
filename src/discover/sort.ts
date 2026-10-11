@@ -14,6 +14,18 @@ const startTime = (event: AppEvent) => {
   const [hour, minute] = event.time.split(":").map(Number)
   return new Date(year, month - 1, day, hour || 0, minute || 0).getTime()
 }
+/**
+ * The home feed shows only events still open to people: waiting for participants (not yet
+ * started) or started and not yet over. The time check also hides events whose status has not
+ * been updated yet (the server's status jobs are off in development).
+ */
+export function isOpenForFeed(event: AppEvent, now = Date.now()) {
+  const status = event.status || "waiting_participants"
+  const start = startTime(event)
+  if (status === "waiting_participants") return start >= now
+  if (status === "started") return start + (parseInt(event.duration || "", 10) || 120) * 60000 > now
+  return false
+}
 const created = (event: AppEvent) => Date.parse(event.createdAt || "") || 0
 const hasCoordinates = (event: AppEvent) => Number.isFinite(event.latitude) && Number.isFinite(event.longitude)
 

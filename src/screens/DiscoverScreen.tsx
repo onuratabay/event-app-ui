@@ -18,7 +18,7 @@ import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI"
 import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
 import * as Location from "expo-location";
-import { sortFeed, type SortOption } from "../discover/sort";
+import { isOpenForFeed, sortFeed, type SortOption } from "../discover/sort";
 interface Props {
   navigate: NavigateFn;
 }
@@ -443,7 +443,7 @@ export default function DiscoverScreen({
   const [sortOpen, setSortOpen] = useState(false);
   const [shareEvent, setShareEvent] = useState<AppEvent | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const visibleEvents = EVENTS.filter(e => {
+  const visibleEvents = EVENTS.filter(e => isOpenForFeed(e)).filter(e => {
     if (activeFilter === "Padel" || activeFilter === "Konser") return e.category === activeFilter;
     if (activeFilter === "Outdoor") return ["Hiking", "Koşu", "Outdoor"].includes(e.category);
     if (activeFilter === "Sanat") return ["Fotoğraf", "Fotoğrafçılık", "Sanat"].includes(e.category);

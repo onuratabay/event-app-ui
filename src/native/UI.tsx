@@ -129,11 +129,11 @@ function Content({
         <View
           key={React.isValidElement(c) ? (c.key ?? i) : i}
           style={{
-            // Floor so sub-pixel rounding (notably on Android) never pushes the
-            // last cell of a row onto the next line.
+            // Floor the cell width: Android rounds layout to device pixels, and an exact
+            // fraction can overflow the row by a pixel, pushing cells onto one per line.
             width: width
               ? Math.max(0, Math.floor((width - (columns - 1) * gap) / columns))
-              : `${100 / columns}%`,
+              : `${Math.floor(100 / columns) - 2}%`, // leaves room for the gap until measured
             flexGrow: 0,
             flexShrink: 0,
           }}
