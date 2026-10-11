@@ -218,7 +218,28 @@ async function tap(tree, label) {
   const roomC = { ...mapApiEvent(photoFree), id: "c" }
   assert.deepEqual([roomC, roomA, roomB].sort(byLatestMessage).map(room => room.id), ["b", "a", "c"], "Rooms sort by newest message across time zone formats; silent rooms last")
   assert.equal(roomTitle(roomA), `${roomA.title} · ${roomA.date}`)
-  const { sortFeed } = require("../src/discover/sort.ts")
+  // Grid cells must never overflow the row (Android pixel rounding pushed cells one per line).
+  {
+    const { Box } = require("../src/native/UI.tsx")
+    let grid
+    await act(async () => { grid = create(React.createElement(Box, { style: { gap: 12, flexDirection: "row", flexWrap: "wrap" }, columns: 2 }, ["a", "b"].map(key => React.createElement(Box, { key })))) })
+    const row = grid.root.findAll(n => typeof n.props.onLayout === "function" && n.props.style?.flexWrap === "wrap")[0]
+    const cells = () => row.findAll(n => n.parent === row || n.parent?.parent === row).filter(n => n.props.style && "flexShrink" in n.props.style)
+    assert.equal(cells().length, 2, "Both grid cells are found")
+    assert(cells().every(cell => cell.props.style.width === "48%"), "Before measuring, cells leave room for the gap")
+    await act(async () => row.props.onLayout({ nativeEvent: { layout: { width: 343.5 } } }))
+    const widths = cells().map(cell => cell.props.style.width)
+    assert(widths.every(width => Number.isInteger(width)) && widths.reduce((sum, width) => sum + width, 0) + 12 <= 343.5, "Two cells plus the gap fit in one row")
+    await act(async () => grid.unmount())
+  }
+  const { sortFeed, isOpenForFeed } = require("../src/discover/sort.ts")
+  const at = (date, time, extra) => ({ ...mapApiEvent(photoFree), date, time, ...extra })
+  const now = new Date(2026, 9, 11, 12, 0).getTime()
+  assert.equal(isOpenForFeed(at("12/10/2026", "18:00", { status: "waiting_participants" }), now), true, "Upcoming events waiting for participants are shown")
+  assert.equal(isOpenForFeed(at("11/10/2026", "11:30", { status: "started", duration: "90 dk" }), now), true, "Started events still in progress are shown")
+  assert.equal(isOpenForFeed(at("11/10/2026", "09:00", { status: "started", duration: "60 dk" }), now), false, "Started events past their end are hidden")
+  assert.equal(isOpenForFeed(at("10/10/2026", "18:00", { status: "waiting_participants" }), now), false, "Waiting events whose start passed are hidden (status not updated yet)")
+  for (const status of ["closed", "cancelled"]) assert.equal(isOpenForFeed(at("20/10/2026", "18:00", { status }), now), false, `${status} events are hidden`)
   const feedEvent = (id, extra) => ({ ...mapApiEvent(photoFree), id, ...extra })
   const feed = [
     feedEvent("old-padel", { category: "Padel", createdAt: "2026-10-01T10:00:00Z", date: "20/10/2026", time: "18:00", latitude: 39.95, longitude: 32.85 }),
