@@ -44,6 +44,7 @@ const storage = new Map()
 Module._load = function (id, parent, isMain) {
   if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]), usePathname: () => global.__testPathname || "/discover", useRootNavigationState: () => global.__testRootState, useRouter: () => ({ navigate: href => global.__testNavigations?.push(href.pathname ?? href), replace: href => global.__testNavigations?.push(href.pathname ?? href), push: href => global.__testNavigations?.push(href.pathname ?? href), back: () => global.__testNavigations?.push("back"), canGoBack: () => !!global.__testRootState && global.__testRootState.index > 0, canDismiss: () => true, dismissAll: () => global.__testNavigations?.push("dismissAll") }) }
   if (id === "socket.io-client") return require("./mock-socket.cjs")
+  if (id === "expo-notifications") { global.__expoNotificationsLoaded = true; return {} }
   if (id === "expo-location") return {
     getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
     Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => ({ coords: { latitude: 39.92, longitude: 32.85 } }), geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => [],
@@ -232,6 +233,10 @@ async function tap(tree, label) {
     assert(widths.every(width => Number.isInteger(width)) && widths.reduce((sum, width) => sum + width, 0) + 12 <= 343.5, "Two cells plus the gap fit in one row")
     await act(async () => grid.unmount())
   }
+  // expo-router loads every route at startup; Expo Go on Android throws as soon as expo-notifications loads.
+  global.__expoNotificationsLoaded = false
+  require("../app/settings.tsx")
+  assert.equal(global.__expoNotificationsLoaded, false, "Loading the settings route must not load expo-notifications")
   const { sortFeed, isOpenForFeed } = require("../src/discover/sort.ts")
   const at = (date, time, extra) => ({ ...mapApiEvent(photoFree), date, time, ...extra })
   const now = new Date(2026, 9, 11, 12, 0).getTime()
