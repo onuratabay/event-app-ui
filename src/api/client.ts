@@ -145,6 +145,30 @@ async function refreshSession(): Promise<boolean> {
   return refreshing
 }
 
+// In-memory session cache for rarely changing data. Device storage keeps session tokens
+// only, so nothing here survives an app restart. Keys starting with "user:" belong to the
+// signed-in account and are dropped on sign-in, sign-out and account changes.
+const sessionCache = new Map<string, { expires: number; value: Promise<unknown> }>()
+const HOURS = 60 * 60 * 1000
+function cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
+  const hit = sessionCache.get(key)
+  if (hit && hit.expires > Date.now()) return hit.value as Promise<T>
+  const value = load()
+  sessionCache.set(key, { expires: Date.now() + ttlMs, value })
+  // A failed request is not cached; the next caller retries.
+  value.catch(() => { if (sessionCache.get(key)?.value === value) sessionCache.delete(key) })
+  return value
+}
+/** Shares one request among callers that ask while it is still in flight (no reuse after it settles). */
+function shared<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const value = cached(key, Number.POSITIVE_INFINITY, load)
+  void value.finally(() => { if (sessionCache.get(key)?.value === value) sessionCache.delete(key) }).catch(() => {})
+  return value
+}
+export function clearSessionCache(scope: "user" | "all" = "all") {
+  for (const key of [...sessionCache.keys()]) if (scope === "all" || key.startsWith("user:")) sessionCache.delete(key)
+}
+
 export async function register(input: {
   firstName: string
   lastName: string
@@ -152,11 +176,13 @@ export async function register(input: {
   phoneNumber: string
   password: string
   birthDate: string
+  city: string
 }) {
   const response = await request<AuthResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify({ ...input, language: "tr" }),
   })
+  clearSessionCache("user")
   await saveTokens(response.tokens)
   return response
 }
@@ -166,12 +192,14 @@ export async function login(email: string, password: string) {
     method: "POST",
     body: JSON.stringify({ email, password, language: "tr" }),
   })
+  clearSessionCache("user")
   await saveTokens(response.tokens)
   return response
 }
 
 export async function logout() {
   sessionVersion++
+  clearSessionCache("user")
   const removal = tokenWrites.then(() => AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]))
   tokenWrites = removal.catch(() => {})
   await removal
@@ -242,8 +270,10 @@ export async function hasSession() { return Boolean((await AsyncStorage.getItem(
 
 // Each interest lists its own levels (managed in the interest_levels table); empty means no level step.
 export interface InterestLevel { id: string; enum: string; name: string }
-export function getMapInterests(signal?: AbortSignal) {
-  return request<Array<{ id: string; name: string; slug: string; levels?: InterestLevel[] }>>("/interests", { signal, headers: { "Accept-Language": "tr" } })
+// The catalog is the same for everyone and changes rarely: fetched once per 6 hours per app session.
+// The signal is accepted for compatibility but not passed on, so one screen leaving cannot cancel the shared request.
+export function getMapInterests(_signal?: AbortSignal) {
+  return cached("interests", 6 * HOURS, () => request<Array<{ id: string; name: string; slug: string; levels?: InterestLevel[] }>>("/interests", { headers: { "Accept-Language": "tr" } }))
 }
 
 export function forgotPassword(email: string) {
@@ -256,9 +286,10 @@ export function resetPassword(token: string, newPassword: string) {
 export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
 export interface NotificationPreferences { invites?: boolean; messages?: boolean; reminders?: boolean }
 export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; recommendationProfile?: import('../recommendations/model').RecommendationProfile; notifications?: NotificationPreferences; mutedRooms?: { ids: string[] } }
-export const getCurrentUser = () => request<ApiUser>('/auth/me', { method: 'POST' })
+// Startup asks for the account from several places at once; they share one request.
+export const getCurrentUser = () => shared('user:me', () => request<ApiUser>('/auth/me', { method: 'POST' }))
 // profile_incomplete → approved once at least one interest is saved (photo optional).
-export const completeProfile = () => request<ApiUser>('/users/me/profile/complete', { method: 'POST' })
+export const completeProfile = () => request<ApiUser>('/users/me/profile/complete', { method: 'POST' }).finally(() => clearSessionCache('user'))
 export const getUserInterests = () => request<Array<{ id: string; name: string }>>('/users/me/interests')
 export const setUserInterests = (interestIds: string[]) => request<Array<{ id: string; name: string }>>('/users/me/interests', { method: 'PUT', body: JSON.stringify({ interestIds }) })
 export const updateProfile = (value: Partial<ApiUser>) => request<ApiUser>('/users/me/profile', { method: 'PATCH', body: JSON.stringify(value) })
@@ -266,7 +297,7 @@ export const updateProfile = (value: Partial<ApiUser>) => request<ApiUser>('/use
 export const changePassword = (oldPassword: string, newPassword: string) => request<{ message: string }>('/users/me/password', { method: 'PATCH', body: JSON.stringify({ oldPassword, newPassword, language: 'tr' }) })
 export const deleteAccount = (password: string) => request<{ message: string }>('/users/me', { method: 'DELETE', body: JSON.stringify({ password, language: 'tr' }) })
 export const setProfilePhoto = (photo: string) => request('/users/me/photo', { method: photo ? 'PUT' : 'DELETE', ...(photo ? { body: JSON.stringify({ photo }) } : {}) })
-export const getPreferences = () => request<Preferences>('/users/me/preferences')
+export const getPreferences = () => shared('user:preferences', () => request<Preferences>('/users/me/preferences'))
 let preferenceWrites = Promise.resolve<unknown>(undefined)
 export function putPreference<K extends keyof Preferences>(key: K, value: NonNullable<Preferences[K]>) {
   const version = sessionVersion
@@ -284,12 +315,12 @@ export const participate = (id: string, join: boolean) => request<ApiEvent>(`/ev
 export const getSuggestions = () => request<{ items: string[] }>('/events/mine/suggestions')
 export const dismissSuggestion = (text: string) => request<{ items: string[] }>('/events/mine/suggestions', { method: 'DELETE', body: JSON.stringify({ text }) })
 export const canCreateEvent = () => request<{ canCreate: boolean; message: string | null }>('/events/can-create')
-export const getUserSettings = () => request<{ canCreateInviteOnly: boolean }>('/users/me/settings')
+export const getUserSettings = () => cached('user:settings', HOURS / 6, () => request<{ canCreateInviteOnly: boolean }>('/users/me/settings'))
 export interface FriendUser { id: string; firstName: string; lastName: string; profilePhoto: string | null }
 // Accepted friends whose accounts are approved; only they can be invited.
 export const getActiveFriends = () => request<{ items: Array<{ user: FriendUser }> }>('/friends?active=true&limit=100')
 export const getInvitations = () => request<EventListResponse>('/events/invitations?limit=50')
-export const getEnums = (group: string) => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`)
+export const getEnums = (group: string) => cached(`enums:${group}`, 6 * HOURS, () => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`))
 export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value) })
 export interface ApiMessage { kind?: 'message' | 'announcement'; id: string; text: string; createdAt: string; editedAt?: string | null; deleted?: boolean; user: { id: string; firstName: string; lastName: string } }
 export const editMessage = (eventId: string, messageId: string, text: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ text }) })

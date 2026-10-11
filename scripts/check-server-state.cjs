@@ -13,9 +13,9 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   storage.set('event-app:v1', JSON.stringify(legacy))
   let tree = await mount('Profile')
   assert(text(tree.toJSON()).includes('Sunucu Kullanıcısı'))
-  // The profile no longer shows a bio; the city proves server data was restored.
+  // City and the About me text (bio) prove server data was restored.
   assert(text(tree.toJSON()).includes('Ankara'))
-  assert(!text(tree.toJSON()).includes('Sunucu profili'))
+  assert(text(tree.toJSON()).includes('Sunucu profili'), 'Bio from the server is shown in About me')
   assert.equal(storage.has('event-app:v1'), false)
   assert(server.preferences.recommendationProfile.equipmentByCity.izmir.includes('racket'))
   await act(async () => tree.unmount())

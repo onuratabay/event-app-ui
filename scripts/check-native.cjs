@@ -8,6 +8,17 @@ const React = require("react")
 const { create, act } = require("react-test-renderer")
 global.IS_REACT_ACT_ENVIRONMENT = true
 global.__DEV__ = true
+// Swapping the fake server stands in for a different backend, so the app's in-memory
+// session cache (catalogs, settings) must not leak between suites.
+{
+  let currentFetch
+  const clientPath = require("node:path").join(__dirname, "../src/api/client.ts")
+  Object.defineProperty(global, "fetch", {
+    configurable: true,
+    get: () => currentFetch,
+    set: value => { currentFetch = value; require.cache[clientPath]?.exports.clearSessionCache?.() },
+  })
+}
 global.fetch = async () => ({ ok: true, json: async () => ({ items: [], total: 0 }) })
 for (const extension of [".ts", ".tsx"])
   require.extensions[extension] = (module, filename) => {
@@ -69,7 +80,7 @@ Module._load = function (id, parent, isMain) {
       BackHandler: { addEventListener: (_name, handler) => { global.__testBackHandler = handler; return { remove() { global.__testBackHandler = undefined } } } },
       AccessibilityInfo: { isReduceMotionEnabled: async () => false, announceForAccessibility() {}, getRecommendedTimeoutMillis: async value => value },
       Easing: { linear: value => value, quad: value => value ** 2, cubic: value => value ** 3, out: easing => easing, inOut: easing => easing },
-      Linking: { openURL: async () => {} },
+      Linking: { openURL: async url => { global.__openedUrl = url }, canOpenURL: async () => true },
       Share: { share: async () => {} },
       StyleSheet: {
         create: (s) => s,
@@ -219,18 +230,26 @@ async function tap(tree, label) {
   const roomC = { ...mapApiEvent(photoFree), id: "c" }
   assert.deepEqual([roomC, roomA, roomB].sort(byLatestMessage).map(room => room.id), ["b", "a", "c"], "Rooms sort by newest message across time zone formats; silent rooms last")
   assert.equal(roomTitle(roomA), `${roomA.title} · ${roomA.date}`)
-  // Grid cells must never overflow the row (Android pixel rounding pushed cells one per line).
+  // Text never sits on a line shorter than its size, even when the size is inherited (Android clipped descenders).
+  {
+    const { Box, Label } = require("../src/native/UI.tsx")
+    let tree
+    await act(async () => { tree = create(React.createElement(Box, { style: { fontSize: 20, fontFamily: "Fraunces" } }, React.createElement(Label, null, "Ayşe Yılmaz"))) })
+    const lineHeight = [].concat(tree.root.findByType("Text").props.style).reduce((value, part) => part?.lineHeight ?? value, undefined)
+    assert(lineHeight >= 26, `Inherited 20px text gets a tall enough line (got ${lineHeight})`)
+    await act(async () => tree.unmount())
+  }
+  // Grids are explicit rows of equal flex cells, so nothing can wrap (Android pixel rounding
+  // used to push cells onto one per line).
   {
     const { Box } = require("../src/native/UI.tsx")
     let grid
-    await act(async () => { grid = create(React.createElement(Box, { style: { gap: 12, flexDirection: "row", flexWrap: "wrap" }, columns: 2 }, ["a", "b"].map(key => React.createElement(Box, { key })))) })
-    const row = grid.root.findAll(n => typeof n.props.onLayout === "function" && n.props.style?.flexWrap === "wrap")[0]
-    const cells = () => row.findAll(n => n.parent === row || n.parent?.parent === row).filter(n => n.props.style && "flexShrink" in n.props.style)
-    assert.equal(cells().length, 2, "Both grid cells are found")
-    assert(cells().every(cell => cell.props.style.width === "48%"), "Before measuring, cells leave room for the gap")
-    await act(async () => row.props.onLayout({ nativeEvent: { layout: { width: 343.5 } } }))
-    const widths = cells().map(cell => cell.props.style.width)
-    assert(widths.every(width => Number.isInteger(width)) && widths.reduce((sum, width) => sum + width, 0) + 12 <= 343.5, "Two cells plus the gap fit in one row")
+    await act(async () => { grid = create(React.createElement(Box, { style: { gap: 12, flexDirection: "row", flexWrap: "wrap" }, columns: 2 }, ["a", "b", "c"].map(key => React.createElement(Box, { key, testID: key })))) })
+    const rows = grid.root.findAll(n => n.type === "View" && n.props.style?.flexDirection === "row" && n.props.style?.gap === 12 && !n.props.style?.flexWrap)
+    assert.equal(rows.length, 2, "Three items in two columns make two rows")
+    const cells = row => row.children.filter(child => child.props.style?.flex === 1)
+    assert.deepEqual(rows.map(row => cells(row).length), [2, 2], "Each row has one equal cell per column")
+    assert.equal(cells(rows[1])[1].findAll(n => n.props.testID).length, 0, "The incomplete last row keeps an empty spacer so cells stay the same width")
     await act(async () => grid.unmount())
   }
   // expo-router loads every route at startup; Expo Go on Android throws as soon as expo-notifications loads.
@@ -288,11 +307,21 @@ async function tap(tree, label) {
   assert(text(registration.toJSON()).includes("Doğum tarihi gelecekte olamaz"), "Future birth dates are rejected")
   await act(async () => birthField().props.onChangeText("1995-06-15"))
   assert.equal(birthField().props.value, "1995-06-15")
+  // City is a required select: open the list, search with Turkish casing and pick.
+  const cityField = registration.root.findAllByType("Pressable").find(n => String(n.props.accessibilityLabel).startsWith("Şehir:"))
+  assert(cityField, "Registration has a city select")
+  await act(async () => cityField.props.onPress())
+  const citySearch = registration.root.findAllByType("TextInput").find(n => n.props.placeholder === "Şehir ara")
+  await act(async () => citySearch.props.onChangeText("izmir"))
+  const options = registration.root.findAllByType("Pressable").filter(n => n.props.accessibilityState && "selected" in n.props.accessibilityState)
+  assert.deepEqual(options.map(n => text(n).trim()), ["İzmir"], "Searching 'izmir' finds İzmir")
+  await act(async () => options[0].props.onPress())
   await tap(registration, "Topluluk ilkelerini okudum")
   await tap(registration, "Devam Et")
   assert.equal(destination, "onboarding-2")
   assert.equal(registrationRequest.url, "http://192.168.1.15:3000/auth/register")
   assert.equal(registrationRequest.body.birthDate, "15/06/1995")
+  assert.equal(registrationRequest.body.city, "İzmir", "The chosen city is sent with the registration")
   assert.equal(registrationRequest.body.phoneNumber, "+905321234567")
   assert.equal(storage.get("event-app:access-token"), "test-access")
   await act(async () => registration.unmount())
