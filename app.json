@@ -42,8 +42,7 @@
         {
           "locationWhenInUsePermission": "Yakınındaki etkinlikleri ve bulunduğun şehre uygun önerileri göstermek için konumuna erişim gerekiyor."
         }
-      ],
-      "expo-sharing"
+      ]
     ],
     "experiments": {
       "typedRoutes": true
