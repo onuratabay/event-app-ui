@@ -392,3 +392,6 @@ export interface EventCandidate { user: { id: string; firstName: string; lastNam
 export const getEventCandidates = (eventId: string) => request<{ capacity: { confirmed: number; max: number; spotsLeft: number }; items: EventCandidate[] }>(`/events/${eventId}/candidates`)
 // An invitation is not a seat: invitees still pass the capacity check when they accept.
 export const inviteEventCandidates = (eventId: string, userIds: string[]) => request<{ invited: number; expiresAt: string }>(`/events/${eventId}/invitations`, { method: 'POST', body: JSON.stringify({ userIds }) })
+// Before the event exists: pool members who fit the creation form's draft. Read-only; invitations go out after creation.
+export interface CandidateDraft { interestId: string; levelId?: string; date: string; startTime: string; durationMinutes?: number; latitude: number; longitude: number }
+export const previewEventCandidates = (draft: CandidateDraft) => request<{ items: EventCandidate[] }>('/events/candidates/preview', { method: 'POST', body: JSON.stringify(draft) })

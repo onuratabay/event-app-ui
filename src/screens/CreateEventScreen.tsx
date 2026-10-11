@@ -2,7 +2,7 @@ import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
 import { Alert, Platform } from "react-native";
 import * as Location from "expo-location";
-import { canCreateEvent, createEvent, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions } from "../api/client";
+import { canCreateEvent, createEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions } from "../api/client";
 import { mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useState } from "react";
 import { Avatar, AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
@@ -15,6 +15,7 @@ import { NavigateFn } from "../types";
 import TopNavBar from "../components/TopNavBar";
 import { useBottomNavInset } from "../components/BottomNav";
 import { DURATIONS, MAX_DURATION_MINUTES, formatDuration } from "../events/duration";
+import PoolCandidatesPicker from "../availability/PoolCandidatesPicker";
 function StickyBar({
   children
 }: {
@@ -98,6 +99,8 @@ export default function CreateEventScreen({
   const [activities, setActivities] = useState<Array<{ id: string; name: string; levels?: InterestLevel[] }>>([]);
   const [visibilities, setVisibilities] = useState<Array<{ id: string; name: string; enum: string }>>([]);
   const [creating, setCreating] = useState(false);
+  // People from the private availability pool to invite once the event exists.
+  const [poolIds, setPoolIds] = useState<string[]>([]);
   const [places, setPlaces] = useState<Array<{ latitude: number; longitude: number }>>([]);
   const [coordinate, setCoordinate] = useState<{ latitude: number; longitude: number } | null>(null);
   const [findingPlace, setFindingPlace] = useState(false);
@@ -175,6 +178,8 @@ export default function CreateEventScreen({
       const event = await createEvent({ interestId: interest.id, ...(level ? { levelId: level.id } : {}), visibilityId: visibility.id, date, startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: coordinate.latitude, longitude: coordinate.longitude, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(inviteOnly ? { invitedUserIds: invitedIds } : {}), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
       // The creator sees the new event at the top of Discover right away.
       setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)], feedIds: [event.id, ...p.feedIds.filter(id => id !== event.id)] }));
+      // The event already exists here; a failed invite must not look like a failed creation.
+      if (poolIds.length) await inviteEventCandidates(event.id, poolIds).catch(error => Alert.alert('Etkinlik oluşturuldu', `Davetler gönderilemedi: ${getApiErrorMessage(error)} Etkinlik detayındaki "+ Kişi ekle" ile tekrar deneyebilirsin.`));
       // The creation flow leaves history entirely; back from the new event's detail goes home.
       navigate('event-detail', { eventId: event.id, aboveHome: true });
     } catch (error) { Alert.alert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
@@ -254,10 +259,16 @@ export default function CreateEventScreen({
             </Box>
           </GlassCard>
 
+          {(() => {
+            const interest = activities.find(i => i.name === data.activity), level = levels.find(i => i.name === data.level);
+            if (!interest || !coordinate || levels.length > 0 && !level || isPastStart(data.date, data.time)) return null;
+            return <PoolCandidatesPicker selected={poolIds} onChange={setPoolIds} draft={{ interestId: interest.id, ...(level ? { levelId: level.id } : {}), date: displayDate(data.date), startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: coordinate.latitude, longitude: coordinate.longitude }} />;
+          })()}
+
           <Touch onPress={publish} disabled={creating} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.mb4], {
           color: palette.text
         }]} gradient={["#4d5bcb", "#6651c9"]}>
-            Etkinliği Oluştur
+            {poolIds.length ? `Etkinliği Oluştur · ${poolIds.length} kişiyi davet et` : "Etkinliği Oluştur"}
           </Touch>
         </Box>
       </Scroll>

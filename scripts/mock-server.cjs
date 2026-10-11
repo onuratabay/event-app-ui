@@ -33,6 +33,7 @@ module.exports = function () {
       if (options.method === 'DELETE') { availabilities.splice(availabilities.indexOf(record), 1); result = { message: 'Müsaitlik kaydı kaldırıldı.' } }
       else { if (action === 'pause') record.status = 'paused'; else if (action === 'resume') record.status = 'active'; else Object.assign(record, body); result = { ...record } }
     }
+    else if (path === '/events/candidates/preview') result = { items: candidates.filter(item => !poolInvites.some(invite => invite.userId === item.user.id)) }
     else if (path.endsWith('/candidates')) result = { capacity: { confirmed: 1, max: 4, spotsLeft: 3 }, items: candidates.filter(item => !poolInvites.some(invite => invite.userId === item.user.id)) }
     else if (path.endsWith('/invitations') && body) { const expiresAt = new Date(Date.now() + 86400000).toISOString(); body.userIds.forEach(userId => poolInvites.push({ eventId: path.split('/')[2], userId, expiresAt })); result = { invited: body.userIds.length, expiresAt } }
     else if (path.startsWith('/events/invite-1/')) { const invite = invitations.splice(0, 1)[0]; result = { ...invite, viewerParticipationStatus: path.endsWith('/join') ? 'confirmed' : 'declined' } }

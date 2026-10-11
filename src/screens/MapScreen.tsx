@@ -11,6 +11,7 @@ import * as Location from "expo-location"
 import DiscoveryFilterSheet from "../map/DiscoveryFilterSheet"
 import { apiDate, applyDiscoveryFilters, categoryVisual, dateRange, placeBounds, DEFAULT_FILTERS, filterError, type DiscoveryFilters, type MapPlace } from "../map/filters"
 import MapView, { Marker, type Region } from "react-native-maps"
+import { MAP_PROVIDER } from "../map/provider"
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg"
 import { FilterChip } from "../components/GlassUI"
 import { getApiErrorMessage, getMapEvents, getMapInterests, type ApiEvent } from "../api/client"
@@ -161,7 +162,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   return <Box style={s.root}>
     {/* The map owns the entire canvas. Every control below is an overlay layer. */}
     <View style={StyleSheet.absoluteFill} onLayout={event => setSize(event.nativeEvent.layout)}>
-      <MapView ref={map} testID="event-map" style={StyleSheet.absoluteFill} initialRegion={INITIAL_REGION} mapType="satellite"
+      <MapView ref={map} provider={MAP_PROVIDER} testID="event-map" style={StyleSheet.absoluteFill} initialRegion={INITIAL_REGION} mapType="standard"
         userInterfaceStyle="dark" rotateEnabled={false} pitchEnabled={false} showsCompass={false}
         showsPointsOfInterests={false} showsBuildings={false} toolbarEnabled={false}
         onMapReady={() => setReady(true)} onRegionChange={setRegion} onRegionChangeComplete={setRegion}
