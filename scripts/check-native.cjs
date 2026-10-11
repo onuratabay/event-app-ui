@@ -439,6 +439,17 @@ async function tap(tree, label) {
   await pressLabel("Minimum azalt")
   assert(!maxCard(), "Max card hides again when min returns to 2")
   assert(text(createEvent.toJSON()).includes("Hızlı ekle"), "Message to participants is on the participants step")
+  {
+    // Long quick-add chips stay inside the row: capped width, left-aligned text, × never shrinks away.
+    const flat = node => Object.assign({}, ...[].concat(node.props.style).flat(Infinity).filter(Boolean))
+    const remove = createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Su getir. önerisini sil")
+    let chip = remove.parent
+    while (chip && flat(chip).maxWidth === undefined) chip = chip.parent
+    assert.equal(chip && flat(chip).maxWidth, "100%", "A quick-add chip is never wider than its row")
+    assert.equal(flat(remove).flexShrink, 0, "The remove button keeps its size")
+    const label = createEvent.root.findAllByType("Pressable").find(n => text(n).trim() === "Su getir." && n.props.accessibilityLabel !== "Su getir. önerisini sil")
+    assert.equal(flat(label).alignItems, "flex-start", "Chip text is left-aligned")
+  }
   const description = createEvent.root.findAllByType("TextInput")[0]
   await act(async () => description.props.onChangeText("Sunucuya kaydedilen test etkinliği"))
   await tap(createEvent,"Su getir.")

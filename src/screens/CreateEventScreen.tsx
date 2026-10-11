@@ -469,14 +469,15 @@ export default function CreateEventScreen({
                   Hızlı ekle
                 </Label>
                 <Box style={[[ui.flex, ui.flexWrap, ui.gap2]]}>
-                  {suggestions.map(s => <Box key={s} style={[[ui.flex, ui.itemsCenter, ui.roundedXl, ui.border, hasLine(data.description, s) ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite10, ui.bgWhite004]]]}>
+                  {/* Chips never exceed the row: long suggestions wrap left-aligned and the × stays inside. */}
+                  {suggestions.map(s => <Box key={s} style={[[ui.flex, ui.itemsCenter, ui.roundedXl, ui.border, hasLine(data.description, s) ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite10, ui.bgWhite004]], { maxWidth: "100%" }]}>
                       <Touch onPress={() => setData(p => ({
                   ...p,
                   description: toggleLine(p.description, s)
-                }))} style={[[ui.py15, ui.px3, ui.textXs, hasLine(data.description, s) ? ui.textC8a44a : ui.textWhite55], { flexShrink: 1 }, personalSuggestions.length > 0 && { paddingRight: 0 }]}>
+                }))} style={[[ui.py15, ui.px3, ui.textXs, hasLine(data.description, s) ? ui.textC8a44a : ui.textWhite55], { flexShrink: 1, alignItems: "flex-start", textAlign: "left" }, personalSuggestions.length > 0 && { paddingRight: 0 }]}>
                         {s}
                       </Touch>
-                      {personalSuggestions.length > 0 && <Touch accessibilityLabel={`${s} önerisini sil`} onPress={() => removeSuggestion(s)} hitSlop={8} style={{ paddingHorizontal: 8, alignSelf: "stretch", justifyContent: "center" }}>
+                      {personalSuggestions.length > 0 && <Touch accessibilityLabel={`${s} önerisini sil`} onPress={() => removeSuggestion(s)} hitSlop={8} style={{ paddingHorizontal: 8, alignSelf: "stretch", justifyContent: "center", flexShrink: 0 }}>
                           <CloseIcon size={12} strokeWidth={2} style={{ color: palette.muted }} />
                         </Touch>}
                     </Box>)}
