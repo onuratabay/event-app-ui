@@ -51,7 +51,7 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
     <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "#00000088", paddingTop: 48 }}><Pressable accessibilityLabel="Filtreyi kapat" style={StyleSheet.absoluteFill} onPress={onClose} />
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.keyboard}>
       <Box style={s.panel}>
-        <Box style={s.heading}><Box><Label style={s.eyebrow}>PLANIN NEREDEYSE</Label><Label style={s.title}>Sana göre</Label></Box><Touch accessibilityLabel="Filtreyi kapat" onPress={onClose} style={s.close}><Label style={s.text}>✕</Label></Touch></Box>
+        <Box style={s.heading}><Box><Label style={s.eyebrow}>PLANIN NEREDEYSE</Label><Label style={s.title}>Filtreler</Label></Box><Touch accessibilityLabel="Filtreyi kapat" onPress={onClose} style={s.close}><Label style={s.text}>✕</Label></Touch></Box>
         <Scroll style={s.scroll} keyboardShouldPersistTaps="handled">
           <Label style={s.section}>Ne zaman uygunsun?</Label>
           <Box style={s.wrap}>{([["all", "Yaklaşan"], ["today", "Bugün"], ["tomorrow", "Yarın"], ["week", "Haftaya"], ["custom", "Tarih seç"]] as const).map(([id, label]) => <FilterChip solid key={id} label={label} selected={draft.datePreset === id} onPress={() => setDraft(previous => ({ ...previous, datePreset: id, dateFrom: previous.dateFrom || localDate(new Date()), dateTo: previous.dateTo || localDate(new Date()) }))} />)}</Box>

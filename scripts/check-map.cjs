@@ -77,24 +77,38 @@ module.exports = async function checkMap({ mount, tap, act, text, storage }) {
   }
   let destination
   const tree = await mount("Map", { navigate: (...args) => { destination = args } })
-  assert(text(tree.toJSON()).includes("Yoğunluk"))
+  const press = async label => { const node = tree.root.findAllByType("Pressable").find(item => item.props.accessibilityLabel === label); assert(node, `Missing control: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })) }
   const map = tree.root.findByType("MapView")
+  assert(Array.isArray(map.props.customMapStyle) && map.props.customMapStyle.length > 0 && map.props.userInterfaceStyle === "dark", "The map uses the dark style")
+  // Wide view: heat layer with a compact legend; the status line counts events instead of explaining modes.
+  assert(text(tree.toJSON()).includes("Yoğunluk") && text(tree.toJSON()).includes("etkinlik bu alanda"))
+  assert(!text(tree.toJSON()).includes("Otomatik görünüm"), "No mode jargon in the bottom panel")
   await act(async () => map.props.onRegionChangeComplete({ ...region, latitudeDelta: 0.1, longitudeDelta: 0.1 }))
-  assert(text(tree.toJSON()).includes("Etkinlik kümeleri"))
+  assert(!text(tree.toJSON()).includes("Yoğunluk"), "The density legend is only shown while the heat layer is visible")
   await act(async () => map.props.onRegionChangeComplete({ ...region, latitudeDelta: 0.0008, longitudeDelta: 0.0008 }))
-  assert(text(tree.toJSON()).includes("Otomatik görünüm"))
+  // Picking a pin opens an event card with one clear action.
   await act(async () => tree.root.findAllByType("Marker")[0].props.onPress({ stopPropagation() {} }))
+  assert(text(tree.toJSON()).includes("Seçilen etkinlik") && text(tree.toJSON()).includes("1/10 kişi"), "The picked event shows as a card with its fill")
   await tap(tree, "Detay")
   assert.equal(destination[0], "event-detail")
   assert.equal(destination[1].eventId, "one")
-  await tap(tree, "Sana göre")
+  await press("Seçimi kapat")
+  assert(!text(tree.toJSON()).includes("Seçilen etkinlik"), "The card can be dismissed")
+  // Date is one segmented choice; the rest lives behind "Filtreler", whose badge counts active filters.
+  await press("Tarih: Bugün")
+  assert.equal(tree.root.findAllByType("Pressable").find(item => item.props.accessibilityLabel === "Tarih: Bugün").props.accessibilityState.selected, true)
+  await press("Tarih: Tümü")
+  await press("Filtreler")
   assert.equal(tree.root.findAllByType("Modal").length, 1)
   await tap(tree, "İzmir")
   await tap(tree, "Etkinlikleri göster")
   assert.equal(tree.root.findAllByType("Modal").length, 0)
   assert.equal(savedFilters.place.name, "İzmir")
-  await tap(tree, "Yakınımda")
+  assert(tree.root.findAllByType("Pressable").some(item => item.props.accessibilityLabel === "Filtreler, 1 aktif"), "The filter button shows how many filters are active")
+  // The locate button only moves the camera; a denied permission is explained.
+  await press("Konumuma git")
   assert(text(tree.toJSON()).includes("Konum izni verilmedi"))
+  assert.equal(savedFilters.place.name, "İzmir", "Locating never changes the saved filters")
   await act(async () => tree.unmount())
   global.fetch = async () => { throw new Error("offline") }
   const failed = await mount("Map")

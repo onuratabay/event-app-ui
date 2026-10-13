@@ -4,6 +4,7 @@ import { Alert, Platform, StyleSheet } from "react-native"
 import * as Location from "expo-location"
 import MapView, { Circle, Marker } from "react-native-maps"
 import { MAP_PROVIDER } from "../map/provider"
+import { DARK_MAP_PROPS } from "../map/darkStyle"
 import { createAvailability, deleteAvailability, getApiErrorMessage, getAvailabilities, getMapInterests, setAvailabilityPaused, updateAvailability, type ApiAvailability } from "../api/client"
 import { useBottomNavInset } from "../components/BottomNav"
 import { AtmoBackground, GlassCard } from "../components/GlassUI"
@@ -251,7 +252,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
         </Box>}
         {area.mode === "radius" && <Box style={{ gap: 10 }}>
           <Box style={s.mapFrame}>
-            <MapView ref={map} provider={MAP_PROVIDER} testID="availability-map" style={StyleSheet.absoluteFill} initialRegion={regionFor(area.center)} onPress={event => { const center = event.nativeEvent.coordinate; update(current => current.area.mode === "radius" ? { ...current, area: { ...current.area, center: { latitude: center.latitude, longitude: center.longitude } } } : current) }}>
+            <MapView ref={map} provider={MAP_PROVIDER} testID="availability-map" {...DARK_MAP_PROPS} style={StyleSheet.absoluteFill} initialRegion={regionFor(area.center)} onPress={event => { const center = event.nativeEvent.coordinate; update(current => current.area.mode === "radius" ? { ...current, area: { ...current.area, center: { latitude: center.latitude, longitude: center.longitude } } } : current) }}>
               {area.center && <Circle center={area.center} radius={area.radiusKm * 1000} strokeColor="rgba(185,195,255,.9)" fillColor="rgba(105,120,255,.18)" strokeWidth={2} />}
               {area.center && <Marker coordinate={area.center} pinColor={palette.blue} />}
             </MapView>

@@ -132,15 +132,7 @@ function SortSheet({
 }
 
 /* ─── Event card ─── */
-// Event state as the card border colour (no status text on the card).
-const PHASE_BORDER: Record<EventPhase, string> = {
-  started: "rgba(52,211,153,.6)",
-  active: "rgba(52,211,153,.6)",
-  forming: "rgba(251,191,36,.5)",
-  cancelled: "rgba(243,155,175,.45)",
-  closed: "rgba(183,197,255,.12)",
-};
-// Screen readers still hear the state the border shows.
+// The card shows no status text; screen readers still hear the event's state.
 const PHASE_A11Y: Record<EventPhase, string> = { started: "başladı", active: "aktif", forming: "katılımcı bekleniyor", cancelled: "iptal edildi", closed: "sona erdi" };
 function EventCard({
   event,
@@ -173,15 +165,12 @@ function EventCard({
   const progress = event.currentParticipants / event.minParticipants;
   // Still gathering people only while below the minimum; status turns "started" later, at the start time.
   const isForming = !isRoomReady(event) && !['cancelled', 'closed'].includes(event.status || '');
-  // The card's border shows its state instead of status/energy labels: green once the room is open,
-  // amber while it gathers people, muted when it ended or was cancelled.
   const phase = eventPhase(event);
-  const stateBorder = PHASE_BORDER[phase];
   return <Box style={[[], {}]} enter>
       <RippleButton onPress={onPress} accessibilityLabel={`${event.title}, ${PHASE_A11Y[phase]}`} rippleColor="rgba(255,255,255,0.06)" style={[[ui.wFull, ui.textLeft, ui.rounded2xl, ui.overflowHidden], {
       backgroundColor: palette.surface,
-      borderWidth: 1.5,
-      borderColor: stateBorder
+      borderWidth: 1,
+      borderColor: palette.border
     }]} glass>
         {/* Cover */}
         <Box style={[[ui.relative, ui.h44, ui.overflowHidden, ui.bgGray900]]}>

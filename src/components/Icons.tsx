@@ -477,6 +477,9 @@ function LineSymbol({ path, size = 20, style, strokeWidth = 1.75 }: IconProps & 
 export function CloseIcon(props: IconProps) { return <LineSymbol {...props} path="M6 6l12 12M18 6 6 18" /> }
 export function EditIcon(props: IconProps) { return <LineSymbol {...props} path="m15 5 4 4M4 20l5-1L20 8a2.8 2.8 0 0 0-4-4L5 15l-1 5Z" /> }
 export function SendIcon(props: IconProps) { return <LineSymbol {...props} path="M12 19V5m-6 6 6-6 6 6" /> }
+export function FilterIcon(props: IconProps) { return <LineSymbol {...props} path="M4 7h10M18 7h2M4 17h4M12 17h8M14 4v6M8 14v6" /> }
+export function LocateIcon(props: IconProps) { return <LineSymbol {...props} path="M12 2v3M12 19v3M2 12h3M19 12h3M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /> }
+export function ExpandIcon(props: IconProps) { return <LineSymbol {...props} path="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" /> }
 export function CategoryIcon({ name = "", ...props }: IconProps & { name?: string }) {
   const key = name.toLocaleLowerCase("tr-TR");
   const path = /kahve|coffee|yemek/.test(key) ? "M4 8h12v6a5 5 0 0 1-10 0V8m10 1h2a3 3 0 0 1 0 6h-2M5 21h14M8 3v2m4-2v2"

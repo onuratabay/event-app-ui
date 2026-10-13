@@ -8,6 +8,7 @@ import { LocationIcon, SearchIcon } from "../components/Icons"
 import { TURKISH_CITIES } from "../content/cities"
 import { CITY_PRESETS } from "../map/filters"
 import { MAP_PROVIDER } from "../map/provider"
+import { DARK_MAP_PROPS } from "../map/darkStyle"
 import { Box, Field, Label, Touch } from "../native/UI"
 import { palette } from "../theme/palette"
 
@@ -128,7 +129,7 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
       </Touch>)}
     </Box>}
     <Box style={s.mapFrame} onTouchStart={() => onMapTouch?.(true)} onTouchEnd={() => onMapTouch?.(false)} onTouchCancel={() => onMapTouch?.(false)}>
-      <MapView ref={map} provider={MAP_PROVIDER} testID="event-location-map" style={StyleSheet.absoluteFill} initialRegion={initialRegion} mapType="standard"
+      <MapView ref={map} provider={MAP_PROVIDER} testID="event-location-map" style={StyleSheet.absoluteFill} initialRegion={initialRegion} {...DARK_MAP_PROPS}
         showsUserLocation={false} toolbarEnabled={false} onPress={event => void pick(event.nativeEvent.coordinate)}>
         {value && <Marker coordinate={point(value)} draggable pinColor={palette.blue} onDragEnd={event => void pick(event.nativeEvent.coordinate)} />}
       </MapView>
