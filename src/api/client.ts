@@ -18,6 +18,8 @@ export interface ApiEvent {
   startTime: string
   durationMinutes: number | null
   locationName?: string
+  /** Organizer-chosen chat room name; null/absent means the default "Activity · date". */
+  roomName?: string | null
   latitude: number
   longitude: number
   minParticipants: number
@@ -380,7 +382,7 @@ export const getActiveFriends = () => request<{ items: Array<{ user: FriendUser 
 export const getInvitations = () => request<EventListResponse>('/events/invitations?limit=50')
 export const getEnums = (group: string) => cached(`enums:${group}`, 6 * HOURS, () => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`))
 export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value) })
-export interface ApiMessage { kind?: 'message' | 'announcement'; id: string; text: string; createdAt: string; editedAt?: string | null; deleted?: boolean; user: { id: string; firstName: string; lastName: string } }
+export interface ApiMessage { kind?: 'message' | 'announcement' | 'system'; id: string; text: string; createdAt: string; editedAt?: string | null; deleted?: boolean; user: { id: string; firstName: string; lastName: string } }
 // Room requests run in the background: the chat screen never shows the global loading overlay.
 export const editMessage = (eventId: string, messageId: string, text: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ text }), background: true })
 export const deleteMessage = (eventId: string, messageId: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'DELETE', background: true })
@@ -407,11 +409,13 @@ export async function getSocketToken(renew = false) {
 /** Light room summaries (no description/cover) for the Rooms list: one request instead of three. */
 export interface RoomSummary {
   id: string; ownerId: string; interest: { id: string; name: string }; date: string; startTime: string
-  locationName: string; status: string; minParticipants: number; maxParticipants: number
+  locationName: string; roomName?: string | null; status: string; minParticipants: number; maxParticipants: number
   confirmedParticipantCount: number; participants: Array<{ id: string; firstName: string; lastName: string }>
   lastMessageAt: string | null; unreadCount: number
 }
 export const getRooms = () => request<RoomSummary[]>('/events/rooms', { background: true })
+/** Organizer only; an empty name restores the default title. Every member is told over the socket. */
+export const renameRoom = (id: string, name: string) => request<{ eventId: string; roomName: string | null }>(`/events/${id}/room-name`, { method: 'PATCH', body: JSON.stringify({ name }), background: true })
 export const getEventActivity = (id: string) => request<{ waitlist: Array<{ userId: string; createdAt?: string }>; checkins: Array<{ userId: string; method?: string; createdAt?: string }> }>(`/events/${id}/activity`, { background: true })
 
 // "Etkinlik Takvimim": the user's private availability records (never a public listing).

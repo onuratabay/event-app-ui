@@ -12,6 +12,7 @@ let generation = 0
 let background: { remove(): void } | undefined
 let refreshing = false
 let renewalAttempts = 0
+let renewTimer: ReturnType<typeof setTimeout> | undefined
 let watchTimer: ReturnType<typeof setTimeout> | undefined
 let connectedBefore = false
 let unwatchTimer: ReturnType<typeof setTimeout> | undefined
@@ -32,23 +33,42 @@ export function startSocket(userId: string) {
   const current = socket = io(API_URL, { autoConnect: false, transports: ['websocket'], reconnectionDelay: 1500, reconnectionDelayMax: 15000,
     auth: callback => { void getSocketToken().then(token => { if (version === generation) callback({ token }) }).catch(() => {}) },
   })
+  // The server drops the socket when the access token expires. Renewal used to stop after one try, so a single
+  // failed refresh (a network blip) left the chat without live messages until the app restarted. It now keeps
+  // retrying with growing pauses; only an ended session (no refresh token) stops it.
   const renew = async () => {
-    if (refreshing || renewalAttempts >= 1 || version !== generation || AppState.currentState !== 'active') return
-    refreshing = true; renewalAttempts++
-    try { if (await getSocketToken(true) && version === generation) current.connect() }
-    catch { dispatch('connection:error', { message: 'Oturum yenilenemedi.' }) }
-    finally { refreshing = false }
+    if (refreshing || version !== generation) return
+    // In the background the resume handler reconnects (and renews) when the app is active again.
+    if (AppState.currentState !== 'active') return
+    clearTimeout(renewTimer)
+    const delay = renewalAttempts === 0 ? 0 : Math.min(1000 * 2 ** renewalAttempts, 30000)
+    renewalAttempts++
+    if (delay) { renewTimer = setTimeout(() => { void attemptRenew() }, delay); return }
+    await attemptRenew()
+  }
+  const attemptRenew = async () => {
+    if (refreshing || version !== generation || AppState.currentState !== 'active') return
+    refreshing = true
+    try {
+      const token = await getSocketToken(true)
+      if (version !== generation) return
+      if (token) current.connect()
+      else dispatch('connection:error', { message: 'Oturum yenilenemedi.' })
+    } catch {
+      if (version === generation) { refreshing = false; void renew() }
+    } finally { refreshing = false }
   }
   current.on('connect', () => {
     renewalAttempts = 0
     debug('[SOCKET CONNECT]', current.id || '')
     dispatch('connection:changed', { connected: true })
     syncWatches()
-    for (const eventId of rooms.keys()) void socketAction('event:join', { eventId }).catch(() => {})
+    for (const eventId of rooms.keys()) joinRoom(eventId)
     // Only mounted consumers synchronize their critical data after a real gap.
     if (connectedBefore) dispatch('sync:required', {})
     connectedBefore = true
   })
+  current.on('connect_error', error => debug('[SOCKET CONNECT ERROR]', error.message))
   current.on('disconnect', reason => {
     debug('[SOCKET DISCONNECT]', reason)
     if (version !== generation) return
@@ -66,12 +86,23 @@ export function stopSocket() {
   generation++; account = ''; background?.remove(); background = undefined
   socket?.removeAllListeners(); socket?.offAny(); socket?.disconnect(); socket = undefined
   clearTimeout(unwatchTimer); pendingUnwatch.clear()
-  clearTimeout(watchTimer); watchTimer = undefined; renewalAttempts = 0
-  rooms.clear(); watches.clear(); connectedBefore = false; refreshing = false
+  clearTimeout(watchTimer); watchTimer = undefined; renewalAttempts = 0; clearTimeout(renewTimer)
+  // Rooms and watches belong to the mounted screens, which release them on unmount. Clearing them here
+  // dropped a room opened before the socket started, so that chat never joined and got no live messages.
+  connectedBefore = false; refreshing = false
+}
+// A failed join (room check, rate limit, timeout) used to be dropped silently, leaving the chat without
+// live messages. It is retried while the room is still retained and the socket is connected.
+function joinRoom(eventId: string, attempt = 0) {
+  if (!rooms.has(eventId) || !socket?.connected) return
+  socketAction('event:join', { eventId }).then(() => debug('[SOCKET JOINED]', eventId)).catch(error => {
+    debug('[SOCKET JOIN FAILED]', `${eventId} ${error instanceof Error ? error.message : ''}`)
+    if (attempt < 5) setTimeout(() => joinRoom(eventId, attempt + 1), Math.min(1000 * 2 ** attempt, 10000))
+  })
 }
 export function retainEvent(eventId: string) {
   rooms.set(eventId, (rooms.get(eventId) ?? 0) + 1)
-  if (rooms.get(eventId) === 1 && socket?.connected) void socketAction('event:join', { eventId }).catch(() => {})
+  if (rooms.get(eventId) === 1 && socket?.connected) joinRoom(eventId)
   return () => {
     const count = rooms.get(eventId) ?? 0
     if (count > 1) rooms.set(eventId, count - 1)

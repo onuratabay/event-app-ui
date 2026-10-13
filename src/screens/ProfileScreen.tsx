@@ -133,6 +133,8 @@ function AboutMe({ bio, isOwn, name, onSave }: { bio: string; isOwn: boolean; na
       </GlassCard>
     </Box>;
 }
+const referenceRow = { flexDirection: "row" as const, alignItems: "center" as const, gap: 10, minHeight: 48, paddingVertical: 6 };
+const referenceInitial = { width: 32, height: 32, borderRadius: 16, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: "rgba(146,125,255,0.14)" };
 export default function ProfileScreen({
   navigate,
   isOwn: ownProfile = true,
@@ -422,8 +424,18 @@ export default function ProfileScreen({
               </Touch>
 
               {showReferences && <Box style={{ padding: 16 }}>
-                {!references.length && <Label>Henüz onaylanmış referans yok.</Label>}
-                {references.map(ref => <Label key={ref.id}>{ref.direction === 'incoming' ? ref.recipient.name : ref.requester.name} · Onaylandı</Label>)}
+                {!references.length && <Label style={[[ui.textSm, ui.textWhite40]]}>Henüz onaylanmış referans yok.</Label>}
+                {/* "incoming" = they asked me and I approved; the other person is always shown, never me. */}
+                {[{ title: "Onay verdiklerim", rows: references.filter(ref => ref.direction === 'incoming').map(ref => ({ id: ref.id, person: ref.requester })) },
+                  { title: "Bana referans olanlar", rows: references.filter(ref => ref.direction !== 'incoming').map(ref => ({ id: ref.id, person: ref.recipient })) }]
+                  .filter(group => group.rows.length).map(group => <Box key={group.title} style={{ marginBottom: 12 }}>
+                    <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider], { marginBottom: 6 }]}>{group.title} · {group.rows.length}</Label>
+                    {group.rows.map(({ id, person }) => <Touch key={id} accessibilityLabel={`${person.name} profilini aç`} onPress={() => navigate("profile", { userId: person.id })} style={referenceRow}>
+                      <Box style={referenceInitial}><Label style={[[ui.textSm, ui.fontMedium], { color: palette.accent }]}>{person.name.trim().charAt(0).toLocaleUpperCase("tr")}</Label></Box>
+                      <Label style={[[ui.textSm, ui.textWhite80], { flex: 1, minWidth: 0 }]} numberOfLines={1}>{person.name}</Label>
+                      <Label style={[[ui.textWhite30], { fontSize: 20, lineHeight: 22 }]}>›</Label>
+                    </Touch>)}
+                  </Box>)}
               </Box>}
             </GlassCard>
           </Box>}

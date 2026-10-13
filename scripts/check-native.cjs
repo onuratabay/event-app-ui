@@ -459,7 +459,7 @@ async function tap(tree, label) {
     assert(!room.root.findAll(n => ["Katılımcıları göster", "Oda bilgisini aç"].includes(n.props.accessibilityLabel)).length, "The header has no separate participants/⋯ buttons")
     await press(`${EVENTS[0].category} · 01/10/2030`)
     const sheet = text(room.toJSON())
-    assert(room.root.findAllByType("Modal").length > 0 && sheet.includes("Odayı sessize al") && sheet.includes("Katılımcılar ·") && /Aktif|Pasif/.test(sheet), "Tapping the room name opens info, participants and settings in one sheet")
+    assert(room.root.findAllByType("Modal").length > 0 && sheet.includes("Odayı sessize al") && sheet.includes("Katılımcılar ·") && !/Aktif|Pasif/.test(sheet), "Tapping the room name opens info, participants and settings in one sheet")
     await press("Oda bilgisini kapat")
     assert(!text(room.toJSON()).includes("Odayı sessize al"), "Room settings sheet closes")
   }

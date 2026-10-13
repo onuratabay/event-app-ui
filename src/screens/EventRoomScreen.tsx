@@ -1,6 +1,6 @@
 import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
-import { UsersIcon, LocationIcon, ClockIcon, StarIcon, SendIcon } from "../components/Icons";
+import { ArrowLeftIcon, UsersIcon, LocationIcon, ClockIcon, StarIcon, SendIcon } from "../components/Icons";
 import { useScreenActive } from '../native/useScreenActive';
 import { onSocket, retainEvent, socketAction, socketConnected } from '../services/socket';
 import TopNavBar from "../components/TopNavBar";
@@ -9,8 +9,8 @@ import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, useWindowDimen
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import { AtmoBackground } from "../components/GlassUI";
-import { deleteMessage, editMessage, getApiErrorMessage, getEvent, getEventActivity, getMessageReads, getMessages, markRoomRead, putPreference, reportUser, sendMessage, type ApiMessage } from "../api/client";
-import { EMPTY_USER, mapApiEvent, participantCount, roomTitle, setOpenRoom } from "../native/Store";
+import { deleteMessage, editMessage, getApiErrorMessage, getEvent, getEventActivity, getMessageReads, getMessages, markRoomRead, putPreference, renameRoom, reportUser, sendMessage, type ApiMessage } from "../api/client";
+import { EMPTY_USER, defaultRoomTitle, mapApiEvent, participantCount, roomTitle, setOpenRoom } from "../native/Store";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -23,7 +23,8 @@ interface Props {
 const MAX_MESSAGE_LENGTH = 2000;
 const QUICK_REPLIES = ["Yoldayım 🚶", "5 dk gecikeceğim ⏱️", "Geldim 📍"];
 const REPORT_REASONS = ["Taciz veya hakaret", "Spam veya reklam", "Uygunsuz içerik", "Güvenliğimi tehdit ediyor"];
-type RoomMessage = ChatMessage & { announcement?: boolean; deleted?: boolean; edited?: boolean; pending?: boolean; failed?: boolean };
+// system: a WhatsApp-style info line (e.g. the organizer renamed the room), not a chat bubble.
+type RoomMessage = ChatMessage & { system?: boolean; announcement?: boolean; deleted?: boolean; edited?: boolean; pending?: boolean; failed?: boolean };
 type SheetOption = { label: string; onPress: () => void; danger?: boolean };
 // Times arrive as "+03:00" from REST but "Z" from the device (pending sends), so compare instants,
 // never the strings: as text, "09:31Z" sorted before "12:30+03:00" and a new message jumped to the top.
@@ -31,7 +32,7 @@ const instant = (iso?: string) => Date.parse(iso || "") || 0;
 const dayKey = (iso?: string) => { const date = new Date(instant(iso)); return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`; };
 // Consecutive messages from the same person (same day) are grouped: name/photo once, tighter spacing.
 function sameSender(a: RoomMessage | undefined, b: RoomMessage | undefined) {
-  return !!a && !!b && !a.announcement && !b.announcement && a.user.id === b.user.id && dayKey(a.createdAt) === dayKey(b.createdAt);
+  return !!a && !!b && !a.announcement && !b.announcement && !a.system && !b.system && a.user.id === b.user.id && dayKey(a.createdAt) === dayKey(b.createdAt);
 }
 // Inside a group only messages sent in the same minute share one time (shown under the last of them);
 // messages with different times each keep their own.
@@ -88,7 +89,7 @@ export default function EventRoomScreen({
   const [loading, setLoading] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const { height: windowHeight } = useWindowDimensions();
-  // "Aktif" = has this room's chat open now. Snapshot from the server, then live join/leave events.
+  // Online (green dot) = has this room's chat open now. Snapshot from the server, then live join/leave events.
   const [present, setPresent] = useState<Set<string>>(new Set());
   const [input, setInput] = useState("");
   const [editing, setEditing] = useState<RoomMessage | null>(null);
@@ -97,12 +98,25 @@ export default function EventRoomScreen({
   const [checkins, setCheckins] = useState<string[]>([]);
   const [waitlist, setWaitlist] = useState<string[]>([]);
   const [announcement, setAnnouncement] = useState("");
+  // Room name: only the organizer edits it; the change shows at once and reaches every member over the socket.
+  const [roomNameDraft, setRoomNameDraft] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const saveRoomName = async () => {
+    if (!event || roomNameDraft === null || renaming) return;
+    const name = roomNameDraft.replace(/\s+/g, " ").trim();
+    const previous = event.roomName;
+    const apply = (value?: string) => setStore(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, roomName: value } : e) }));
+    setRenaming(true); apply(name || undefined);
+    try { const result = await renameRoom(event.id, name); apply(result.roomName || undefined); setRoomNameDraft(null); }
+    catch (cause) { apply(previous); Alert.alert("Oda adı değiştirilemedi", getApiErrorMessage(cause)); }
+    finally { setRenaming(false); }
+  };
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const nearBottom = useRef(true);
   const stickToEnd = useRef(true);
-  const mapMessage = (message: ApiMessage): RoomMessage => ({ id: message.id, createdAt: message.createdAt, announcement: message.kind === 'announcement', deleted: message.deleted === true, edited: Boolean(message.editedAt), text: message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}`.trim() } });
+  const mapMessage = (message: ApiMessage): RoomMessage => ({ id: message.id, createdAt: message.createdAt, announcement: message.kind === 'announcement', system: message.kind === 'system', deleted: message.deleted === true, edited: Boolean(message.editedAt), text: message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}`.trim() } });
   const upsert = (incoming: RoomMessage[]) => setMessages(prev => [...new Map([...prev, ...incoming].map(m => [m.id, m])).values()]);
   // Listeners read the signed-in id through a ref, so the room loads without waiting for the account.
   const meIdRef = useRef(ME.id);
@@ -178,6 +192,15 @@ export default function EventRoomScreen({
       }),
       onSocket('sync:required', () => { void load(); }),
       onSocket('connection:changed', payload => { if (active) setLive(payload.connected === true); if (payload.connected === true) loadPresence(); }),
+      // Fallback: every member also gets "room:message" on their own channel, which is always joined.
+      // If the chat event has not delivered that message shortly after, the newest page is fetched.
+      onSocket('room:message', (delta: { eventId: string; at: string }) => {
+        if (delta.eventId !== eventId) return;
+        setTimeout(() => {
+          if (!active || messagesRef.current.some(m => instant(m.createdAt) >= instant(delta.at))) return;
+          void getMessages(eventId).then(result => { if (active) { upsert(result.items.map(mapMessage)); markRead(1000); } }).catch(() => {});
+        }, 1500);
+      }),
       onSocket('chat:user_joined', payload => { if (payload.eventId === eventId) setPresent(prev => new Set(prev).add(payload.userId)); }),
       onSocket('chat:user_left', payload => { if (payload.eventId === eventId) setPresent(prev => { const next = new Set(prev); next.delete(payload.userId); return next; }); }),
     ];
@@ -189,7 +212,7 @@ export default function EventRoomScreen({
   const people = useMemo(() => new Map((event?.participants || []).concat(event ? [event.host] : []).map(person => [person.id, person])), [event]);
   const firstName = (userId: string) => people.get(userId)?.name.split(" ")[0] || "Bir katılımcı";
   const pinned = useMemo(() => [...sorted].reverse().find(m => m.announcement && !m.deleted), [sorted]);
-  const lastMine = useMemo(() => [...sorted].reverse().find(m => m.user.id === ME.id && !m.announcement && !m.deleted && !m.pending && !m.failed), [sorted, ME.id]);
+  const lastMine = useMemo(() => [...sorted].reverse().find(m => m.user.id === ME.id && !m.announcement && !m.system && !m.deleted && !m.pending && !m.failed), [sorted, ME.id]);
   const muted = !!eventId && (store.mutedRooms || []).includes(eventId);
   // Only a user's own scroll may page backwards, not the automatic scroll to the newest message.
   const userScrolled = useRef(false);
@@ -297,7 +320,10 @@ export default function EventRoomScreen({
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} title={roomTitle(event)} subtitle={subtitle}
-        onTitlePress={() => setInfoOpen(true)} titleHint="Oda bilgisini ve katılımcıları gösterir" />
+        onTitlePress={() => setInfoOpen(true)} titleHint="Oda bilgisini ve katılımcıları gösterir"
+        right={<Touch accessibilityLabel="Etkinlik detayına git" onPress={() => navigate("event-detail", { eventId: event.id })} style={s.detailButton}>
+          <ArrowLeftIcon size={19} strokeWidth={1.9} style={{ color: palette.accent, transform: [{ rotate: "180deg" }] }} />
+        </Touch>} />
 
       {/* Tapping the room name opens one sheet: event info, participants and room settings. */}
       {infoOpen && <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={() => setInfoOpen(false)}>
@@ -309,7 +335,13 @@ export default function EventRoomScreen({
                 <Label style={s.peopleSheetTitle} numberOfLines={1}>{roomTitle(event)}</Label>
                 <Touch accessibilityLabel="Oda bilgisini kapat" onPress={() => setInfoOpen(false)} style={s.peopleSheetClose}><Label style={s.peopleSheetCloseLabel}>Kapat</Label></Touch>
               </Box>
-              <ScrollView style={{ maxHeight: Math.round(windowHeight * 0.7) }} contentContainerStyle={s.info}>
+              <ScrollView style={{ maxHeight: Math.round(windowHeight * 0.7) }} contentContainerStyle={s.info} keyboardShouldPersistTaps="handled">
+          {isOwner ? <>
+            <Label style={s.panelHeading}>Oda adı</Label>
+            <Field accessibilityLabel="Oda adı" value={roomNameDraft ?? event.roomName ?? ""} onChangeText={setRoomNameDraft} placeholder={defaultRoomTitle(event)} placeholderTextColor="rgba(255,255,255,.35)" maxLength={60} returnKeyType="done" onSubmitEditing={() => void saveRoomName()} style={s.panelInput} />
+            {roomNameDraft !== null && roomNameDraft.replace(/\s+/g, " ").trim() !== (event.roomName ?? "") ? <Touch disabled={renaming} onPress={() => void saveRoomName()} style={s.panelButton}><Label style={s.panelButtonLabel}>{renaming ? "Kaydediliyor…" : "Oda adını kaydet"}</Label></Touch> : null}
+            <Label style={s.panelDetail}>Yeni adı odadaki herkes görür. Boş bırakırsan varsayılan ada döner.</Label>
+          </> : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8 }}>
             {[{ icon: <UsersIcon size={15} />, text: `${participantCount(event.currentParticipants, event.maxParticipants)} kişi` },
               ...(event.location ? [{ icon: <LocationIcon size={15} />, text: event.location }] : []),
@@ -329,12 +361,10 @@ export default function EventRoomScreen({
                 <Touch accessibilityLabel={`${person.name} profilini aç`} onPress={() => { setInfoOpen(false); navigate("profile", person.id === ME.id ? {} : { userId: person.id }); }} style={s.personLink}>
                   <Box style={s.avatarWrap}>
                     <Picture uri={person.avatar} accessibilityLabel={person.name} style={s.personAvatar} />
-                    <Box style={[s.statusDot, { backgroundColor: online ? palette.success : "rgba(255,255,255,.25)" }]} />
+                    {/* Presence shows only as the dot (no "Aktif/Pasif" text); screen readers still hear it. */}
+                    <Box accessibilityLabel={online ? "Odada" : "Odada değil"} style={[s.statusDot, { backgroundColor: online ? palette.success : "rgba(255,255,255,.25)" }]} />
                   </Box>
-                  <Box style={{ flex: 1, minWidth: 0 }}>
-                    <Label style={s.personName} numberOfLines={1}>{person.name}{person.id === event.host.id ? " · Organizatör" : ""}{checked ? " ✓" : ""}</Label>
-                    <Label style={[s.personStatus, { color: online ? palette.success : palette.muted }]}>{online ? "Aktif" : "Pasif"}</Label>
-                  </Box>
+                  <Label style={s.personName} numberOfLines={1}>{person.name}{person.id === event.host.id ? " · Organizatör" : ""}{checked ? " ✓" : ""}</Label>
                 </Touch>
                 {isOwner && event.isActive && !checked && person.id !== event.host.id ? <Touch accessibilityLabel={`${person.name} girişini onayla`} disabled={busy} onPress={async () => { if (await runOwnerAction('event:checkin', { participantId: person.id })) setCheckins(prev => [...prev, person.id]); }} style={s.smallButton}><Label style={s.smallButtonLabel}>Onayla</Label></Touch> : null}
               </Box>;
@@ -394,6 +424,10 @@ export default function EventRoomScreen({
               const previous = sorted[index - 1];
               const newDay = !previous || dayKey(previous.createdAt) !== dayKey(msg.createdAt);
               const separator = newDay ? <Label key={`day-${msg.id}`} style={s.day}>{dayLabel(msg.createdAt)}</Label> : null;
+              // "Burak oda adını “…” olarak değiştirdi" / "Sen …": centred, no bubble, no actions.
+              if (msg.system) return [separator, <Label key={msg.id} accessibilityRole="text" style={s.systemLine}>
+                {msg.user.id === ME.id ? "Sen" : msg.user.name.split(" ")[0]} {msg.text} · {msg.time}
+              </Label>];
               if (msg.announcement) return [separator, <Touch key={msg.id} onLongPress={() => openActions(msg)} style={s.announcement}>
                 <Label style={s.announcementTitle}>📣 Organizatör duyurusu</Label>
                 <Label style={msg.deleted ? s.deletedText : s.announcementText}>{msg.deleted ? "Bu duyuru silindi" : msg.text}</Label>
@@ -462,6 +496,7 @@ const s = StyleSheet.create({
   panelButtonLabel: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 13 },
   people: { gap: 8 },
   person: { flexDirection: "row", alignItems: "center", gap: 8 },
+  detailButton: { width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(105,120,255,.14)", borderWidth: 1, borderColor: palette.border },
   peopleSheet: { backgroundColor: palette.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
   peopleSheetHeader: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   peopleSheetTitle: { fontFamily: "Outfit-SemiBold", fontSize: 16, lineHeight: 22, color: palette.text },
@@ -471,8 +506,8 @@ const s = StyleSheet.create({
   avatarWrap: { position: "relative" },
   personAvatar: { width: 34, height: 34, borderRadius: 17 },
   statusDot: { position: "absolute", right: -1, bottom: -1, width: 11, height: 11, borderRadius: 6, borderWidth: 2, borderColor: palette.surface },
-  personStatus: { fontSize: 11, lineHeight: 14, fontFamily: "Outfit" },
-  personName: { flex: 1, color: "rgba(255,255,255,.75)", fontSize: 13, lineHeight: 17 },
+  // One line centred on the photo; Android's extra font padding would push it off centre.
+  personName: { flex: 1, minWidth: 0, color: "rgba(255,255,255,.75)", fontSize: 14, lineHeight: 18, includeFontPadding: false, textAlignVertical: "center" },
   smallButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: "rgba(111,208,182,.14)", borderWidth: 1, borderColor: "rgba(111,208,182,.35)" },
   smallButtonLabel: { color: palette.success, fontFamily: "Outfit-SemiBold", fontSize: 12, lineHeight: 16 },
   pinned: { marginHorizontal: 16, marginTop: 10, gap: 3, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: "rgba(105,120,255,.14)", borderWidth: 1, borderColor: "rgba(183,197,255,.3)" },
@@ -484,6 +519,7 @@ const s = StyleSheet.create({
   empty: { alignItems: "center", gap: 6, paddingVertical: 48, paddingHorizontal: 24 },
   emptyTitle: { color: palette.text, fontFamily: "Fraunces", fontSize: 20, lineHeight: 26 },
   emptyText: { color: palette.muted, fontSize: 13, lineHeight: 19, textAlign: "center" },
+  systemLine: { alignSelf: "center", maxWidth: "88%", textAlign: "center", color: "rgba(226,232,240,.72)", fontSize: 12, lineHeight: 17, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: "rgba(105,120,255,.10)", borderWidth: 1, borderColor: "rgba(183,197,255,.14)", marginVertical: 8 },
   day: { alignSelf: "center", color: "rgba(255,255,255,.45)", fontSize: 11, lineHeight: 14, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(255,255,255,.05)", marginVertical: 12 },
   message: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 10 },
   messageMine: { flexDirection: "row-reverse" },

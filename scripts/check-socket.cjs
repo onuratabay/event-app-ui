@@ -25,6 +25,21 @@ module.exports = async ({ storage }) => {
   assert.equal(connection.connected, true, 'The socket reconnects after renewing')
   assert.deepEqual(states.slice(-2), [false, true], 'Consumers are told when the connection drops and returns')
   stopStates()
+  // Reported: live messages stopped until the app restarted. A failed refresh (network blip) after the
+  // token expired used to end renewal for good; it must keep retrying and reconnect.
+  {
+    let refreshCalls = 0
+    global.fetch = async url => {
+      if (!String(url).endsWith('/auth/refresh')) return { ok: true, status: 200, json: async () => ({}) }
+      if (++refreshCalls === 1) throw new TypeError('Network request failed')
+      return { ok: true, status: 200, json: async () => ({ accessToken: 'second-token', refreshToken: 'second-refresh' }) }
+    }
+    connection.emit('auth:expired')
+    await new Promise(resolve => setTimeout(resolve, 2600))
+    global.fetch = fetchBefore
+    assert(refreshCalls >= 2, 'A failed renewal is retried')
+    assert.equal(connection.connected, true, 'The socket comes back after a failed renewal')
+  }
   let received = 0
   const cleanup = manager.onSocket('chat:message_created', () => received++)
   connection.receive('chat:message_created', {})

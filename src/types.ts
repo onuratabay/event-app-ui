@@ -33,6 +33,8 @@ export interface AppEvent {
   date: string
   time: string
   location: string
+  /** Organizer-chosen chat room name (shown instead of "Activity · date"). */
+  roomName?: string
   latitude?: number
   longitude?: number
   distance: string

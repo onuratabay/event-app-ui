@@ -331,7 +331,8 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     const { StoreProvider } = require("../src/native/Store.tsx")
     const ProfileScreen = require("../src/screens/ProfileScreen.tsx").default
     let showProfile = true, root
-    const App = () => React.createElement(StoreProvider, null, showProfile ? React.createElement(ProfileScreen, { navigate: () => {} }) : null)
+    let profileOpened
+    const App = () => React.createElement(StoreProvider, null, showProfile ? React.createElement(ProfileScreen, { navigate: (route, opts) => { profileOpened = { route, opts } } }) : null)
     calls.length = 0
     await act(async () => { root = create(React.createElement(App)) })
     await act(() => new Promise(resolve => setTimeout(resolve, 50)))
@@ -342,8 +343,15 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     const socket = require("./mock-socket.cjs").instances.at(-1)
     await act(async () => socket.receive("reference:created", { id: "ref-1", status: "pending", direction: "outgoing", createdAt: new Date().toISOString(), requester: { id: "pending-user", name: "Bekleyen Üye" }, recipient: { id: "ece", name: "Ece Referans" } }))
     await act(async () => socket.receive("reference:updated", { id: "ref-1", status: "approved" }))
-    await act(async () => root.root.findAllByType("Pressable").find(n => text(n).includes("Referans")).props.onPress())
-    assert(text(root.toJSON()).replace(/\s+/g, " ").includes("Bekleyen Üye · Onaylandı"), "A reference approved over the socket appears without refetching")
+    // Someone asked me and I approved: they are listed under the people I approved (never my own name).
+    await act(async () => socket.receive("reference:created", { id: "ref-2", status: "approved", direction: "incoming", createdAt: new Date().toISOString(), requester: { id: "ali-onay", name: "Ali Onaylı" }, recipient: { id: "pending-user", name: "Bekleyen Üye" } }))
+    await act(async () => root.root.findAllByType("Pressable").find(n => text(n).includes("Referanslarım")).props.onPress())
+    const refs = text(root.toJSON()).replace(/\s+/g, " ")
+    assert(refs.includes("Bana referans olanlar · 1") && refs.includes("Ece Referans"), "A reference approved over the socket appears without refetching, showing who approved")
+    assert(refs.includes("Onay verdiklerim · 1") && refs.includes("Ali Onaylı"), "People I approved are listed by name")
+    assert.deepEqual([...new Set(root.root.findAll(n => / profilini aç$/.test(String(n.props.accessibilityLabel)) && typeof n.props.onPress === "function").map(n => n.props.accessibilityLabel))].sort(), ["Ali Onaylı profilini aç", "Ece Referans profilini aç"], "My own name is never listed as a reference")
+    await act(async () => root.root.findAll(n => n.props.accessibilityLabel === "Ali Onaylı profilini aç" && typeof n.props.onPress === "function")[0].props.onPress())
+    assert.deepEqual(profileOpened, { route: "profile", opts: { userId: "ali-onay" } }, "Tapping a reference opens their profile")
     assert.equal(calls.filter(path => path === "/references/requests").length, 1)
     await act(async () => root.unmount())
   }
@@ -651,7 +659,8 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     assert(room.root.findAllByType("Modal").length > 0 && text(room.toJSON()).replace(/\s+/g, " ").includes("Katılımcılar · 3"), "Tapping the room name opens the sheet with participants")
     const rows = () => room.root.findAllByType("Pressable").filter(n => / profilini aç$/.test(String(n.props.accessibilityLabel)))
     assert.deepEqual(rows().map(n => n.props.accessibilityLabel), ["Ali Kaya profilini aç", "Ev Sahibi profilini aç", "Zeynep Aydın profilini aç"], "Participants are sorted by name")
-    const status = name => text(rows().find(n => n.props.accessibilityLabel.startsWith(name))).includes("Aktif") ? "Aktif" : "Pasif"
+    const status = name => rows().find(n => n.props.accessibilityLabel.startsWith(name)).findAll(n => n.props.accessibilityLabel === "Odada").length ? "Aktif" : "Pasif"
+    assert(!/Aktif|Pasif/.test(text(room.toJSON())), "No Aktif/Pasif text under participants")
     assert.equal(status("Ali"), "Aktif", "Someone in the room shows as active")
     assert.equal(status("Zeynep"), "Pasif", "Someone not in the room shows as passive")
     const socket = fakeSocket.instances.at(-1)
@@ -659,8 +668,98 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     assert.equal(status("Zeynep"), "Aktif", "Joining the room turns a member active live")
     await act(async () => rows().find(n => n.props.accessibilityLabel.startsWith("Ali")).props.onPress())
     assert.deepEqual(opened, { route: "profile", opts: { userId: "ali" } }, "Tapping a participant opens their profile")
+    await act(async () => room.root.findAll(n => n.props.accessibilityLabel === "Etkinlik detayına git" && typeof n.props.onPress === "function")[0].props.onPress())
+    assert.deepEqual(opened, { route: "event-detail", opts: { eventId: "room-u" } }, "The top-right icon opens the event detail")
     assert(!room.root.findAllByType("Modal").length, "The sheet closes when a profile opens")
     await act(async () => room.unmount())
+    fakeSocket.setAction(async () => ({}))
+    global.fetch = previousFetch
+  }
+
+  // Live messages: a failed room join is retried, and "room:message" on the user's own channel
+  // fetches the newest page when the chat event never arrives.
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const previousFetch = global.fetch
+    const fakeSocket = require("./mock-socket.cjs")
+    let joins = 0
+    fakeSocket.setAction(async name => { if (name === "event:join" && ++joins === 1) throw new Error("ROOM_LIMIT"); return name === "event:presence" ? [] : {} })
+    const serverMessages = []
+    let messageFetches = 0
+    global.fetch = async (url, options = {}) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === "/events/room-u/messages") { messageFetches++; return { ok: true, status: 200, json: async () => ({ items: [...serverMessages], nextCursor: null }) } }
+      if (/^\/events\/room-u\/(messages\/reads|messages\/read|activity)$/.test(parsed.pathname)) return { ok: true, status: 200, json: async () => parsed.pathname.endsWith("activity") ? { waitlist: [], checkins: [] } : { items: [] } }
+      if (parsed.pathname === "/events/room-u") return { ok: true, status: 200, json: async () => ({ ...cardBase, id: "room-u", owner: { id: "host", firstName: "Ev", lastName: "Sahibi" }, interest: { id: "film", slug: "film", name: "Film" }, locationName: "Sinema", confirmedParticipantCount: 3, minParticipants: 2, viewerParticipationStatus: "confirmed", participants: [{ id: "ali", firstName: "Ali", lastName: "Kaya" }] }) }
+      return previousFetch(url, options)
+    }
+    const room = await mount("EventRoom", { eventId: "room-u" })
+    await act(() => new Promise(resolve => setTimeout(resolve, 1300)))
+    assert(joins >= 2, "A failed room join is retried")
+    const socket = fakeSocket.instances.at(-1)
+    // Delivered by the chat event: no extra fetch.
+    const first = { id: "m1", text: "Canlı mesaj", createdAt: new Date().toISOString(), user: { id: "ali", firstName: "Ali", lastName: "Kaya" } }
+    const before = messageFetches
+    await act(async () => { socket.receive("chat:message_created", { eventId: "room-u", message: first }); socket.receive("room:message", { eventId: "room-u", at: first.createdAt, userId: "ali" }) })
+    await act(() => new Promise(resolve => setTimeout(resolve, 1600)))
+    assert(text(room.toJSON()).includes("Canlı mesaj"), "A chat event shows the message at once")
+    assert.equal(messageFetches, before, "No fallback fetch when the chat event arrived")
+    // Chat event lost: the user-channel notice fetches it.
+    const second = { id: "m2", text: "Kaçan mesaj", createdAt: new Date(Date.now() + 1000).toISOString(), user: { id: "ali", firstName: "Ali", lastName: "Kaya" } }
+    serverMessages.push(first, second)
+    await act(async () => socket.receive("room:message", { eventId: "room-u", at: second.createdAt, userId: "ali" }))
+    await act(() => new Promise(resolve => setTimeout(resolve, 1600)))
+    assert(text(room.toJSON()).includes("Kaçan mesaj"), "A message whose chat event never arrived still appears")
+    await act(async () => room.unmount())
+    fakeSocket.setAction(async () => ({}))
+    global.fetch = previousFetch
+  }
+
+  // Room name: only the organizer can change it; every member sees the new name live.
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const previousFetch = global.fetch
+    const fakeSocket = require("./mock-socket.cjs")
+    fakeSocket.setAction(async name => name === "event:presence" ? [] : {})
+    const renames = []
+    const roomEvent = owner => ({ ...cardBase, id: "room-n", owner, interest: { id: "film", slug: "film", name: "Film" }, locationName: "Sinema", confirmedParticipantCount: 3, minParticipants: 2, viewerParticipationStatus: "confirmed", participants: [{ id: "ali", firstName: "Ali", lastName: "Kaya" }], roomName: null })
+    let owner = { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" }
+    global.fetch = async (url, options = {}) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === "/events/room-n/room-name") { const body = JSON.parse(options.body); renames.push({ method: options.method, body }); return { ok: true, status: 200, json: async () => ({ eventId: "room-n", roomName: body.name || null }) } }
+      if (/^\/events\/room-n\/(messages|messages\/reads|messages\/read|activity)$/.test(parsed.pathname)) return { ok: true, status: 200, json: async () => parsed.pathname.endsWith("activity") ? { waitlist: [], checkins: [] } : { items: [], nextCursor: null } }
+      if (parsed.pathname === "/events/room-n") return { ok: true, status: 200, json: async () => roomEvent(owner) }
+      return previousFetch(url, options)
+    }
+    const openSheet = async tree => act(async () => tree.root.findAllByType("Pressable").find(n => String(n.props.accessibilityLabel).startsWith("Film · ") || n.props.accessibilityLabel === "Cuma Film Ekibi").props.onPress())
+    const field = tree => tree.root.findAll(n => n.props.accessibilityLabel === "Oda adı" && typeof n.props.onChangeText === "function")[0]
+    // Organizer: can rename; the header shows the new name at once.
+    const mine = await mount("EventRoom", { eventId: "room-n" })
+    await act(() => new Promise(resolve => setTimeout(resolve, 300)))
+    await openSheet(mine)
+    assert(field(mine), "The organizer sees the room name field")
+    await act(async () => field(mine).props.onChangeText("  Cuma   Film Ekibi "))
+    await act(async () => mine.root.findAll(n => typeof n.props.onPress === "function" && text(n).trim() === "Oda adını kaydet")[0].props.onPress())
+    await act(() => new Promise(resolve => setTimeout(resolve, 30)))
+    assert.deepEqual(renames, [{ method: "PATCH", body: { name: "Cuma Film Ekibi" } }], "The new name is sent once, trimmed")
+    assert(text(mine.toJSON()).includes("Cuma Film Ekibi"), "The organizer sees the new name right away")
+    const systemLine = (id, owner, name) => ({ eventId: "room-n", message: { id, kind: "system", text: `oda adını “${name}” olarak değiştirdi`, createdAt: new Date().toISOString(), user: owner } })
+    await act(async () => fakeSocket.instances.at(-1).receive("chat:message_created", systemLine("sys-1", { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" }, "Cuma Film Ekibi")))
+    assert(text(mine.toJSON()).replace(/\s+/g, " ").includes("Sen oda adını “Cuma Film Ekibi” olarak değiştirdi"), "The organizer sees the change as a system line")
+    await act(async () => mine.unmount())
+    // Member: no field; a rename by the organizer arrives over the socket and replaces the title.
+    owner = { id: "host", firstName: "Ev", lastName: "Sahibi" }
+    const member = await mount("EventRoom", { eventId: "room-n" })
+    await act(() => new Promise(resolve => setTimeout(resolve, 300)))
+    await openSheet(member)
+    assert(!field(member), "Other members cannot rename the room")
+    await act(async () => fakeSocket.instances.at(-1).receive("room:renamed", { eventId: "room-n", roomName: "Pazar Sinema" }))
+    assert(text(member.toJSON()).includes("Pazar Sinema"), "Members see the organizer's new name live")
+    await act(async () => fakeSocket.instances.at(-1).receive("chat:message_created", systemLine("sys-2", owner, "Pazar Sinema")))
+    const chat = text(member.toJSON()).replace(/\s+/g, " ")
+    assert(chat.includes("Ev oda adını “Pazar Sinema” olarak değiştirdi"), "Members see who renamed the room, WhatsApp-style")
+    assert(!member.root.findAll(n => n.props.accessibilityLabel === "Mesaj seçenekleri" && text(n).includes("Pazar Sinema")).length, "A system line is not a bubble with message actions")
+    await act(async () => member.unmount())
     fakeSocket.setAction(async () => ({}))
     global.fetch = previousFetch
   }

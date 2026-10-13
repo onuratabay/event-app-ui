@@ -74,7 +74,9 @@ export const isLivePhase = (phase: EventPhase) => phase === "started" || phase =
 let openRoomId: string | null = null
 export const setOpenRoom = (eventId: string | null) => { openRoomId = eventId }
 // Rooms are named after the activity plus the date, so two Padel events stay distinguishable.
-export const roomTitle = (event: AppEvent) => `${event.title} · ${event.date}`
+export const defaultRoomTitle = (event: AppEvent) => `${event.title} · ${event.date}`
+// The organizer may name the room; everyone then sees that name.
+export const roomTitle = (event: AppEvent) => event.roomName || defaultRoomTitle(event)
 // Rooms with the newest message come first; rooms without messages keep their order at the end.
 // Compare instants, not strings: REST sends "+03:00" offsets while socket payloads use UTC "Z".
 export const byLatestMessage = (a: AppEvent, b: AppEvent) => (Date.parse(b.lastMessageAt || "") || 0) - (Date.parse(a.lastMessageAt || "") || 0)
@@ -91,7 +93,7 @@ export function mergeRoomSummaries(events: AppEvent[], rooms: import('../api/cli
     const avatars = new Map(existing?.participants.map(person => [person.id, person.avatar]) || [])
     const participants = room.participants.map(person => ({ ...EMPTY_USER, id: person.id, name: `${person.firstName} ${person.lastName}`.trim(), avatar: avatars.get(person.id) || "" }))
     const summary = {
-      title: room.interest.name, category: room.interest.name, date: room.date, time: room.startTime, location: room.locationName,
+      title: room.interest.name, category: room.interest.name, date: room.date, time: room.startTime, location: room.locationName, roomName: room.roomName || undefined,
       status: room.status, isActive: room.status === "started", minParticipants: room.minParticipants, maxParticipants: room.maxParticipants,
       currentParticipants: room.confirmedParticipantCount, participants, lastMessageAt: room.lastMessageAt || undefined, unreadCount: room.unreadCount,
       // Every room is one the user belongs to.
@@ -131,6 +133,7 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     date: event.date,
     time: event.startTime,
     location: event.locationName || "",
+    roomName: event.roomName || undefined,
     latitude: event.latitude,
     longitude: event.longitude,
     distance: "",
@@ -408,12 +411,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setData(current => ({ ...current, events: current.events.map(event => event.id !== delta.eventId ? event : { ...event, joined: true, waitlisted: false, ...(typeof delta.participantCount === 'number' ? { currentParticipants: delta.participantCount } : {}) }) }))
       ensureEvent(delta.eventId)
     })
+    // Renamed by the organizer: every member gets this on their own channel, inside the room or not.
+    const renamed = onSocket('room:renamed', (delta: { eventId: string; roomName: string | null }) => setData(current => ({ ...current, events: current.events.map(event => event.id === delta.eventId ? { ...event, roomName: delta.roomName || undefined } : event) })))
     const promoted = memberAdded('event:waitlist_promoted')
     const joinedHere = memberAdded('event:participant_joined')
     const unknownRoom = onSocket('room:message', (delta: { eventId: string }) => ensureEvent(delta.eventId))
     // Events missed while offline: one rooms refresh after reconnecting, only if the list was ever loaded.
     const resync = onSocket('sync:required', () => { if (roomsLoaded.current) void refreshRooms(true).catch(() => {}) })
-    return () => { cleanups.forEach(cleanup => cleanup()); roomMessage(); referenceCreated(); referenceUpdated(); promoted(); joinedHere(); unknownRoom(); resync() }
+    return () => { cleanups.forEach(cleanup => cleanup()); roomMessage(); referenceCreated(); referenceUpdated(); promoted(); joinedHere(); unknownRoom(); resync(); renamed() }
   }, [guestMode])
   return <Context.Provider value={{ data: guestMode ? initial : data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, refreshFeed, refreshMyEvents, refreshRooms, whenReady, loadReferences, resetSession: () => { referencesLoaded.current = false; roomsLoaded.current = false; feedLoad.current = null; stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
     {!guestMode && storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}
