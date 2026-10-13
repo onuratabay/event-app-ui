@@ -56,7 +56,10 @@ export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
 // Events without a participant cap are stored with the API's highest allowed capacity.
 export const UNLIMITED_PARTICIPANTS = 100000
 export const isUnlimitedCapacity = (max: number) => max >= UNLIMITED_PARTICIPANTS
-export const participantCount = (current: number, max: number) => `${current}/${isUnlimitedCapacity(max) ? "∞" : max}`
+// No maximum set does not mean "unlimited": the stored placeholder is never shown, only the count.
+export const participantCount = (current: number, max: number) => isUnlimitedCapacity(max) ? `${current}` : `${current}/${max}`
+/** Seats to fill: up to the maximum when one is set, otherwise up to the minimum. */
+export const capacityTarget = (event: { minParticipants: number; maxParticipants: number }) => isUnlimitedCapacity(event.maxParticipants) ? event.minParticipants : event.maxParticipants
 // The event room (chat) opens once confirmed participants reach the minimum; the backend enforces the same rule.
 export const isRoomReady = (event: AppEvent) => event.status !== "cancelled" && event.currentParticipants >= event.minParticipants
 // One meaning of "aktif" everywhere: the minimum is reached and the room is open.
@@ -116,7 +119,9 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
   const host: AppUser = {
     id: event.owner.id,
     name: `${event.owner.firstName} ${event.owner.lastName}`.trim(),
-    avatar: "",
+    // The organizer is also a participant; the server sends their photo there, and only when the viewer
+    // has a profile photo of their own (otherwise it is null and the initial is shown).
+    avatar: event.participants.find(participant => participant.id === event.owner.id)?.profilePhoto || "",
     city: "",
     bio: "",
     instagram: "",
@@ -169,7 +174,7 @@ export function mapApiEventPreservingCover(event: Parameters<typeof mapApiEvent>
   const mapped = mapApiEvent(event)
   // List payloads carry no participant photos; keep ones already loaded on the detail screen.
   const avatars = new Map(previous?.participants.map(person => [person.id, person.avatar]) || [])
-  return { ...mapped, coverImage: event.coverPhoto || previous?.coverImage || mapped.coverImage, participants: mapped.participants.map(person => ({ ...person, avatar: person.avatar || avatars.get(person.id) || "" })) }
+  return { ...mapped, coverImage: event.coverPhoto || previous?.coverImage || mapped.coverImage, host: { ...mapped.host, avatar: mapped.host.avatar || previous?.host.avatar || "" }, participants: mapped.participants.map(person => ({ ...person, avatar: person.avatar || avatars.get(person.id) || "" })) }
 }
 
 const Context = createContext<{
@@ -245,7 +250,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return events
       })
       feedLoad.current = feed.then(() => {}, () => {})
-      const [remote, interests, preferences, events, mine] = await Promise.all([getCurrentUser(), getUserInterests(), getPreferences(), feed, getMyEvents(1, { background: true })])
+      // The account (id) and interests are stored as soon as they arrive. Screens compare against the user id
+      // ("Sen", owner-only actions); waiting for the slow personal lists left it empty, so the signed-in user
+      // also showed up by name next to "Sen" (and never at all if one of those lists failed).
+      const me = getCurrentUser().then(remote => {
+        // Interests may arrive first (on the still id-less user); they are dropped only for a different account.
+        if (generation === sessionGeneration.current) setData(current => {
+          const sameAccount = !current.user.id || current.user.id === remote.id
+          return { ...current, user: { ...updateStoreUser(sameAccount ? current.user : EMPTY_USER, remote), interests: sameAccount ? current.user.interests : [] } }
+        })
+        return remote
+      })
+      const myInterests = getUserInterests().then(rows => {
+        if (generation === sessionGeneration.current) setData(current => ({ ...current, user: { ...current.user, interests: rows.map(i => i.name) } }))
+        return rows
+      })
+      const [remote, interests, preferences, events, mine] = await Promise.all([me, myInterests, getPreferences(), feed, getMyEvents(1, { background: true })])
       if (generation !== sessionGeneration.current) return
       // Migrate only preferences belonging to this authenticated account, never another account's data.
       const legacy = await AsyncStorage.getItem('event-app:v1')

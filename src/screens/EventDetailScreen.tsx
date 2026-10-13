@@ -3,8 +3,8 @@ import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
 import { CategoryIcon } from "../components/Icons";
 import { socketAction } from '../services/socket';
-import { participate, getApiErrorMessage, getEvent } from "../api/client";
-import { eventPhase, isLivePhase, isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
+import { participate, getApiErrorMessage, getEvent, cancelEvent } from "../api/client";
+import { capacityTarget, eventPhase, isLivePhase, isRoomReady, mapApiEvent, participantCount } from "../native/Store";
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet } from "react-native";
 import { Avatar, GlassCard } from "../components/GlassUI";
@@ -19,6 +19,19 @@ import { remainingLabel, useRemaining } from "../availability/countdown";
 interface Props {
   navigate: NavigateFn;
   eventId?: string;
+}
+// "90 dk" → "1 saat 30 dk"; events created without a duration say so instead of showing nothing.
+// Event start on the device clock (date "dd/MM/yyyy", time "HH:mm").
+function startsAt(event: { date: string; time: string }) {
+  const [day, month, year] = event.date.split("/").map(Number);
+  const [hour, minute] = event.time.split(":").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1, hour || 0, minute || 0);
+}
+export function durationLabel(duration?: string) {
+  const minutes = parseInt(duration || "", 10);
+  if (!minutes || minutes <= 0) return "Belirtilmedi";
+  const hours = Math.floor(minutes / 60), rest = minutes % 60;
+  return [hours ? `${hours} saat` : "", rest ? `${rest} dk` : ""].filter(Boolean).join(" ");
 }
 export default function EventDetailScreen({
   navigate,
@@ -40,6 +53,10 @@ export default function EventDetailScreen({
   useEffect(() => { let active = true; if (eventId) getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(error => { if (active) setLoadError(getApiErrorMessage(error, 'Etkinlik yüklenemedi.')); }); return () => { active = false; }; }, [eventId]);
   if (!event) return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}><TopNavBar navigate={navigate} fallback="discover" title="Etkinlik" /><Box style={{ paddingTop: 96, paddingHorizontal: 20 }}><Label>{loadError || 'Etkinlik yükleniyor…'}</Label></Box></Box>;
   const joined = event.host.id === store.user.id || event.joined || event.participants.some(p => p.id === store.user.id);
+  // Joining, leaving and the waitlist change only before the start: never once it started, was cancelled
+  // or ended (the server enforces the same rule).
+  const participationOpen = event.status === "waiting_participants" && startsAt(event) > new Date();
+  const frozenNote = event.status === "cancelled" ? "Etkinlik iptal edildi; katılım durumu değiştirilemez." : event.status === "closed" ? "Etkinlik sona erdi; katılım durumu değiştirilemez." : "Etkinlik başladı; katılım durumu artık değiştirilemez.";
   const setJoined = async (join: boolean) => {
     if (joining) return;
     setJoining(true);
@@ -90,9 +107,9 @@ export default function EventDetailScreen({
               label: "Konum",
               value: event.location
             }, {
-              icon: <StarIcon size={17} strokeWidth={1.75} />,
-              label: "Mesafe",
-              value: event.distance
+              icon: <ClockIcon size={17} strokeWidth={1.75} />,
+              label: "Süre",
+              value: durationLabel(event.duration)
             }, ...(event.level ? [{
               icon: <CheckIcon size={17} strokeWidth={1.75} />,
               label: "Seviye",
@@ -119,7 +136,9 @@ export default function EventDetailScreen({
                 <Label style={[[ui.textSm, ui.fontSemibold, ui.textWhite]]}>
                   {participantCount(event.currentParticipants, event.maxParticipants)}
                 </Label>
-                {event.host.id === store.user.id && event.status === "waiting_participants" && <Touch accessibilityLabel="Kişi ekle" onPress={() => setInviteOpen(true)} style={[[ui.px3, ui.roundedXl, ui.textXs, ui.fontMedium, ui.border, ui.borderC8a44a30, ui.bgC8a44a10, ui.textC8a44a], { minHeight: 36 }]}>
+                {/* Invite only while seats remain: up to the maximum, or up to the minimum when none was set
+                    (the organizer counts, so min 2 is reached with one more person). */}
+                {event.host.id === store.user.id && event.status === "waiting_participants" && event.currentParticipants < capacityTarget(event) && <Touch accessibilityLabel="Kişi ekle" onPress={() => setInviteOpen(true)} style={[[ui.px3, ui.roundedXl, ui.textXs, ui.fontMedium, ui.border, ui.borderC8a44a30, ui.bgC8a44a10, ui.textC8a44a], { minHeight: 36 }]}>
                     + Kişi ekle
                   </Touch>}
               </Box>
@@ -139,7 +158,8 @@ export default function EventDetailScreen({
                 </Box>}
               {/* Empty slots */}
               {Array.from({
-              length: isUnlimitedCapacity(event.maxParticipants) ? 0 : Math.max(0, event.maxParticipants - event.currentParticipants)
+              // Without a maximum, empty seats lead up to the minimum.
+              length: Math.max(0, capacityTarget(event) - event.currentParticipants)
             }).map((_, i) => <Box key={i} style={[[ui.w8, ui.h8, ui.roundedFull, ui.border, ui.borderDashed, ui.borderWhite15, ui.flex, ui.itemsCenter, ui.justifyCenter]]}>
                   <Label style={[[ui.textWhite20, ui.textXs]]}>+</Label>
                 </Box>)}
@@ -191,7 +211,8 @@ export default function EventDetailScreen({
               Düzenleyen
             </Label>
             <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-              <Avatar uri={event.host.avatar} name={event.host.name} size="md" />
+              {/* Your own event shows your own photo; another organizer's photo comes from the server's rule. */}
+              <Avatar uri={event.host.id === store.user.id ? store.user.avatar : event.host.avatar} name={event.host.name} size="md" />
               <Box style={[[ui.flex1]]}>
                 <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>
                   {event.host.name}
@@ -203,9 +224,10 @@ export default function EventDetailScreen({
                   </Label>
                 </Box>
               </Box>
-              <Touch onPress={() => navigate("profile", { userId: event.host.id })} style={[[ui.textXs, ui.px3, ui.py15, ui.roundedXl, ui.textWhite50, ui.border, ui.borderWhite10]]}>
+              {/* Your own event: no button to your own profile. */}
+              {event.host.id !== store.user.id ? <Touch onPress={() => navigate("profile", { userId: event.host.id })} style={[[ui.textXs, ui.px3, ui.py15, ui.roundedXl, ui.textWhite50, ui.border, ui.borderWhite10]]}>
                 Profil
-              </Touch>
+              </Touch> : null}
             </Box>
           </GlassCard>
 
@@ -216,17 +238,18 @@ export default function EventDetailScreen({
 
       {/* Compact action bar with an opaque surface so scrolling text cannot show through. */}
       <Box onLayout={event => setActionHeight(event.nativeEvent.layout.height)} style={[actionStyles.bar, { bottom: navInset }]}>
+        {!participationOpen && event.host.id !== store.user.id && <Label accessibilityRole="text" style={[[ui.textXs, ui.mb2, ui.textWhite50]]}>{frozenNote}</Label>}
         {event.invited && !joined && remaining !== null && <Label accessibilityLiveRegion="polite" style={[[ui.textXs, ui.mb2], { color: remaining > 0 ? palette.accent : palette.error }]}>
             {remaining > 0 ? `Davete yanıt için ${remainingLabel(remaining)}` : "Bu davetin süresi doldu."}
           </Label>}
         {event.invited && !joined ? <Box style={actionStyles.row} enter>
-            <Touch disabled={joining || ['cancelled', 'closed'].includes(event.status || '') || remaining !== null && remaining <= 0} onPress={() => setJoined(true)} style={actionStyles.primary} gradient={palette.actionGradient}>
+            <Touch disabled={joining || !participationOpen || remaining !== null && remaining <= 0} onPress={() => setJoined(true)} style={actionStyles.primary} gradient={palette.actionGradient}>
               Daveti kabul et
             </Touch>
-            <Touch disabled={joining} onPress={() => setJoined(false)} style={actionStyles.secondary}>
+            <Touch disabled={joining || !participationOpen} onPress={() => setJoined(false)} style={actionStyles.secondary}>
               Reddet
             </Touch>
-          </Box> : !joined ? <Touch disabled={joining || ['cancelled', 'closed'].includes(event.status || '')} onPress={async () => {
+          </Box> : !joined ? <Touch disabled={joining || !participationOpen} onPress={async () => {
           if (event.waitlisted) return setJoined(false);
           if (event.currentParticipants < event.maxParticipants) return setJoined(true);
           setJoining(true);
@@ -242,7 +265,17 @@ export default function EventDetailScreen({
               <CheckIcon size={16} strokeWidth={2} style={{ color: palette.success }} />
               <Label style={actionStyles.statusText}>{event.host.id === store.user.id ? "Düzenleyensin" : "Katıldın"}</Label>
             </Box>}
-            {event.host.id !== store.user.id && <Touch accessibilityLabel="Katılımı iptal et" disabled={joining} onPress={() => setJoined(false)} style={actionStyles.cancel}>
+            {/* The organizer may cancel only before the start; members are notified and the room closes. */}
+            {event.host.id === store.user.id && event.status === "waiting_participants" && startsAt(event) > new Date() && <Touch accessibilityLabel="Etkinliği iptal et" disabled={joining} onPress={() => Alert.alert("Etkinliği iptal et", "Etkinlik iptal edilecek, katılımcılara bildirim gidecek ve etkinlik odasında artık mesaj gönderilemeyecek. Emin misin?", [
+              { text: "Vazgeç", style: "cancel" },
+              { text: "Etkinliği iptal et", style: "destructive", onPress: async () => {
+                try { await cancelEvent(event.id); setStore(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, status: "cancelled", isActive: false } : e) })); }
+                catch (error) { Alert.alert("Etkinlik iptal edilemedi", getApiErrorMessage(error)); }
+              } },
+            ])} style={actionStyles.cancel}>
+              Etkinliği iptal et
+            </Touch>}
+            {event.host.id !== store.user.id && participationOpen && <Touch accessibilityLabel="Katılımı iptal et" disabled={joining} onPress={() => setJoined(false)} style={actionStyles.cancel}>
               {joining ? "Bekle…" : "İptal Et"}
             </Touch>}
           </Box>}

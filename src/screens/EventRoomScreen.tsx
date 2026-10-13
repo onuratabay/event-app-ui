@@ -251,7 +251,10 @@ export default function EventRoomScreen({
       }
     });
   };
+  // Cancelled by the organizer (live via "event:cancelled"): the history stays readable, nothing can be sent.
+  const cancelled = event?.status === "cancelled";
   const sendText = async (raw: string) => {
+    if (cancelled) return;
     const text = raw.trim();
     if (!text || !eventId) return;
     stickToEnd.current = true;
@@ -287,6 +290,7 @@ export default function EventRoomScreen({
     } })),
   });
   const openActions = (msg: RoomMessage) => {
+    if (cancelled) return;
     if (msg.deleted || !event) return;
     const mine = msg.user.id === ME.id;
     const isOwner = event.host.id === ME.id;
@@ -457,6 +461,10 @@ export default function EventRoomScreen({
             })}
           </Scroll>
 
+          {cancelled ? <Box accessibilityRole="alert" style={[s.cancelledBar, { paddingBottom: 14 + navInset }]}>
+            <Label style={s.cancelledTitle}>Etkinlik iptal edildi</Label>
+            <Label style={s.cancelledText}>Etkinlik sahibi etkinliği iptal etti; bu odada artık mesaj gönderilemez.</Label>
+          </Box> : <>
           {typingName && <Label style={s.typing}>{typingName} yazıyor…</Label>}
           <Box style={[s.composerWrap, { paddingBottom: 12 + navInset }]}>
             {editing ? <Box style={s.editBar}>
@@ -476,6 +484,7 @@ export default function EventRoomScreen({
             </Box>
             {input.length > MAX_MESSAGE_LENGTH - 200 && <Label style={s.counter}>{input.length}/{MAX_MESSAGE_LENGTH}</Label>}
           </Box>
+          </>}
         </>}
       </Box>
       {sheet ? <ActionSheet title={sheet.title} options={sheet.options} onClose={() => setSheet(null)} /> : null}
@@ -483,6 +492,9 @@ export default function EventRoomScreen({
 }
 const s = StyleSheet.create({
   body: { flex: 1, paddingTop: 68 },
+  cancelledBar: { paddingHorizontal: 20, paddingTop: 14, gap: 4, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.border, backgroundColor: "rgba(243,155,175,.08)" },
+  cancelledTitle: { color: palette.error, fontFamily: "Outfit-SemiBold", fontSize: 14, lineHeight: 18 },
+  cancelledText: { color: palette.muted, fontFamily: "Outfit", fontSize: 13, lineHeight: 18 },
   info: { gap: 12, paddingBottom: 8 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: "rgba(255,255,255,.05)", borderWidth: 1, borderColor: "rgba(255,255,255,.07)" },
   chipLabel: { color: "rgba(255,255,255,.6)", fontSize: 12, lineHeight: 16 },

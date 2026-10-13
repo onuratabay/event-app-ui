@@ -1,7 +1,8 @@
 import { distanceKm } from "../map/filters"
 import type { AppEvent } from "../types"
 
-export type SortOption = "recommended" | "time-asc" | "time-desc" | "distance-near" | "distance-far"
+// "mine": only the events the user created (soonest first).
+export type SortOption = "recommended" | "mine" | "time-asc" | "time-desc" | "distance-near" | "distance-far"
 export interface SortContext {
   /** Interest names of the signed-in user. */
   interests: string[]
@@ -15,16 +16,12 @@ const startTime = (event: AppEvent) => {
   return new Date(year, month - 1, day, hour || 0, minute || 0).getTime()
 }
 /**
- * The home feed shows only events still open to people: waiting for participants (not yet
- * started) or started and not yet over. The time check also hides events whose status has not
- * been updated yet (the server's status jobs are off in development).
+ * The home feed lists only events whose start time has not come yet (still gathering people).
+ * Started, cancelled and ended events are left out; the time check also hides events whose
+ * status has not been updated yet (the server's status jobs are off in development).
  */
 export function isOpenForFeed(event: AppEvent, now = Date.now()) {
-  const status = event.status || "waiting_participants"
-  const start = startTime(event)
-  if (status === "waiting_participants") return start >= now
-  if (status === "started") return start + (parseInt(event.duration || "", 10) || 120) * 60000 > now
-  return false
+  return (event.status || "waiting_participants") === "waiting_participants" && startTime(event) > now
 }
 const created = (event: AppEvent) => Date.parse(event.createdAt || "") || 0
 const hasCoordinates = (event: AppEvent) => Number.isFinite(event.latitude) && Number.isFinite(event.longitude)
@@ -42,6 +39,7 @@ export function sortFeed(events: AppEvent[], sortBy: SortOption, context: SortCo
   const primary = (a: AppEvent, b: AppEvent) => {
     switch (sortBy) {
       case "recommended": return Number(interests.has(b.category)) - Number(interests.has(a.category)) || startTime(a) - startTime(b)
+      case "mine":
       case "time-asc": return startTime(a) - startTime(b)
       case "time-desc": return startTime(b) - startTime(a)
       case "distance-near":

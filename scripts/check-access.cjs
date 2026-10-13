@@ -304,6 +304,13 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   cards = await mount("Discover")
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   assert(text(cards.toJSON()).replace(/\s+/g, " ").includes("3 kişi daha"), "A card below its minimum shows how many are missing")
+  assert(text(cards.toJSON()).replace(/\s+/g, " ").includes("Ev Sahibi düzenliyor"), "Someone else's event names its organizer")
+  await act(async () => cards.unmount())
+  // My own event: "Sen düzenliyorsun" instead of my name.
+  global.__testFeedEvents = [{ ...feedEvent("mine", "Film", "Sinema", 1, 4), owner: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" } }]
+  cards = await mount("Discover")
+  await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+  assert(text(cards.toJSON()).includes("Sen düzenliyorsun") && !text(cards.toJSON()).includes("Bekleyen Üye düzenliyor"), "My own events say Sen")
   await act(async () => cards.unmount())
   // Empty feed: an inviting state with ideas that open the create flow, never a bare "Yenile".
   global.__testFeedEvents = []
@@ -440,6 +447,12 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
       if (parsed.pathname === "/users/ali/profile") return { ok: true, status: 200, json: async () => ({ id: "ali", firstName: "Ali", lastName: "Kaya", city: "Ankara", bio: "", rank: 4, interests: [] }) }
       if (parsed.pathname === "/friends/status/ali") return { ok: true, status: 200, json: async () => relation }
       if (parsed.pathname === "/friends/status/pending-user") return { ok: true, status: 200, json: async () => ({ status: "self", canRequest: false, friendCount: 7 }) }
+      if (parsed.pathname === "/events/stats") return { ok: true, status: 200, json: async () => ({ attended: 5, organized: 2 }) }
+      if (parsed.pathname === "/events/mine") return { ok: true, status: 200, json: async () => ({ items: [
+        { ...cardBase, id: "own-wait", interest: { id: "padel", slug: "padel", name: "Padel" }, owner: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" }, confirmedParticipantCount: 1, minParticipants: 3, status: { enum: "waiting_participants", name: "" } },
+        { ...cardBase, id: "own-cancel", interest: { id: "yoga", slug: "yoga", name: "Yoga" }, owner: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" }, status: { enum: "cancelled", name: "" } },
+        { ...cardBase, id: "own-done", interest: { id: "film", slug: "film", name: "Film" }, owner: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" }, status: { enum: "closed", name: "" } },
+      ], total: 3 }) }
       if (parsed.pathname === "/events/attended") return { ok: true, status: 200, json: async () => ({ items: parsed.searchParams.get("limit") === "1" ? [] : [{ ...cardBase, id: "done-1", interest: { id: "film", slug: "film", name: "Film" }, locationName: "Eski Sinema", status: { enum: "closed", name: "Bitti" }, viewerParticipationStatus: "confirmed" }], total: 3 }) }
       if (parsed.pathname === "/friends/of/ali") return { ok: true, status: 200, json: async () => ({ items: [{ user: { id: "zeynep", firstName: "Zeynep", lastName: "Aydın", profilePhoto: null }, friendsSince: new Date().toISOString() }], total: 1 }) }
       if (parsed.pathname === "/friends/of/pending-user") return { ok: true, status: 200, json: async () => ({ items: [{ user: { id: "ali", firstName: "Ali", lastName: "Kaya", profilePhoto: null }, friendsSince: new Date().toISOString() }], total: 1 }) }
@@ -493,6 +506,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     const stranger = await mount("Profile", { userId: "ali", isOwn: false })
     await settle()
     assert(!stranger.root.findAll(n => n.props.accessibilityLabel === "Arkadaşlık isteği gönder").length && text(stranger.toJSON()).includes("Birlikte bir etkinliğe katıldığınızda"), "Without a shared event a hint replaces the button")
+    assert(!stranger.root.findAll(n => n.props.accessibilityLabel === "Arşivi aç").length, "Another member's archive is never shown")
     await act(async () => stranger.unmount())
     // Own profile: "Bağlantı" is the friend count.
     const own = await mount("Profile")
@@ -505,10 +519,17 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     assert(text(own.toJSON()).includes("Ali Kaya") && own.root.findAll(n => n.props.accessibilityLabel === "Ali Kaya arkadaşlıktan çıkar").length, "Own connections are listed, each removable")
     await press(own, "Bağlantıları kapat")
     // "Katıldığı": the number of ended events joined; tapping lists them and opens one.
-    assert(text(own.toJSON()).replace(/\s+/g, " ").includes("3 Katıldığı"), "Katıldığı shows the ended events joined")
+    assert(text(own.toJSON()).replace(/\s+/g, " ").includes("5 Katıldığı"), "Katıldığı = joined-and-ended + organized")
+    assert(text(own.toJSON()).replace(/\s+/g, " ").includes("2 Düzenlediği"), "Düzenlediği = own events that started")
     await press(own, "Katıldığım etkinlikleri göster")
     await settle()
     assert(text(own.toJSON()).includes("Eski Sinema"), "Tapping Katıldığı lists those events")
+    await press(own, "Listeyi kapat")
+    // Archive: every event I created, with its status; only on my own profile.
+    await press(own, "Arşivi aç")
+    await settle()
+    const archive = text(own.toJSON()).replace(/\s+/g, " ")
+    assert(archive.includes("Arşiv · 3") && archive.includes("Katılımcı Bekleniyor") && archive.includes("İptal edildi") && archive.includes("Sona erdi"), "The archive lists my events with their status")
     await act(async () => own.unmount())
     global.fetch = previousFetch
   }
@@ -873,6 +894,12 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     const chat = text(member.toJSON()).replace(/\s+/g, " ")
     assert(chat.includes("Ev oda adını “Pazar Sinema” olarak değiştirdi"), "Members see who renamed the room, WhatsApp-style")
     assert(!member.root.findAll(n => n.props.accessibilityLabel === "Mesaj seçenekleri" && text(n).includes("Pazar Sinema")).length, "A system line is not a bubble with message actions")
+    // The organizer cancels: the open room stops taking messages live; the history stays readable.
+    assert(member.root.findAll(n => n.props.accessibilityLabel === "Mesaj gönder").length, "Before cancelling, messages can be sent")
+    await act(async () => fakeSocket.instances.at(-1).receive("event:cancelled", { eventId: "room-n", status: "cancelled" }))
+    const closed = text(member.toJSON()).replace(/\s+/g, " ")
+    assert(closed.includes("Etkinlik sahibi etkinliği iptal etti") && !member.root.findAll(n => n.props.accessibilityLabel === "Mesaj gönder").length, "After cancelling, the room cannot send messages")
+    assert(closed.includes("Ev oda adını “Pazar Sinema” olarak değiştirdi"), "The history stays readable")
     await act(async () => member.unmount())
     fakeSocket.setAction(async () => ({}))
     global.fetch = previousFetch

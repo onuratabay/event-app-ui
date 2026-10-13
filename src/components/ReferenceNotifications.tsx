@@ -6,7 +6,7 @@ import { Box, Label, Touch } from "../native/UI"
 import { ui } from "../theme/styles"
 import { ErrorNotice } from "./ErrorNotice"
 
-export function ReferenceNotifications() {
+export function ReferenceNotifications({ onCount }: { onCount?: (count: number) => void } = {}) {
   const [requests, setRequests] = useState<ReferenceRequest[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -32,8 +32,12 @@ export function ReferenceNotifications() {
     } catch (cause) { setError(getApiErrorMessage(cause, "Yanıtın kaydedilemedi. Tekrar dene.")) }
     finally { setBusy(null) }
   }
+  // Only requests still waiting for this user's answer belong here. Answered and outgoing ones live
+  // under the profile's "Referanslarım", so "Tümünü sil" (decline) or a reply clears the card at once.
+  const waiting = requests.filter(request => request.direction === "incoming" && request.status === "pending")
+  useEffect(() => { onCount?.(waiting.length) }, [waiting.length])
   return <Box style={{ gap: 10 }}>
-    {requests.map(request => <Box key={request.id} style={{ padding: 16, borderRadius: 16, gap: 8, backgroundColor: "rgba(105,120,255,0.08)", borderColor: "rgba(105,120,255,0.2)", borderWidth: 1 }}>
+    {waiting.map(request => <Box key={request.id} style={{ padding: 16, borderRadius: 16, gap: 8, backgroundColor: "rgba(105,120,255,0.08)", borderColor: "rgba(105,120,255,0.2)", borderWidth: 1 }}>
       <Label style={[[ui.textSm, ui.textWhite85, ui.fontMedium]]}>{request.direction === "incoming" ? `${request.requester.name} senden referans istiyor` : `${request.recipient.name} için referans isteğin`}</Label>
       {request.status === "pending" && request.direction === "incoming" ? <>
         <Label style={[[ui.textXs, ui.textWhite50]]}>Bu kişinin topluluğa katılması için referans olmak ister misin?</Label>

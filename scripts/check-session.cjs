@@ -77,6 +77,30 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     unsubscribe()
     global.fetch = oldFetch
   }
+  {
+    // Reported: "Burak · Tuğçe · Sen/Katıldın" with 2 participants. While the slow personal lists load,
+    // the signed-in user must already be known, so they appear once (as "Sen"), never also by name.
+    storage.set("event-app:access-token", "duo-test")
+    let releaseMine
+    const mineGate = new Promise(resolve => { releaseMine = resolve })
+    const duo = { id: "duo-1", owner: { id: "host", firstName: "Burak", lastName: "D" }, interest: { id: "padel", slug: "padel", name: "Padel" }, level: null, date: "01/10/2030", startTime: "18:30", durationMinutes: 60, latitude: 39.9, longitude: 32.8, locationName: "Kort", minParticipants: 2, maxParticipants: 100000, confirmedParticipantCount: 2, participants: [{ id: "host", firstName: "Burak", lastName: "D", profilePhoto: null }, { id: "tugce", firstName: "Tuğçe", lastName: "Y", profilePhoto: null }], coverPhoto: null, description: "", requirements: null, status: { enum: "waiting_participants" }, isFavorite: false, viewerParticipationStatus: "confirmed" }
+    global.fetch = async (url, options) => {
+      const path = new URL(url).pathname
+      if (path === "/auth/me") return ok({ id: "tugce", firstName: "Tuğçe", lastName: "Y", status: { enum: "approved" } })
+      if (path === "/events/mine") await mineGate
+      if (path === "/events/duo-1") return ok(duo)
+      return oldFetch(url, options)
+    }
+    api.clearSessionCache?.()
+    const detail = await mount("EventDetail", { eventId: "duo-1" })
+    await act(() => new Promise(resolve => setTimeout(resolve, 80)))
+    const shown = text(detail.toJSON()).replace(/\s+/g, " ")
+    assert(shown.includes("Burak") && shown.includes("Katıldın"), "The other participant and my own badge are shown")
+    assert(!shown.includes("Tuğçe"), "I am not listed by name next to my own badge")
+    await act(async () => { releaseMine(); await new Promise(resolve => setTimeout(resolve, 20)) })
+    await act(async () => detail.unmount())
+    global.fetch = oldFetch
+  }
   for (const name of ["Login", "Welcome"]) {
     route = undefined
     tree = await mount(name, { navigate: next => { route = next } })

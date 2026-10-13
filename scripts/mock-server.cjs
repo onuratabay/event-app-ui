@@ -6,7 +6,7 @@ module.exports = function () {
   const user = { id: 'server-user', firstName: 'Sunucu', lastName: 'Kullanıcısı', city: 'Ankara', bio: 'Sunucu profili', profilePhoto: null }
   let interests = [{ id: 'padel', name: 'Padel' }]
   const suggestions = ['Su getir.', 'Raket gerekli.']
-  const state = { createBlocked: false }
+  const state = { createBlocked: false, friendRequests: [], references: [] }
   const friends = [{ user: { id: 'friend-1', firstName: 'Ayşe', lastName: 'Arkadaş', profilePhoto: null } }]
   // "Etkinlik Takvimim" fixtures (test-only): availability records, pool candidates and sent pool invitations.
   const availabilities = [], poolInvites = []
@@ -25,7 +25,12 @@ module.exports = function () {
     requests.push({ path, body, method: options.method || 'GET' })
     let result
     if (path === '/auth/me') { require('node:assert/strict').equal(options.method, 'POST'); result = user }
+    else if (path === '/notifications' && options.method === 'DELETE') { const deleted = notifications.length; notifications.length = 0; result = { deleted } }
     else if (path === '/notifications') result = { items: notifications.map(row => ({ ...row })), unreadCount: notifications.filter(row => !row.readAt).length, nextCursor: null }
+    else if (path === '/references/requests' && !body) result = { items: state.references.map(row => ({ ...row })) }
+    else if (path.startsWith('/references/requests/') && path.endsWith('/respond')) { const row = state.references.find(item => item.id === path.split('/')[3]); if (row) row.status = body.decision; result = { status: body.decision } }
+    else if (path === '/friends/requests/incoming') result = { items: state.friendRequests.map(user => ({ user, requestedAt: new Date().toISOString() })), total: state.friendRequests.length }
+    else if (path.startsWith('/friends/requests/') && path.endsWith('/decline')) { const id = path.split('/')[3]; state.friendRequests = state.friendRequests.filter(user => user.id !== id); result = { message: 'ok' } }
     else if (path === '/notifications/read-all') { notifications.forEach(row => row.readAt = new Date().toISOString()); result = { success: true } }
     else if (path.startsWith('/notifications/') && path.endsWith('/read')) { const row = notifications.find(row => row.id === path.split('/')[2]); if (row) row.readAt = new Date().toISOString(); result = { success: true } }
     else if (path === '/legal/documents') result = { items: legalDocuments.map(({ body: _body, ...doc }) => doc) }

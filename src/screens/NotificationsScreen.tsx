@@ -8,7 +8,8 @@ import { EventInvitations } from "../components/EventInvitations";
 import { AtmoBackground } from "../components/GlassUI";
 import TopNavBar from "../components/TopNavBar";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { getNotifications, readAllNotifications, readNotification, getEvent, getApiErrorMessage, hasSession, type AppNotification } from "../api/client";
+import { Alert } from "react-native";
+import { getNotifications, readAllNotifications, readNotification, getEvent, getApiErrorMessage, hasSession, deleteAllNotifications, getIncomingFriendRequests, getReferenceRequests, getInvitations, declineFriendRequest, respondToReference, participate, type AppNotification } from "../api/client";
 import { mapApiEvent, useStore } from "../native/Store";
 import { onSocket } from "../services/socket";
 import { Box, Label, Scroll, Touch } from "../native/UI";
@@ -59,6 +60,53 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
     catch (cause) { if (current === generation.current) setError(getApiErrorMessage(cause, "Bildirimler okundu işaretlenemedi.")); }
     finally { if (current === generation.current) { pending.current = false; setBusy(false); } }
   };
+  // Pending sections (invitations, references) remount after a bulk decline so they reload.
+  const [pendingVersion, setPendingVersion] = useState(0);
+  // Like "Tümünü oku": "Tümünü sil" is disabled when nothing is shown (no notifications, invitations or reference cards).
+  const [inviteCount, setInviteCount] = useState(0);
+  const [referenceCount, setReferenceCount] = useState(0);
+  const nothingToDelete = !notifications.length && !inviteCount && !referenceCount;
+  /**
+   * "Tümünü sil": deletes every notification. If something is still waiting for an answer
+   * (friend requests, reference requests, event invitations) the user may decline those too.
+   */
+  const removeAll = async () => {
+    if (pending.current) return;
+    pending.current = true; setBusy(true);
+    const current = generation.current;
+    const release = () => { if (current === generation.current) { pending.current = false; setBusy(false); } };
+    const [friends, references, invitations] = await Promise.all([
+      getIncomingFriendRequests().then(r => r.items.map(item => item.user.id)).catch(() => [] as string[]),
+      getReferenceRequests().then(r => r.items.filter(item => item.direction === "incoming" && item.status === "pending").map(item => item.id)).catch(() => [] as string[]),
+      getInvitations().then(r => r.items.map(item => item.id)).catch(() => [] as string[]),
+    ]);
+    if (current !== generation.current) return;
+    const run = async (declinePending: boolean) => {
+      try {
+        if (declinePending) await Promise.allSettled([
+          ...friends.map(id => declineFriendRequest(id)),
+          ...references.map(id => respondToReference(id, "declined")),
+          ...invitations.map(id => participate(id, false)),
+        ]);
+        await deleteAllNotifications();
+        if (current !== generation.current) return;
+        setNotifications([]); setUnreadCount(0); setNextCursor(null);
+        if (declinePending) setPendingVersion(v => v + 1);
+        void refresh();
+      } catch (cause) { if (current === generation.current) setError(getApiErrorMessage(cause, "Bildirimler silinemedi.")); }
+      finally { release(); }
+    };
+    const waiting = [friends.length ? `${friends.length} arkadaşlık isteği` : "", references.length ? `${references.length} referans isteği` : "", invitations.length ? `${invitations.length} etkinlik daveti` : ""].filter(Boolean);
+    if (waiting.length) Alert.alert("Onay bekleyen istekler var", `${waiting.join(", ")} yanıtını bekliyor. Bunları da reddetmek ister misin?`, [
+      { text: "Vazgeç", style: "cancel", onPress: release },
+      { text: "Sadece bildirimleri sil", onPress: () => void run(false) },
+      { text: "Reddet ve tümünü sil", style: "destructive", onPress: () => void run(true) },
+    ], { cancelable: true, onDismiss: release });
+    else Alert.alert("Tüm bildirimler silinsin mi?", "Bu işlem geri alınamaz.", [
+      { text: "Vazgeç", style: "cancel", onPress: release },
+      { text: "Tümünü sil", style: "destructive", onPress: () => void run(false) },
+    ], { cancelable: true, onDismiss: release });
+  };
   const open = async (notification: AppNotification) => {
     if (pending.current) return;
     pending.current = true; setBusy(true);
@@ -92,10 +140,13 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
   };
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
     <AtmoBackground />
-    <TopNavBar navigate={navigate} fallback="discover" title="Bildirimler" subtitle={unreadCount ? `${unreadCount} yeni bildirim` : undefined} right={<Touch accessibilityLabel="Tüm bildirimleri okundu işaretle" disabled={busy || !unreadCount} onPress={() => void markAll()} style={[[ui.textXs, ui.textWhite50, ui.px2]]}>Tümünü oku</Touch>} />
+    <TopNavBar navigate={navigate} fallback="discover" title="Bildirimler" subtitle={unreadCount ? `${unreadCount} yeni bildirim` : undefined} right={<Box style={{ flexDirection: "row", alignItems: "center" }}>
+      <Touch accessibilityLabel="Tüm bildirimleri okundu işaretle" disabled={busy || !unreadCount} onPress={() => void markAll()} style={[[ui.textXs, ui.textWhite50, ui.px2], { minHeight: 44, justifyContent: "center" }]}>Tümünü oku</Touch>
+      <Touch accessibilityLabel="Tüm bildirimleri sil" disabled={busy || nothingToDelete} onPress={() => void removeAll()} style={[[ui.textXs, ui.px2], { minHeight: 44, justifyContent: "center", color: palette.error }]}>Tümünü sil</Touch>
+    </Box>} />
     <Scroll style={[[ui.flex1, ui.px5, ui.spaceY2], { paddingTop: 80, paddingBottom: 40 + navInset }]}>
-      <EventInvitations navigate={navigate} />
-      <ReferenceNotifications />
+      <EventInvitations key={`invites-${pendingVersion}`} navigate={navigate} onCount={setInviteCount} />
+      <ReferenceNotifications key={`references-${pendingVersion}`} onCount={setReferenceCount} />
       {error && <ErrorNotice title="Bildirimler yüklenemedi" message={error} onDismiss={() => setError(null)} />}
       {loading && <Label style={[[ui.textSm, ui.textWhite50, ui.py4]]}>Bildirimler yükleniyor…</Label>}
       {!loading && !error && !notifications.length && <Label style={[[ui.textSm, ui.textWhite50, ui.py4]]}>Henüz yeni uyarın yok.</Label>}

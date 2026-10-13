@@ -266,7 +266,7 @@ async function tap(tree, label) {
   const at = (date, time, extra) => ({ ...mapApiEvent(photoFree), date, time, ...extra })
   const now = new Date(2026, 9, 11, 12, 0).getTime()
   assert.equal(isOpenForFeed(at("12/10/2026", "18:00", { status: "waiting_participants" }), now), true, "Upcoming events waiting for participants are shown")
-  assert.equal(isOpenForFeed(at("11/10/2026", "11:30", { status: "started", duration: "90 dk" }), now), true, "Started events still in progress are shown")
+  assert.equal(isOpenForFeed(at("11/10/2026", "11:30", { status: "started", duration: "90 dk" }), now), false, "Started events are not listed, even while in progress")
   assert.equal(isOpenForFeed(at("11/10/2026", "09:00", { status: "started", duration: "60 dk" }), now), false, "Started events past their end are hidden")
   assert.equal(isOpenForFeed(at("10/10/2026", "18:00", { status: "waiting_participants" }), now), false, "Waiting events whose start passed are hidden (status not updated yet)")
   for (const status of ["closed", "cancelled"]) assert.equal(isOpenForFeed(at("20/10/2026", "18:00", { status }), now), false, `${status} events are hidden`)
@@ -387,6 +387,53 @@ async function tap(tree, label) {
   const detail = await mount("EventDetail", { eventId: EVENTS[0].id, navigate: (screen, options) => profileNavigations.push({ screen, options }) })
   await tap(detail, "Profil")
   assert.deepEqual(profileNavigations.pop(), { screen: "profile", options: { userId: server.events[0].owner.id } }, "Host profile button selects the host instead of the signed-in user")
+  {
+    // My own event: no "Profil" button next to the organizer (that would just open my own profile).
+    const originalOwner = server.events[0].owner
+    server.events[0].owner = { id: server.user.id, firstName: server.user.firstName, lastName: server.user.lastName }
+    // Storage was cleared above; this check needs a signed-in user.
+    storage.set("event-app:access-token", "own-event-test")
+    const ownDetail = await mount("EventDetail", { eventId: EVENTS[0].id })
+    await act(async () => { await new Promise(r => setTimeout(r, 150)) })
+    assert(text(ownDetail.toJSON()).includes("Düzenleyen"), "The organizer card is still shown")
+    assert(!ownDetail.root.findAllByType("Pressable").some(n => text(n).trim() === "Profil"), "No profile button when I organize the event")
+    // The organizer cancels before the start (after confirming); the detail shows it at once.
+    global.__testAlert = (_title, _message, buttons) => buttons?.find(button => button.style === "destructive")?.onPress?.()
+    await act(async () => ownDetail.root.findAll(n => n.props.accessibilityLabel === "Etkinliği iptal et" && typeof n.props.onPress === "function")[0].props.onPress())
+    await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+    global.__testAlert = undefined
+    const cancelRequest = server.requests.find(r => r.path === `/events/${EVENTS[0].id}/status` && r.method === "PATCH")
+    assert.deepEqual(cancelRequest?.body, { status: "cancelled" }, "The organizer can cancel the event")
+    assert(text(ownDetail.toJSON()).includes("Etkinlik iptal edildi") && !ownDetail.root.findAll(n => n.props.accessibilityLabel === "Etkinliği iptal et").length, "The detail shows the cancellation right away")
+    await act(async () => ownDetail.unmount())
+    server.events[0].owner = originalOwner
+    // Participants cannot change their participation once the event started or was cancelled.
+    const original = { status: server.events[0].status, viewer: server.events[0].viewerParticipationStatus }
+    const freeze = async (status, viewer) => {
+      Object.assign(server.events[0], { status: { enum: status }, viewerParticipationStatus: viewer })
+      const view = await mount("EventDetail", { eventId: EVENTS[0].id })
+      await act(async () => { await new Promise(r => setTimeout(r, 150)) })
+      return view
+    }
+    let frozen = await freeze("started", "confirmed")
+    assert(!frozen.root.findAll(n => n.props.accessibilityLabel === "Katılımı iptal et").length, "A started event cannot be left")
+    assert(text(frozen.toJSON()).includes("Etkinlik başladı; katılım durumu artık değiştirilemez."), "The reason is shown")
+    await act(async () => frozen.unmount())
+    frozen = await freeze("cancelled", null)
+    const join = frozen.root.findAll(n => typeof n.props.onPress === "function" && "disabled" in n.props && text(n).trim() === "Katıl")[0]
+    assert(join && join.props.disabled === true, "A cancelled event cannot be joined")
+    assert(text(frozen.toJSON()).includes("Etkinlik iptal edildi; katılım durumu değiştirilemez."))
+    await act(async () => frozen.unmount())
+    Object.assign(server.events[0], { status: original.status, viewerParticipationStatus: original.viewer })
+    storage.delete("event-app:access-token")
+  }
+  {
+    // The detail shows the event's duration where distance used to be.
+    const { durationLabel } = require("../src/screens/EventDetailScreen.tsx")
+    assert.deepEqual(["45 dk", "60 dk", "90 dk", "150 dk", undefined].map(durationLabel), ["45 dk", "1 saat", "1 saat 30 dk", "2 saat 30 dk", "Belirtilmedi"], "Durations read naturally")
+    const info = text(detail.toJSON()).replace(/\s+/g, " ")
+    assert(info.includes("Süre 1 saat") && !info.includes("Mesafe"), "Event detail shows Süre instead of Mesafe")
+  }
   await tap(detail, "Katıl")
   assert(text(detail.toJSON()).includes("Katıldın"))
   assert(!text(detail.toJSON()).includes("Odaya Katıl"), "No room button below the minimum")
@@ -554,7 +601,25 @@ async function tap(tree, label) {
   assert.deepEqual(server.events[0].invitedUserIds, ['friend-1'], 'Selected friends are invited')
   assert.equal(server.events[0].durationMinutes, 60)
   assert.equal(server.events[0].minParticipants, 2)
-  assert.equal(server.events[0].maxParticipants, 100000, 'Closed max is sent as unlimited capacity')
+  assert.equal(server.events[0].maxParticipants, 100000, 'Without a maximum the server gets its placeholder capacity')
+  {
+    // No maximum is not "unlimited": the placeholder never shows, and the minimum drives progress.
+    const { participantCount, capacityTarget } = require("../src/native/Store.tsx")
+    assert.equal(participantCount(3, 100000), "3", "Only the count shows when no maximum was set")
+    assert.equal(participantCount(3, 8), "3/8")
+    assert.equal(capacityTarget({ minParticipants: 4, maxParticipants: 100000 }), 4, "The minimum is the goal without a maximum")
+    // Organizer photo: taken from the participant list, where the server only fills it in when the viewer has a photo.
+    const { mapApiEvent } = require("../src/native/Store.tsx")
+    const withPhoto = mapApiEvent({ ...server.events[0], owner: { id: "host", firstName: "Ev", lastName: "Sahibi" }, participants: [{ id: "host", firstName: "Ev", lastName: "Sahibi", profilePhoto: "data:image/png;base64,HOST" }] })
+    assert.equal(withPhoto.host.avatar, "data:image/png;base64,HOST", "The organizer's photo is shown when the server sends it")
+    const hidden = mapApiEvent({ ...server.events[0], owner: { id: "host", firstName: "Ev", lastName: "Sahibi" }, participants: [{ id: "host", firstName: "Ev", lastName: "Sahibi", profilePhoto: null }] })
+    assert.equal(hidden.host.avatar, "", "No photo (viewer has none) falls back to the initial")
+    const noMax = await mount("EventDetail", { eventId: server.events[0].id })
+    await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+    const shown = text(noMax.toJSON())
+    assert(!/100000|∞|[Ss]ınırsız|sınırı yok/.test(shown), "The detail never shows an unlimited capacity")
+    await act(async () => noMax.unmount())
+  }
   assert.equal(storage.has('event-app:v1'), false, 'No domain data is written to device storage')
   storage.set("event-app:access-token", "invite-test")
   assert.equal(server.events[0].levelId, 'beginner', 'Interest level is sent when the interest has levels')
@@ -578,7 +643,7 @@ async function tap(tree, label) {
   server.state.createBlocked = false
   server.notifications.push({ id: "notice-1", type: "participant_joined", title: "Etkinliğine yeni katılımcı", body: "Ayşe etkinliğine katıldı.", eventId: server.events[0].id, actorId: "other", readAt: null, createdAt: new Date().toISOString() })
   const notificationNavigations = []
-  const notifications = await mount("Notifications", { navigate: (screen, options) => notificationNavigations.push({ screen, options }) })
+  let notifications = await mount("Notifications", { navigate: (screen, options) => notificationNavigations.push({ screen, options }) })
   await act(async () => { await new Promise(r=>setTimeout(r,20)) })
   assert(text(notifications.toJSON()).includes("etkinliğine davet etti"), "Pending invitations are listed")
   assert(text(notifications.toJSON()).includes("Etkinliğine yeni katılımcı"), "Persisted notifications are loaded")
@@ -595,6 +660,48 @@ async function tap(tree, label) {
   assert(server.requests.some(r => r.path === '/events/invite-1/join' && r.method === 'POST'), "Accepting an invitation joins the event")
   assert.equal(server.invitations.length, 0)
   assert(!text(notifications.toJSON()).includes("etkinliğine davet etti"), "Answered invitation leaves the list")
+  {
+    // "Tümünü sil": with requests still waiting, the user may decline them too.
+    const dialogs = []
+    server.state.friendRequests = [{ id: "friend-1", firstName: "Can", lastName: "Arkadaş", profilePhoto: null }]
+    // Reference cards: only the request still waiting for my answer shows; answered/outgoing ones do not.
+    const ref = (id, direction, status, requester, recipient) => ({ id, direction, status, createdAt: new Date().toISOString(), requester: { id: requester, name: requester }, recipient: { id: recipient, name: recipient } })
+    server.state.references = [ref("ref-wait", "incoming", "pending", "Deniz Bekleyen", "Ben"), ref("ref-done", "incoming", "approved", "Eski Onaylı", "Ben"), ref("ref-out", "outgoing", "pending", "Ben", "Giden İstek")]
+    await act(async () => notifications.unmount())
+    notifications = await mount("Notifications", { navigate: (screen, options) => notificationNavigations.push({ screen, options }) })
+    await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+    const cards = text(notifications.toJSON())
+    assert(cards.includes("Deniz Bekleyen senden referans istiyor"), "A reference request waiting for my answer is shown")
+    assert(!cards.includes("Eski Onaylı") && !cards.includes("Giden İstek"), "Answered and outgoing references are not notification cards")
+    server.invitations.push({ ...server.events[1], id: "invite-1", owner: { id: "inviter", firstName: "Davet", lastName: "Eden" }, viewerParticipationStatus: "invited" })
+    global.__testAlert = (title, message, buttons) => { dialogs.push({ title, message }); buttons.find(button => button.text === "Reddet ve tümünü sil").onPress() }
+    await tap(notifications, "Tümünü sil")
+    await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    assert.equal(dialogs[0]?.title, "Onay bekleyen istekler var", "Pending requests are offered for declining")
+    assert(dialogs[0].message.includes("1 arkadaşlık isteği") && dialogs[0].message.includes("1 etkinlik daveti"), "The dialog says what is waiting")
+    assert(server.requests.some(r => r.path === "/friends/requests/friend-1/decline" && r.method === "POST"), "A pending friend request is declined")
+    assert(server.requests.some(r => r.path === "/events/invite-1/leave" && r.method === "POST"), "A pending invitation is declined")
+    assert(server.requests.some(r => r.path === "/notifications" && r.method === "DELETE") && server.notifications.length === 0, "Every notification is deleted")
+    assert(dialogs[0].message.includes("1 referans isteği"), "Pending references are counted")
+    assert.equal(server.state.references.find(row => row.id === "ref-wait").status, "declined", "A pending reference request is declined")
+    assert(!text(notifications.toJSON()).includes("Referans isteğin yanıtlandı") && !text(notifications.toJSON()).includes("etkinliğine davet etti") && !text(notifications.toJSON()).includes("senden referans istiyor"), "The screen is cleared, reference cards included")
+    // Nothing waiting: a plain confirmation, and "Sadece bildirimleri sil" never declines anything.
+    server.notifications.push({ id: "notice-3", type: "message", title: "Yeni oda mesajı", body: "Selam", eventId: null, actorId: null, readAt: null, createdAt: new Date().toISOString() })
+    await act(async () => { require("./mock-socket.cjs").instances.at(-1).receive("notification:created", server.notifications.at(-1)); await new Promise(r => setTimeout(r, 20)) })
+    dialogs.length = 0
+    global.__testAlert = (title, message, buttons) => { dialogs.push({ title, message }); buttons.find(button => button.style === "destructive").onPress() }
+    await tap(notifications, "Tümünü sil")
+    await act(async () => { await new Promise(r => setTimeout(r, 40)) })
+    assert.equal(dialogs[0]?.title, "Tüm bildirimler silinsin mi?", "Without pending requests a simple confirmation is shown")
+    assert.equal(server.notifications.length, 0)
+    // Nothing left to show: like "Tümünü oku", "Tümünü sil" is disabled.
+    const deleteAll = () => notifications.root.findAll(n => n.props.accessibilityLabel === "Tüm bildirimleri sil" && "disabled" in n.props)[0]
+    assert.equal(deleteAll().props.disabled, true, "Tümünü sil is disabled when there is nothing to delete")
+    server.notifications.push({ id: "notice-4", type: "message", title: "Yine mesaj", body: "Selam", eventId: null, actorId: null, readAt: null, createdAt: new Date().toISOString() })
+    await act(async () => { require("./mock-socket.cjs").instances.at(-1).receive("notification:created", server.notifications.at(-1)); await new Promise(r => setTimeout(r, 20)) })
+    assert.equal(deleteAll().props.disabled, false, "Tümünü sil is enabled again when a notification arrives")
+    global.__testAlert = undefined
+  }
   await act(async () => notifications.unmount())
   storage.delete("event-app:access-token")
   const routes=fs.readdirSync(path.join(__dirname,"../app"))

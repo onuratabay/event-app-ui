@@ -371,6 +371,8 @@ export function setFavorite(id: string, saved: boolean): { done: Promise<unknown
   void done.finally(() => { if (favoriteQueue.get(id) === done) favoriteQueue.delete(id) }).catch(() => {})
   return { done, isLatest: () => latestFavorite.get(id) === done }
 }
+/** Organizer only, before the start: members are notified and the room stops taking messages. */
+export const cancelEvent = (id: string) => request<{ message: string }>(`/events/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) })
 export const participate = (id: string, join: boolean) => request<ApiEvent>(`/events/${id}/${join ? 'join' : 'leave'}`, { method: 'POST' })
 // Most frequent lines from the user's own past event descriptions (dismissed ones excluded).
 export const getSuggestions = () => request<{ items: string[] }>('/events/mine/suggestions')
@@ -387,6 +389,7 @@ export const getFriendRelationship = (userId: string) => request<FriendRelations
 export const sendFriendRequest = (userId: string) => request<{ message: string }>('/friends/requests', { method: 'POST', body: JSON.stringify({ userId }), background: true })
 export const cancelFriendRequest = (userId: string) => request<{ message: string }>(`/friends/requests/${encodeURIComponent(userId)}`, { method: 'DELETE', background: true })
 export const acceptFriendRequest = (userId: string) => request<{ message: string }>(`/friends/requests/${encodeURIComponent(userId)}/accept`, { method: 'POST', background: true })
+export const getIncomingFriendRequests = () => request<{ items: Array<{ user: FriendUser }>; total: number }>('/friends/requests/incoming?limit=100', { background: true })
 /** A member's connections: visible to themselves and their friends only (others get 403). */
 export const getFriendsOf = (userId: string) => request<{ items: Array<{ user: FriendUser; friendsSince: string }>; total: number }>(`/friends/of/${encodeURIComponent(userId)}?limit=100`, { background: true })
 export const removeFriend = (userId: string) => request<{ message: string }>(`/friends/${encodeURIComponent(userId)}`, { method: 'DELETE', background: true })
@@ -407,8 +410,12 @@ export const getMessages = (id: string, signal?: AbortSignal, cursor?: string) =
 export const markRoomRead = (id: string) => request<{ eventId: string; unreadCount: number }>(`/events/${id}/messages/read`, { method: 'POST', background: true })
 export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text }), background: true })
 /** Profile "Katıldığı": ended events the user joined (not their own), newest first; `total` is the count. */
-// limit=1 is enough for the count; the full list loads only when it is opened (covers are heavy).
+/** Profile counters: organized = own events that started; attended = joined-and-ended + organized. */
+export const getProfileStats = () => request<{ attended: number; organized: number }>('/events/stats', { background: true })
+// The full list loads only when it is opened (covers are heavy).
 export const getAttendedEvents = (limit = 50) => request<EventListResponse>(`/events/attended?limit=${limit}`, { background: true })
+/** Profile "Arşiv": every event the user created, any status, newest first. Only ever the requester's own. */
+export const getOwnedEvents = (page = 1) => request<EventListResponse>(`/events/mine?page=${page}&limit=20`, { background: true })
 export async function getMyEvents(page = 1, options: { background?: boolean } = {}) {
   const lists = await Promise.all(['mine', 'participating', 'favorites'].map(kind => request<EventListResponse>(`/events/${kind}?page=${page}&limit=30`, options)))
   return { items: lists.flatMap(list => list.items), hasMore: lists.some(list => page * 30 < list.total) }
@@ -466,6 +473,7 @@ export interface AppNotification {
 export const getNotifications = (cursor?: string) => request<{ items: AppNotification[]; unreadCount: number; nextCursor: string | null }>(`/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, { background: true })
 export const readNotification = (id: string) => request(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' })
 export const readAllNotifications = () => request('/notifications/read-all', { method: 'PATCH' })
+export const deleteAllNotifications = () => request<{ deleted: number }>('/notifications', { method: 'DELETE' })
 
 
 export interface EventShareLink { url: string; code: string; expiresAt: string; responsibilityAcceptedAt: string }

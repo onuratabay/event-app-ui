@@ -258,7 +258,7 @@ export default function CreateEventScreen({
                   { icon: <ClockIcon size={16} />, text: data.durationMinutes ? formatDuration(data.durationMinutes) : "Süre" },
                   { icon: <LocationIcon size={16} />, text: data.location || "Konum" },
                   ...(data.level ? [{ icon: <StarIcon size={16} />, text: data.level }] : []),
-                  { icon: <UsersIcon size={16} />, text: data.maxParticipants ? `${data.minParticipants}-${data.maxParticipants} kişi` : `En az ${data.minParticipants} kişi · sınırsız` },
+                  { icon: <UsersIcon size={16} />, text: data.maxParticipants ? `${data.minParticipants}-${data.maxParticipants} kişi` : `En az ${data.minParticipants} kişi` },
                   { icon: <LockIcon size={16} />, text: data.privacy ? `${data.privacy}${invitedIds.length && isInviteOnly ? ` · ${invitedIds.length} davetli` : ""}` : "Gizlilik" }
                 ].map((item, index) => <Box key={index} style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>{item.icon}<Label style={{ flexShrink: 1 }}>{item.text}</Label></Box>)}
               </Box>
@@ -418,7 +418,7 @@ export default function CreateEventScreen({
           }, {
             label: "Maksimum",
             value: data.maxParticipants ?? 0,
-            display: data.maxParticipants ? `${data.maxParticipants} kişi` : "Sınırsız",
+            display: data.maxParticipants ? `${data.maxParticipants} kişi` : "",
             // The max card stays hidden while min is 2 (unlimited capacity).
             hidden: data.maxParticipants === null,
             canDecrease: data.maxParticipants !== null && data.maxParticipants > data.minParticipants + 1,
@@ -456,7 +456,7 @@ export default function CreateEventScreen({
                   </Box>
                 </Box>)}
               <Label style={[[ui.textXs, ui.textWhite40]]}>
-                {data.maxParticipants === null ? "Katılımcı sınırı yok. Maksimum belirlemek için minimumu 2'nin üzerine çıkar." : "Maksimum, minimumdan büyük olmalı."}
+                {data.maxParticipants === null ? "Etkinlik minimum katılımcı sayısına göre ilerler. Maksimum belirlemek için minimumu 2'nin üzerine çıkar." : "Maksimum, minimumdan büyük olmalı."}
               </Label>
 
               {/* Participants and the message to them share one step. */}

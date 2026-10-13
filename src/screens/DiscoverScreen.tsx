@@ -13,7 +13,7 @@ import HeaderIconButton from "../components/HeaderIconButton";
 import { HeartButton, RippleButton, SpringButton } from "../components/Expressive";
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
 import { CalendarIcon, SearchIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
-import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, isRoomReady, participantCount, useStore } from "../native/Store";
+import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, capacityTarget, isRoomReady, participantCount, useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
@@ -55,6 +55,10 @@ const SORT_OPTIONS: {
   value: "recommended",
   label: "Önerilen",
   sub: "Sana özel sıralama"
+}, {
+  value: "mine",
+  label: "Senin etkinliklerin",
+  sub: "Yalnızca oluşturduğun etkinlikler"
 }, {
   value: "time-asc",
   label: "En Yakın Zaman",
@@ -139,8 +143,11 @@ function EventCard({
   index: number;
 }) {
   const {
+    data: store,
     setData
   } = useStore();
+  // My own events say "Sen" instead of my name, so they stand out in the feed.
+  const mine = !!store.user.id && event.host.id === store.user.id;
   const saved = event.isSaved;
   // Optimistic: the heart flips at once and the request runs in the background (no loader, taps never blocked).
   const setSaved = (value: boolean) => {
@@ -156,7 +163,8 @@ function EventCard({
   const progress = event.currentParticipants / event.minParticipants;
   // Still gathering people only while below the minimum; status turns "started" later, at the start time.
   const isForming = !isRoomReady(event) && !['cancelled', 'closed'].includes(event.status || '');
-  const fillRate = event.maxParticipants ? event.currentParticipants / event.maxParticipants : 0;
+  // Without a maximum the minimum is the goal, so the energy reflects progress towards it.
+  const fillRate = Math.min(1, event.currentParticipants / Math.max(1, capacityTarget(event)));
   const excitement = event.isActive && fillRate >= .7 ? "high" : event.isActive || fillRate >= .45 ? "medium" : "low";
   const energy = excitement === "high"
     ? { label: "Yüksek enerji", color: "#b9c3ff", border: "rgba(105,120,255,.25)", background: "rgba(105,120,255,.17)" }
@@ -267,11 +275,13 @@ function EventCard({
             </Box>}
 
           <Box style={[[ui.mt3, ui.flex, ui.itemsCenter, ui.gap2, ui.pt3, ui.borderT, ui.borderWhite5]]}>
-            <Picture uri={event.host.avatar} accessibilityLabel={event.host.name} style={[[ui.w5, ui.h5, ui.roundedFull]]} />
-            <Label style={[[ui.textXs, ui.textWhite30]]}>
+            {mine ? <Box style={{ width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(105,120,255,.22)" }}>
+                <Label style={{ color: palette.accent, fontSize: 8, lineHeight: 10, fontFamily: "Outfit-SemiBold" }}>Sen</Label>
+              </Box> : <Picture uri={event.host.avatar} accessibilityLabel={event.host.name} style={[[ui.w5, ui.h5, ui.roundedFull]]} />}
+            {mine ? <Label style={[[ui.textXs], { color: palette.accent, fontFamily: "Outfit-SemiBold" }]}>Sen düzenliyorsun</Label> : <Label style={[[ui.textXs, ui.textWhite30]]}>
               <Label style={[[ui.textWhite45]]}>{event.host.name}</Label>{" "}
               düzenliyor
-            </Label>
+            </Label>}
           </Box>
         </Box>
       </RippleButton>
@@ -301,9 +311,12 @@ export default function DiscoverScreen({
   } = useStore();
   // Only the feed's own events; the shared list also holds joined/favourite events for Rooms.
   const feedIds = new Set(store.feedIds);
-  const EVENTS = store.events.filter(event => feedIds.has(event.id));
   const [activeFilter, setActiveFilter] = useState("Sana Özel");
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
+  // "Senin etkinliklerin": the user's own events, which come from their own list (the feed may leave them out).
+  const EVENTS = sortBy === "mine"
+    ? store.events.filter(event => !!store.user.id && event.host.id === store.user.id)
+    : store.events.filter(event => feedIds.has(event.id));
   // Distance sorts use where the user is right now; asked only when such a sort is chosen.
   const [deviceLocation, setDeviceLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const chooseSort = async (next: SortOption) => {
@@ -360,8 +373,8 @@ export default function DiscoverScreen({
           renderItem={({ item: event, index }) => <Box style={{ marginBottom: 16 }}><EventCard event={event} index={index} onPress={() => navigate("event-detail", {
             eventId: event.id
           })} onShare={() => setShareEvent(event)} /></Box>}
-          ListEmptyComponent={!store.feedLoaded ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 48 }} /> : <DiscoverEmptyState interests={store.user.interests} filterLabel={activeFilter !== "Sana Özel" && EVENTS.some(isOpenForFeed) ? activeFilter : undefined}
-            onClearFilter={() => setActiveFilter("Sana Özel")} onCreate={activity => navigate("create-event", activity ? { activity } : undefined)} />}
+          ListEmptyComponent={!store.feedLoaded ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 48 }} /> : <DiscoverEmptyState interests={store.user.interests} filterLabel={sortBy === "mine" ? "Senin etkinliklerin" : activeFilter !== "Sana Özel" && EVENTS.some(isOpenForFeed) ? activeFilter : undefined}
+            onClearFilter={() => { setActiveFilter("Sana Özel"); setSortBy("recommended"); }} onCreate={activity => navigate("create-event", activity ? { activity } : undefined)} />}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 20 }} /> : null}
           refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={() => { void pullToRefresh(); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={112} />}
           onEndReached={() => { void handleLoadMore(); }}

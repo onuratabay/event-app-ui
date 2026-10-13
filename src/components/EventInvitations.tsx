@@ -23,7 +23,7 @@ function InvitationCard({ event, busy, saving, onOpen, onRespond }: { event: Api
       <Label style={[[ui.textXs, ui.textWhite50], { textAlign: "left" }]}>{details}</Label>
     </Touch>
     {remaining !== null && <Label accessibilityLiveRegion="polite" style={[[ui.textXs, ui.fontMedium], { color: expired ? palette.error : palette.accent }]}>{expired ? "Bu davetin süresi doldu." : `Yanıt için ${remainingLabel(remaining)}`}</Label>}
-    <Label style={[[ui.textXs, ui.textWhite40]]}>{isUnlimitedCapacity(event.maxParticipants) ? "Kontenjan sınırı yok." : `Davet yer ayırmaz: kabul ettiğinde kontenjan uygunsa katılırsın (${spotsLeft} yer kaldı).`}</Label>
+    <Label style={[[ui.textXs, ui.textWhite40]]}>{isUnlimitedCapacity(event.maxParticipants) ? "Davet yer ayırmaz: kabul ettiğinde etkinliğe katılırsın." : `Davet yer ayırmaz: kabul ettiğinde kontenjan uygunsa katılırsın (${spotsLeft} yer kaldı).`}</Label>
     {event.viewerHasTimeConflict && <Label style={[[ui.textXs], { color: palette.error }]}>Aynı saatte katıldığın başka bir etkinlik var; bu daveti kabul edemezsin.</Label>}
     <Box style={{ flexDirection: "row", gap: 10 }}>
       <Touch disabled={busy || expired || !!event.viewerHasTimeConflict} onPress={() => onRespond(true)} style={[[ui.py3, ui.roundedXl, ui.textSm], { flex: 1, color: palette.text }]} gradient={["#4d5bcb", "#6651c9"]}>{saving ? "Kaydediliyor…" : "Kabul et"}</Touch>
@@ -33,7 +33,7 @@ function InvitationCard({ event, busy, saving, onOpen, onRespond }: { event: Api
 }
 
 // Pending invitations; accepting joins (after the server re-checks expiry, capacity and conflicts), declining marks the invite declined.
-export function EventInvitations({ navigate }: { navigate: NavigateFn }) {
+export function EventInvitations({ navigate, onCount }: { navigate: NavigateFn; onCount?: (count: number) => void }) {
   const { setData } = useStore()
   const [invitations, setInvitations] = useState<ApiEvent[]>([])
   const [busy, setBusy] = useState<string | null>(null)
@@ -52,6 +52,8 @@ export function EventInvitations({ navigate }: { navigate: NavigateFn }) {
     const sync = onSocket("sync:required", () => { void refresh() })
     return () => { active = false; invited(); reminder(); sync() }
   }, [reload])
+  // The screen enables "Tümünü sil" only while something is shown.
+  useEffect(() => { onCount?.(invitations.length) }, [invitations.length])
   const remember = (event: ApiEvent) => setData(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)] }))
   const respond = async (event: ApiEvent, accept: boolean) => {
     if (busy) return

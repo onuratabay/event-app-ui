@@ -172,6 +172,20 @@ module.exports = async function ({ mount, act, text, storage }) {
   assert.deepEqual(sent.body, { userIds: ["cand-1"] }, "Only the chosen candidate is invited")
   assert(text(detail.toJSON()).includes("1 kişiye davet gönderildi") && !text(detail.toJSON()).includes("Ece Aday"), "Invited candidates leave the list")
   await act(async () => detail.unmount())
+  // "Kişi ekle" only while seats remain: up to the max, or up to the min (organizer included) when no max was set.
+  const ownEvent = server.events.find(event => event.id === "own-event")
+  const hasInvite = async (confirmed, max) => {
+    Object.assign(ownEvent, { confirmedParticipantCount: confirmed, minParticipants: 2, maxParticipants: max })
+    const view = await mount("EventDetail", { eventId: "own-event" })
+    await wait(50)
+    const shown = view.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "Kişi ekle")
+    await act(async () => view.unmount())
+    return shown
+  }
+  assert.equal(await hasInvite(1, 100000), true, "Min 2, no max: the organizer can still invite one person")
+  assert.equal(await hasInvite(2, 100000), false, "Min 2, no max: once one person joins the organizer, Kişi ekle disappears")
+  assert.equal(await hasInvite(2, 4), true, "With a max, inviting continues past the minimum")
+  assert.equal(await hasInvite(4, 4), false, "Kişi ekle disappears when the max is reached")
   const guestView = await mount("EventDetail", { eventId: server.events[0].id })
   await wait(50)
   assert(!guestView.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "Kişi ekle"), "Only the organizer sees Kişi ekle")

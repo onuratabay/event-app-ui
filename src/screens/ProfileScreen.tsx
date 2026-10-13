@@ -5,10 +5,11 @@ import TopNavBar from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
-import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, type FriendRelationship } from "../api/client";
+import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, getProfileStats, type FriendRelationship } from "../api/client";
 import FriendActions from "../components/FriendActions";
 import ConnectionsSheet from "../components/ConnectionsSheet";
 import EventsSheet from "../components/EventsSheet";
+import EventArchive from "../components/EventArchive";
 import { onSocket } from "../services/socket";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
@@ -179,13 +180,15 @@ export default function ProfileScreen({
   }, [relationTarget, isOwn]);
   // "Katıldığı": ended events you joined. The count loads with the profile (one row); the list on tap.
   const [attendedCount, setAttendedCount] = useState<number | null>(null);
+  const [organizedCount, setOrganizedCount] = useState<number | null>(null);
   const [attended, setAttended] = useState<AppEvent[] | null>(null);
   const [attendedOpen, setAttendedOpen] = useState(false);
   const [attendedError, setAttendedError] = useState("");
   useEffect(() => {
     if (!isOwn || !store.user.id) return;
     let active = true;
-    getAttendedEvents(1).then(result => { if (active) setAttendedCount(result.total); }).catch(() => {});
+    // "Düzenlediği" = own events that started; "Katıldığı" = joined-and-ended + those organized ones.
+    getProfileStats().then(stats => { if (active) { setAttendedCount(stats.attended); setOrganizedCount(stats.organized); } }).catch(() => {});
     return () => { active = false; };
   }, [isOwn, store.user.id]);
   const openAttended = () => {
@@ -291,7 +294,7 @@ export default function ProfileScreen({
         </Box> : undefined}
       />
 
-      {attendedOpen ? <EventsSheet title="Katıldığım etkinlikler" events={attended} error={attendedError} emptyText="Henüz katılıp tamamladığın bir etkinlik yok."
+      {attendedOpen ? <EventsSheet title="Katıldığım etkinlikler" events={attended} error={attendedError} emptyText="Henüz katıldığın ya da düzenleyip başlattığın bir etkinlik yok."
         onClose={() => setAttendedOpen(false)} onOpen={eventId => navigate("event-detail", { eventId })} /> : null}
       {connectionsOpen && canSeeConnections && relationTarget ? <ConnectionsSheet userId={relationTarget} title={isOwn ? "Bağlantılarım" : `${user.name.split(" ")[0]} · Bağlantılar`} canRemove={isOwn}
         onClose={() => setConnectionsOpen(false)} onOpenProfile={id => navigate("profile", id === store.user.id ? {} : { userId: id })}
@@ -357,7 +360,7 @@ export default function ProfileScreen({
             value: relation?.friendCount ?? user.stats.connections,
             label: "Bağlantı"
           }, {
-            value: user.stats.organized,
+            value: organizedCount ?? user.stats.organized,
             label: "Düzenlediği"
           }].map((s, i) => {
               const card = <GlassCard key={i} style={[[ui.p4, ui.textCenter]]}>
@@ -470,9 +473,6 @@ export default function ProfileScreen({
                     <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite80]]}>
                       Referanslarım
                     </Label>
-                    <Label style={[[ui.textXs, ui.textWhite35]]}>
-                      Sadece sana görünür
-                    </Label>
                   </Box>
                 </Box>
                 <Label style={[[ui.textWhite30, ui.textSm, showReferences ? [ui.rotate180] : []]]}>
@@ -496,6 +496,9 @@ export default function ProfileScreen({
               </Box>}
             </GlassCard>
           </Box>}
+
+        {/* Archive: every event you created with its status; only on your own profile. */}
+        {isOwn && <Box style={[[ui.px5, ui.mb4]]}><EventArchive navigate={navigate} /></Box>}
 
         {/* Recent events */}
         <Box style={[[ui.px5, ui.mb4]]}>
