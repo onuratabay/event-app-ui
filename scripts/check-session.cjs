@@ -18,6 +18,65 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await act(waitForSplash)
   assert.equal(route, "discover")
   await act(async () => tree.unmount())
+  {
+    // Discover opens with its feed ready: the splash waits for a slow /events instead of opening an empty list.
+    let releaseFeed
+    const feedGate = new Promise(resolve => { releaseFeed = resolve })
+    global.fetch = async (url, options) => {
+      if (new URL(url).pathname === "/events") await feedGate
+      return oldFetch(url, options)
+    }
+    route = undefined
+    tree = await mount("Splash", { navigate: next => { route = next } })
+    await act(waitForSplash)
+    assert.equal(route, undefined, "The splash keeps waiting while the feed is still loading")
+    await act(async () => { releaseFeed(); await new Promise(resolve => setTimeout(resolve, 50)) })
+    assert.equal(route, "discover", "Discover opens once the feed has arrived")
+    await act(async () => tree.unmount())
+    // Discover itself shows a loader, not the empty state, until the first feed page arrives.
+    let releaseLate
+    const lateGate = new Promise(resolve => { releaseLate = resolve })
+    global.fetch = async (url, options) => {
+      if (new URL(url).pathname === "/events") await lateGate
+      return oldFetch(url, options)
+    }
+    tree = await mount("Discover")
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+    assert(!text(tree.toJSON()).includes("Sahne boş"), "No empty state while the feed is loading")
+    await act(async () => { releaseLate(); await new Promise(resolve => setTimeout(resolve, 50)) })
+    await act(async () => tree.unmount())
+    global.fetch = oldFetch
+  }
+  {
+    // Startup: only the event list matters. The personal lists may still be loading (no global loader)
+    // when Discover opens; the list comes without covers and the covers follow in the background.
+    const { apiLoading } = require("../src/api/loading.ts")
+    let pending = 0
+    const unsubscribe = apiLoading.subscribe(count => { pending = count })
+    let releaseMine
+    const mineGate = new Promise(resolve => { releaseMine = resolve })
+    global.fetch = async (url, options) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === "/events/mine") await mineGate
+      const response = await oldFetch(url, options)
+      if (parsed.pathname !== "/events" || parsed.searchParams.get("includePhotos") === "false") return response
+      const body = await response.json()
+      return { ...response, json: async () => ({ ...body, items: body.items.map(item => ({ ...item, coverPhoto: "data:image/png;base64,REALCOVER" })) }) }
+    }
+    route = undefined
+    tree = await mount("Splash", { navigate: next => { route = next } })
+    await act(waitForSplash)
+    assert.equal(route, "discover", "Discover opens without waiting for the personal lists")
+    assert.equal(pending, 0, "No global loader while the personal lists keep loading")
+    await act(async () => tree.unmount())
+    const home = await mount("Discover")
+    await act(() => new Promise(resolve => setTimeout(resolve, 80)))
+    assert(home.root.findAll(n => n.props.uri === "data:image/png;base64,REALCOVER").length > 0, "Covers replace the placeholders once they arrive")
+    await act(async () => { releaseMine(); await new Promise(resolve => setTimeout(resolve, 30)) })
+    await act(async () => home.unmount())
+    unsubscribe()
+    global.fetch = oldFetch
+  }
   for (const name of ["Login", "Welcome"]) {
     route = undefined
     tree = await mount(name, { navigate: next => { route = next } })

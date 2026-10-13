@@ -18,7 +18,8 @@ export default function HardwareBack() {
       if (guest?.guest || pathname.startsWith("/guest-")) return true
       if (PRE_APP_ROUTES.has(pathname)) return false
       if (router.canGoBack() && canReturnTo(previous)) return false
-      if (pathname === "/discover") return false
+      // Home closes the app, unless a blocked page (e.g. login) is still below it: that is cleared first.
+      if (pathname === "/discover" && !router.canGoBack()) return false
       if (router.canDismiss()) router.dismissAll()
       router.replace("/discover")
       return true

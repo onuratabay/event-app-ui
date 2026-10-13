@@ -3,7 +3,7 @@ import CityPicker from "../components/CityPicker";
 import { CalendarIcon, StarIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
 import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage } from "../api/client";
 import { ComingSoonCard } from "../components/Expressive";
@@ -87,11 +87,10 @@ const ABOUT_LIMIT = 280;
 const limitAbout = (text: string) => Array.from(text).slice(0, ABOUT_LIMIT).join("");
 const QUICK_EMOJIS = ["😄", "😎", "🤩", "🎾", "🏃", "🚴", "⛰️", "☕", "🍕", "🎶", "🎨", "📸", "🐶", "✈️", "❤️", "✨"];
 /** "About me" (stored as bio): a few fun facts other members read before meeting you. */
-function AboutMe({ bio, isOwn, onSave }: { bio: string; isOwn: boolean; onSave: (bio: string) => Promise<void> }) {
+function AboutMe({ bio, isOwn, name, onSave }: { bio: string; isOwn: boolean; name: string; onSave: (bio: string) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(bio);
   const [saving, setSaving] = useState(false);
-  if (!isOwn && !bio.trim()) return null;
   const save = async () => {
     if (saving) return;
     setSaving(true);
@@ -125,6 +124,8 @@ function AboutMe({ bio, isOwn, onSave }: { bio: string; isOwn: boolean; onSave: 
                 <Label style={[[ui.textSm, ui.textWhite75, ui.leadingRelaxed]]}>{bio}</Label>
               </Touch>
             : <Label style={[[ui.textSm, ui.textWhite75, ui.leadingRelaxed, ui.mt2]]}>{bio}</Label>
+          // Other members always see the section; an empty one says so instead of disappearing.
+          : !isOwn ? <Label style={[[ui.textSm, ui.textWhite40, ui.leadingRelaxed, ui.mt2]]}>{`${name.split(" ")[0] || "Bu üye"} henüz kendinden bahsetmemiş.`}</Label>
           : <Touch accessibilityLabel="Hakkımda yazısı ekle" onPress={() => { setDraft(""); setEditing(true); }} style={[[ui.mt3, ui.p4, ui.roundedXl, ui.border, ui.borderDashed, ui.borderWhite15], { alignItems: "flex-start" }]}>
             <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>Kendini birkaç eğlenceli cümleyle anlat</Label>
             <Label style={[[ui.textXs, ui.textWhite40, ui.mt1, ui.leadingRelaxed]]}>Etkinlikte seninle tanışacak kişiler önce bunu okur. İlk izlenimi sen belirle.</Label>
@@ -161,7 +162,6 @@ export default function ProfileScreen({
   const interests = new Set(user.interests);
   const [interestCatalog, setInterestCatalog] = useState<Array<{ id: string; name: string }> | null>(null);
   const [loadingInterests, setLoadingInterests] = useState(false);
-  const interestSavePending = useRef(false);
   const openInterests = async () => {
     if (loadingInterests) return;
     setLoadingInterests(true);
@@ -194,21 +194,31 @@ export default function ProfileScreen({
       setStore(p => ({ ...p, user: { ...p.user, [key]: value } }));
     } catch (error) { Alert.alert('Profil kaydedilemedi', getApiErrorMessage(error)); throw error; }
   };
-  const toggleInterest = async (interest: string) => {
-    if (interestSavePending.current) return;
-    interestSavePending.current = true;
+  // Interest taps only change a local draft; "Kaydet" sends the whole list once (the server adds and removes).
+  const [interestDraft, setInterestDraft] = useState<Set<string> | null>(null);
+  const [savingInterests, setSavingInterests] = useState(false);
+  const shownInterests = interestDraft ?? interests;
+  const interestsChanged = !!interestDraft && (interestDraft.size !== interests.size || [...interestDraft].some(name => !interests.has(name)));
+  const toggleInterest = (interest: string) => setInterestDraft(previous => {
+    const next = new Set(previous ?? interests);
+    if (next.has(interest)) next.delete(interest); else next.add(interest);
+    return next;
+  });
+  const cancelInterests = () => { setInterestDraft(null); setInterestCatalog(null); };
+  const saveInterests = async () => {
+    if (!interestDraft || savingInterests) return;
+    setSavingInterests(true);
     try {
       const catalog = interestCatalog || await getMapInterests();
-      const chosen = new Set(store.user.interests);
-      if (chosen.has(interest)) chosen.delete(interest); else chosen.add(interest);
-      const saved = await setUserInterests(catalog.filter(i => chosen.has(i.name)).map(i => i.id));
-      setStore(p => ({ ...p, user: { ...p.user, interests: saved.map(i => i.name) } }));
+      const saved = await setUserInterests(catalog.filter(item => interestDraft.has(item.name)).map(item => item.id));
+      setStore(p => ({ ...p, user: { ...p.user, interests: saved.map(item => item.name) } }));
+      cancelInterests();
     } catch (error) { Alert.alert('İlgi alanları kaydedilemedi', getApiErrorMessage(error)); }
-    finally { interestSavePending.current = false; }
+    finally { setSavingInterests(false); }
   };
   const myEvents = EVENTS.filter(e => e.host.id === user.id || e.participants.some(p => p.id === user.id));
   if (!isOwn && !otherUser) return <Box style={[[ui.flex1, ui.bg06060e]]}>
-    <TopNavBar navigate={navigate} fallback="discover" title="Profil" onBack={() => navigate("discover", { back: true })} />
+    <TopNavBar navigate={navigate} fallback="discover" title="Profil" />
     <Box style={{ padding: 24, paddingTop: 100 }}><Label>{profileError || "Profil yükleniyor…"}</Label></Box>
   </Box>;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
@@ -216,7 +226,7 @@ export default function ProfileScreen({
       <TopNavBar
         navigate={navigate}
         fallback="discover"
-        onBack={() => navigate("discover", { back: !!userId })}
+        onBack={() => navigate("discover", { back: true })}
         backLabel="Geri"
         title="Profil"
         right={isOwn ? <Box style={profileNavStyles.actions}>
@@ -337,7 +347,7 @@ export default function ProfileScreen({
         </Box>
 
         {/* About me (bio) */}
-        <AboutMe bio={user.bio || ""} isOwn={isOwn} onSave={bio => update("bio", bio)} />
+        <AboutMe bio={user.bio || ""} isOwn={isOwn} name={user.name} onSave={bio => update("bio", bio)} />
 
         {/* Interests */}
         <Box style={[[ui.px5, ui.mb4]]}>
@@ -346,11 +356,18 @@ export default function ProfileScreen({
               İlgi Alanları
             </Label>
             <Box style={[[ui.flex, ui.flexWrap, ui.gap2]]}>
-              {(isOwn && interestCatalog ? interestCatalog.map(item => item.name) : Array.from(interests)).map(interest => <InterestChip key={interest} label={interest} selected={interests.has(interest)} onPress={() => isOwn && toggleInterest(interest)} />)}
+              {(isOwn && interestCatalog ? interestCatalog.map(item => item.name) : Array.from(interests)).map(interest => <InterestChip key={interest} label={interest} selected={shownInterests.has(interest)} onPress={() => isOwn && toggleInterest(interest)} />)}
               {isOwn && !interestCatalog && <Touch accessibilityLabel="İlgi alanı ekle" disabled={loadingInterests} onPress={() => void openInterests()} style={[[ui.px3, ui.py2, ui.roundedXl, ui.textXs, ui.border, ui.borderDashed, ui.borderWhite15, ui.textWhite30]]}>
                   {loadingInterests ? "Yükleniyor…" : "+ Ekle"}
                 </Touch>}
             </Box>
+            {isOwn && interestsChanged && <Box style={[[ui.mt3]]}>
+                {!interestDraft?.size && <Label style={[[ui.textXs, ui.mb2], { color: palette.error }]}>En az bir ilgi alanı seç.</Label>}
+                <Box style={[[ui.flex, ui.gap2]]}>
+                  <Touch accessibilityLabel="İlgi alanlarını kaydet" onPress={() => void saveInterests()} disabled={savingInterests || !interestDraft?.size} style={[[ui.textXs, ui.px4, ui.py2, ui.roundedLg, ui.fontMedium], { backgroundColor: "#4d5bcb", color: palette.text }]}>{savingInterests ? "Kaydediliyor…" : "Kaydet"}</Touch>
+                  <Touch accessibilityLabel="İlgi alanı değişikliklerini geri al" onPress={cancelInterests} disabled={savingInterests} style={[[ui.textXs, ui.px4, ui.py2, ui.roundedLg, ui.textWhite40, ui.border, ui.borderWhite10]]}>Vazgeç</Touch>
+                </Box>
+              </Box>}
           </GlassCard>
         </Box>
 

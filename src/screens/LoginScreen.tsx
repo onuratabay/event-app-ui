@@ -13,7 +13,7 @@ import type { NavigateFn } from "../types"
 import { ui } from "../theme/styles"
 
 export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
-  const { refreshEvents, setData } = useStore()
+  const { refreshEvents, setData, whenReady } = useStore()
   const checkingSession = useSignedOutEntry(navigate)
   const entrance = useRef(new Animated.Value(1)).current
   useEffect(() => {
@@ -44,7 +44,9 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
       // Pending accounts go to their own page and never load the in-app feed.
       const target = gatedScreen((response.user as { status?: { enum: string } }).status?.enum)
       if (target) { navigate(target, { reset: true }); return }
+      // The button keeps its busy state while the feed loads (at most 4 s), so Discover opens filled.
       void refreshEvents().catch(() => {})
+      await whenReady(4000)
       navigate("discover", { reset: true })
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Bilgilerini kontrol edip tekrar dene."))

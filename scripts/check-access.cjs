@@ -29,7 +29,9 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
       : path === "/users/me/preferences" ? {}
       : path === "/legal/documents" ? { items: [{ type: "terms", version: 1, required: true }, { type: "privacy", version: 1, required: true }, { type: "marketing", version: 3, required: false }] }
       : path === "/users/me/profile" ? { ...user(current), ...JSON.parse(options.body || "{}") }
+      : /^\/users\/[^/]+\/profile$/.test(path) && global.__testOtherProfile ? global.__testOtherProfile
       : path === "/events/participating" && global.__testJoinedEvent ? { items: [global.__testJoinedEvent], total: 1 }
+      : path === "/events/rooms" ? (global.__testRooms || [])
       : path === "/events" && global.__testFeedEvents ? { items: global.__testFeedEvents, total: global.__testFeedEvents.length }
       : path === "/events" && new URL(url).searchParams.get("dateFrom") && global.__testDateEvents ? { items: global.__testDateEvents, total: global.__testDateEvents.length }
       : { items: [], total: 0 }
@@ -67,7 +69,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Back: allowed pages pop normally; sign-in pages and a finished creation flow are skipped for home.
   const backFrom = async (routes, opts = { back: true }) => {
-    global.__testRootState = { index: routes.length - 1, routes: routes.map(name => ({ name })) }
+    global.__testRootState = { index: 0, routes: [{ name: "__root", state: { index: routes.length - 1, routes: routes.map(name => ({ name })) } }] }
     global.__testNavigations = []
     await act(async () => { probe = create(React.createElement(Probe)) })
     go("discover", opts)
@@ -75,7 +77,14 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     return global.__testNavigations
   }
   assert.deepEqual(await backFrom(["discover", "event-detail"]), ["back"], "Back returns to a normal previous page")
-  assert.deepEqual(await backFrom(["create-event", "event-detail"]), ["dismissAll", "/discover"], "Back never returns to the event-creation flow")
+  // Reported: Rooms → room → participant profile; back must return to the room, not home.
+  assert.deepEqual(await backFrom(["discover", "rooms", "event-room", "profile"]), ["back"], "Back from a member profile returns to the room it was opened from")
+  {
+    const { previousRouteIn } = require("../src/native/navigation.ts")
+    assert.equal(previousRouteIn({ index: 0, routes: [{ name: "__root", state: { index: 2, routes: [{ name: "rooms" }, { name: "event-room" }, { name: "profile" }] } }] }), "event-room", "The previous page is read from the stack nested under __root")
+    assert.equal(previousRouteIn({ index: 0, routes: [{ name: "__root", state: { index: 0, routes: [{ name: "discover" }] } }] }), null, "A single page has no previous page")
+  }
+  assert.deepEqual(await backFrom(["create-event", "profile"]), ["back"], "An unfinished creation flow is a normal previous page")
   assert.deepEqual(await backFrom(["login", "discover", "search"].slice(0, 2).concat("search")), ["back"])
   assert.deepEqual(await backFrom(["login", "search"]), ["dismissAll", "/discover"], "Back never returns to login")
   assert.deepEqual(await backFrom(["search"]), ["/discover"], "With nowhere to go, back lands on home")
@@ -85,13 +94,22 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   go("event-detail", { eventId: "new", aboveHome: true })
   assert.deepEqual(global.__testNavigations, ["dismissAll", "/discover", "/event-detail"], "Created event detail sits directly above home")
   await act(async () => probe.unmount())
+  // Tabs go on top of history too, so back from any of them returns to the previous page.
+  for (const tab of ["rooms", "profile", "search", "map", "create-event", "discover"]) {
+    global.__testNavigations = []; global.__testMethods = []
+    await act(async () => { probe = create(React.createElement(Probe)) })
+    go(tab)
+    assert.deepEqual(global.__testMethods, ["push"], `Opening ${tab} keeps the previous page in history`)
+    await act(async () => probe.unmount())
+  }
+  global.__testMethods = undefined
 
   // Android back follows the same rules and goes home instead of closing the app.
   if (require("react-native").Platform.OS === "android") {
     const HardwareBack = require("../src/components/HardwareBack.tsx").default
     const press = async (pathname, routes) => {
       global.__testPathname = pathname
-      global.__testRootState = { index: routes.length - 1, routes: routes.map(name => ({ name })) }
+      global.__testRootState = { index: 0, routes: [{ name: "__root", state: { index: routes.length - 1, routes: routes.map(name => ({ name })) } }] }
       global.__testNavigations = []
       let tree
       await act(async () => { tree = create(React.createElement(HardwareBack)) })
@@ -100,7 +118,9 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
       return { handled, navigations: global.__testNavigations }
     }
     assert.deepEqual(await press("/search", ["search"]), { handled: true, navigations: ["dismissAll", "/discover"] }, "Nowhere to go: Android back opens home")
-    assert.deepEqual(await press("/event-detail", ["create-event", "event-detail"]), { handled: true, navigations: ["dismissAll", "/discover"] }, "Android back skips the creation flow")
+    assert.deepEqual(await press("/event-detail", ["discover", "event-detail"]), { handled: false, navigations: [] }, "After creating, Android back from the new event goes home (only home is below it)")
+    assert.deepEqual(await press("/profile", ["create-event", "profile"]), { handled: false, navigations: [] }, "Android back returns to an unfinished creation flow")
+    assert.deepEqual(await press("/discover", ["login", "discover"]), { handled: true, navigations: ["dismissAll", "/discover"] }, "Android back never returns to login")
     assert.deepEqual(await press("/event-detail", ["discover", "event-detail"]), { handled: false, navigations: [] }, "Normal pages pop natively")
     assert.equal((await press("/discover", ["discover"])).handled, false, "Home itself lets Android close the app")
     global.__testPathname = undefined
@@ -212,6 +232,23 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   assert(bodies.some(row => row.path === "/users/me/profile" && row.body.city === "Bursa"), "Choosing a city saves it to the profile")
   const nameField = ownProfile.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Düzenle")
   assert.equal([].concat(nameField.props.style).reduce((value, part) => part?.justifyContent ?? value, undefined), "flex-start", "The name starts at the same left edge as the city")
+  // Interests: taps only change a draft; one "Kaydet" sends the whole list in a single request.
+  {
+    const before = bodies.filter(row => row.path === "/users/me/interests").length
+    await act(async () => ownProfile.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "İlgi alanı ekle").props.onPress())
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)))
+    await tap(ownProfile, "Padel")
+    assert.equal(bodies.filter(row => row.path === "/users/me/interests").length, before, "Choosing an interest does not call the server")
+    assert(ownProfile.root.findAllByType("Pressable").some(n => n.props.accessibilityLabel === "İlgi alanlarını kaydet"), "A save button appears after a change")
+    await tap(ownProfile, "Padel")
+    assert(!ownProfile.root.findAllByType("Pressable").some(n => n.props.accessibilityLabel === "İlgi alanlarını kaydet"), "Undoing the change hides the save button")
+    await tap(ownProfile, "Padel")
+    await act(async () => ownProfile.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "İlgi alanlarını kaydet").props.onPress())
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)))
+    const sent = bodies.filter(row => row.path === "/users/me/interests")
+    assert.equal(sent.length, before + 1, "Saving sends exactly one request")
+    assert.deepEqual(sent.at(-1).body, { interestIds: ["padel"] }, "The whole chosen list is sent")
+  }
   // Instagram: an empty handle invites adding one; the saved handle is sent without "@".
   assert(text(ownProfile.toJSON()).includes("@ kullanıcı adını ekle"), "Empty Instagram handle shows an add prompt")
   await act(async () => ownProfile.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Instagram kullanıcı adı ekle").props.onPress())
@@ -268,6 +305,24 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   assert(text(cards.toJSON()).replace(/\s+/g, " ").includes("3 kişi daha"), "A card below its minimum shows how many are missing")
   await act(async () => cards.unmount())
+  // Empty feed: an inviting state with ideas that open the create flow, never a bare "Yenile".
+  global.__testFeedEvents = []
+  let createdWith
+  const empty = await mount("Discover", { navigate: (route, opts) => { createdWith = { route, opts } } })
+  await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+  assert(text(empty.toJSON()).includes("Sahne boş, ilk hamle senden!") && !/Yenile$/m.test(text(empty.toJSON())), "Empty feed shows the inviting empty state")
+  await act(async () => empty.root.findAll(n => n.props.accessibilityLabel === "Kahve etkinliği oluştur" && typeof n.props.onPress === "function")[0].props.onPress())
+  assert.deepEqual(createdWith, { route: "create-event", opts: { activity: "Kahve" } }, "An idea opens the create flow with that activity")
+  await act(async () => empty.unmount())
+  // A filter that hides every open event offers to clear it.
+  global.__testFeedEvents = [feedEvent("later", "Film", "Sinema", 1, 4)]
+  const filtered = await mount("Discover")
+  await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+  await act(async () => filtered.root.findAll(n => typeof n.props.onPress === "function" && text(n).trim() === "Bugün")[0].props.onPress())
+  assert(text(filtered.toJSON()).replace(/\s+/g, " ").includes("“ Bugün ” şimdilik sessiz"), "Empty filter names the filter")
+  await act(async () => filtered.root.findAll(n => typeof n.props.onPress === "function" && text(n).trim() === "Tüm etkinlikleri göster")[0].props.onPress())
+  assert(text(filtered.toJSON()).includes("Sinema"), "Clearing the filter shows the feed again")
+  await act(async () => filtered.unmount())
   global.__testFeedEvents = undefined
 
   // Profile: references are fetched on the first visit only and then kept current by socket events.
@@ -316,6 +371,22 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     await act(async () => dateField("Bitiş").props.onChangeText("2030-11-30"))
     await act(() => new Promise(resolve => setTimeout(resolve, 50)))
     assert(urls.some(url => decodeURIComponent(url).includes("dateTo=30/11/2030")), "A valid end date narrows the range")
+    // Interest filter, below the dates: works alone (upcoming events from today) and together with dates.
+    await act(async () => search.root.findAll(n => n.props.accessibilityLabel === "Tarih filtresini temizle" && typeof n.props.onPress === "function")[0].props.onPress())
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)))
+    urls.length = 0
+    const chip = () => search.root.findAll(n => typeof n.props.onPress === "function" && text(n).trim() === "Padel")[0]
+    assert(chip(), "Interests are offered as chips")
+    await act(async () => chip().props.onPress())
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+    const sent = urls.map(url => new URL(url)).find(url => url.pathname === "/events" && url.searchParams.get("interestId"))
+    assert(sent && sent.searchParams.getAll("interestId").join() === "padel" && sent.searchParams.get("dateFrom") === iso(new Date()).split("-").reverse().join("/"), "Picking an interest searches upcoming events in it")
+    assert(text(search.toJSON()).includes("Moda Sahili"), "Interest results are listed")
+    await act(async () => dateField("Başlangıç").props.onChangeText("2030-11-01"))
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+    assert(urls.some(url => { const u = new URL(url); return u.searchParams.get("interestId") === "padel" && u.searchParams.get("dateFrom") === "01/11/2030" }), "Dates and interests combine in one request")
+    await act(async () => search.root.findAll(n => n.props.accessibilityLabel === "İlgi alanı filtresini temizle" && typeof n.props.onPress === "function")[0].props.onPress())
+    assert(!search.root.findAll(n => n.props.accessibilityLabel === "İlgi alanı filtresini temizle").length, "The interest filter can be cleared")
     await act(async () => search.unmount())
     global.__testDateEvents = undefined
   }
@@ -349,6 +420,251 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     global.fetch = previousFetch
   }
 
+  // Another member's profile always shows "Benimle Tanışmadan Önce Bil", filled or empty.
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const other = { id: "other-user", firstName: "Ece", lastName: "Kaya", city: "İzmir", bio: "Hafta sonu tırmanışçısı 🧗", instagramUsername: null, rank: 4, profilePhoto: null, interests: [{ id: "padel", name: "Padel" }] }
+    for (const [bio, expected] of [[other.bio, "Hafta sonu tırmanışçısı 🧗"], ["", "Ece henüz kendinden bahsetmemiş."]]) {
+      global.__testOtherProfile = { ...other, bio }
+      const theirs = await mount("Profile", { userId: "other-user" })
+      await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+      assert(text(theirs.toJSON()).includes("Benimle Tanışmadan Önce Bil"), "The section is visible on another member's profile")
+      assert(text(theirs.toJSON()).includes(expected), `Another member's profile shows: ${expected}`)
+      assert(!theirs.root.findAllByType("Pressable").some(n => /Hakkımda yazısı/.test(String(n.props.accessibilityLabel))), "Nobody else can edit it")
+      await act(async () => theirs.unmount())
+    }
+    global.__testOtherProfile = undefined
+  }
+
+  // Opening a room starts messages, seen-by and activity together; none waits for another.
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const previousFetch = global.fetch
+    const started = []
+    let releaseMessages
+    const messagesGate = new Promise(resolve => { releaseMessages = resolve })
+    global.fetch = async (url, options = {}) => {
+      const path = new URL(url).pathname
+      if (/\/events\/room-x\/(messages|messages\/reads|activity)$/.test(path)) {
+        started.push(path.split("/room-x/")[1])
+        if (path.endsWith("/messages")) await messagesGate
+        const body = path.endsWith("/messages") ? { items: [], nextCursor: null } : path.endsWith("/reads") ? { items: [] } : { waitlist: [], checkins: [] }
+        return { ok: true, status: 200, json: async () => body }
+      }
+      if (path === "/events/room-x") return { ok: true, status: 200, json: async () => ({ ...cardBase, id: "room-x", interest: { id: "film", slug: "film", name: "Film" }, locationName: "Sinema", confirmedParticipantCount: 2, minParticipants: 2, viewerParticipationStatus: "confirmed" }) }
+      return previousFetch(url, options)
+    }
+    const room = await mount("EventRoom", { eventId: "room-x" })
+    await act(() => new Promise(resolve => setTimeout(resolve, 30)))
+    assert.deepEqual([...started].sort(), ["activity", "messages", "messages/reads"], "All three room requests start together while messages are still loading")
+    releaseMessages()
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)))
+    await act(async () => room.unmount())
+    global.fetch = previousFetch
+  }
+
+  // Rooms open with the latest 20 messages; scrolling to the top fetches the previous 20.
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const previousFetch = global.fetch
+    const messageUrls = []
+    const page = (from, count) => Array.from({ length: count }, (_, i) => ({ id: `m${from + i}`, text: `mesaj ${from + i}`, createdAt: new Date(Date.UTC(2030, 0, 1, 0, from + i)).toISOString(), user: { id: "u", firstName: "Ece", lastName: "K" } }))
+    global.fetch = async (url, options = {}) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === "/events/room-p/messages") {
+        messageUrls.push(parsed.search)
+        const older = parsed.searchParams.get("cursor")
+        return { ok: true, status: 200, json: async () => older ? { items: page(0, 20), nextCursor: null } : { items: page(20, 20), nextCursor: "c1" } }
+      }
+      if (/^\/events\/room-p\/(messages\/reads|activity)$/.test(parsed.pathname)) return { ok: true, status: 200, json: async () => parsed.pathname.endsWith("reads") ? { items: [] } : { waitlist: [], checkins: [] } }
+      if (parsed.pathname === "/events/room-p") return { ok: true, status: 200, json: async () => ({ ...cardBase, id: "room-p", interest: { id: "film", slug: "film", name: "Film" }, locationName: "Sinema", confirmedParticipantCount: 2, minParticipants: 2, viewerParticipationStatus: "confirmed" }) }
+      return previousFetch(url, options)
+    }
+    let room = await mount("EventRoom", { eventId: "room-p" })
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+    assert.deepEqual(messageUrls, ["?limit=20"], "A room opens with the latest 20 messages")
+    const scroller = room.root.findAll(n => typeof n.props.onScrollBeginDrag === "function")[0]
+    const atTop = { nativeEvent: { contentOffset: { y: 0 }, contentSize: { height: 2000 }, layoutMeasurement: { height: 700 } } }
+    await act(async () => scroller.props.onScroll(atTop))
+    assert.equal(messageUrls.length, 1, "The automatic scroll to the newest message does not page backwards")
+    await act(async () => { scroller.props.onScrollBeginDrag(); scroller.props.onScroll(atTop) })
+    await act(() => new Promise(resolve => setTimeout(resolve, 30)))
+    assert.deepEqual(messageUrls, ["?limit=20", "?cursor=c1&limit=20"], "Scrolling to the top fetches the previous 20")
+    assert(text(room.toJSON()).includes("mesaj 0") && text(room.toJSON()).includes("mesaj 39"), "Both pages are shown")
+    {
+      // 40 messages a minute apart all have different times, so each keeps its own time.
+      const times = room.root.findAllByType("Text").filter(n => /^\d{2}:\d{2}$/.test([].concat(n.props.children).join("")))
+      assert.equal(times.length, 40, "Messages sent at different times are not merged under one time")
+    }
+    await act(async () => room.unmount())
+    global.__scrollToEndCalls = 0
+    room = await mount("EventRoom", { eventId: "room-p" })
+    await act(() => new Promise(resolve => setTimeout(resolve, 150)))
+    assert((global.__scrollToEndCalls || 0) >= 1, "Opening a room scrolls to the newest message by itself")
+    // The newest message stays visible while content keeps growing, until the user scrolls up.
+    {
+      const list = room.root.findAll(n => typeof n.props.onContentSizeChange === "function")[0]
+      global.__scrollToEndCalls = 0
+      await act(async () => { list.props.onContentSizeChange(); list.props.onContentSizeChange(); list.props.onLayout() })
+      await act(() => new Promise(resolve => setTimeout(resolve, 20)))
+      assert.equal(global.__scrollToEndCalls, 3, "Every growth of the conversation keeps the last message in view")
+      assert.equal(list.props.maintainVisibleContentPosition, undefined, "Position holding is off while showing the newest message")
+      await act(async () => { list.props.onScrollBeginDrag(); list.props.onScroll({ nativeEvent: { contentOffset: { y: 300 }, contentSize: { height: 2000 }, layoutMeasurement: { height: 700 } } }) })
+      global.__scrollToEndCalls = 0
+      await act(async () => list.props.onContentSizeChange())
+      await act(() => new Promise(resolve => setTimeout(resolve, 20)))
+      assert.equal(global.__scrollToEndCalls, 0, "After the user scrolls up, new content does not pull the list down")
+    }
+    await act(async () => room.unmount())
+    global.fetch = previousFetch
+  }
+
+  // Chat: no global loader, and a sent message shows at once while delivery runs in the background.
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const { apiLoading } = require("../src/api/loading.ts")
+    let busy = 0
+    const unsubscribe = apiLoading.subscribe(count => { busy = Math.max(busy, count) })
+    const previousFetch = global.fetch
+    let releaseSend, failNext = false
+    let sendGate = new Promise(resolve => { releaseSend = resolve })
+    const sentTexts = []
+    global.fetch = async (url, options = {}) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === "/events/room-s/messages" && options.method === "POST") {
+        const { text: body } = JSON.parse(options.body); sentTexts.push(body)
+        await sendGate
+        if (failNext) { failNext = false; return { ok: false, status: 500, text: async () => "fail" } }
+        return { ok: true, status: 200, json: async () => ({ id: `srv-${sentTexts.length}`, text: body, createdAt: new Date().toISOString(), user: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" } }) }
+      }
+      if (parsed.pathname === "/events/room-s/messages") return { ok: true, status: 200, json: async () => ({ items: [], nextCursor: null }) }
+      if (/^\/events\/room-s\/(messages\/reads|messages\/read|activity)$/.test(parsed.pathname)) return { ok: true, status: 200, json: async () => parsed.pathname.endsWith("activity") ? { waitlist: [], checkins: [] } : { items: [] } }
+      if (parsed.pathname === "/events/room-s") return { ok: true, status: 200, json: async () => ({ ...cardBase, id: "room-s", interest: { id: "film", slug: "film", name: "Film" }, locationName: "Sinema", confirmedParticipantCount: 2, minParticipants: 2, viewerParticipationStatus: "confirmed" }) }
+      return previousFetch(url, options)
+    }
+    // Messages go over the socket when it is connected; the fake socket answers like the server.
+    const fakeSocket = require("./mock-socket.cjs")
+    fakeSocket.setAction(async (name, payload) => {
+      if (name !== "chat:message") return {}
+      sentTexts.push(payload.text)
+      await sendGate
+      if (failNext) { failNext = false; throw new Error("send failed") }
+      return { id: `srv-${sentTexts.length}`, text: payload.text, createdAt: new Date().toISOString(), user: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" } }
+    })
+    const room = await mount("EventRoom", { eventId: "room-s" })
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+    busy = 0
+    const input = () => room.root.findAllByType("TextInput").find(n => n.props.placeholder === "Bir mesaj yaz...")
+    await act(async () => input().props.onChangeText("Merhaba oda"))
+    await act(async () => room.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Mesaj gönder").props.onPress())
+    assert(text(room.toJSON()).includes("Merhaba oda") && text(room.toJSON()).includes("Gönderiliyor"), "The message appears at once, marked as sending")
+    assert.equal(input().props.value, "", "The input clears without waiting for the server")
+    releaseSend(); await act(() => new Promise(resolve => setTimeout(resolve, 30)))
+    assert(!text(room.toJSON()).includes("Gönderiliyor") && text(room.toJSON()).includes("Merhaba oda"), "After delivery the server copy replaces it")
+    sendGate = new Promise(resolve => { releaseSend = resolve }); failNext = true
+    await act(async () => input().props.onChangeText("Kayıp mesaj"))
+    await act(async () => room.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Mesaj gönder").props.onPress())
+    releaseSend(); await act(() => new Promise(resolve => setTimeout(resolve, 30)))
+    assert(text(room.toJSON()).includes("Gönderilemedi"), "A failed send stays visible with a retry option")
+    await act(async () => room.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Mesajı tekrar gönder").props.onPress())
+    await act(() => new Promise(resolve => setTimeout(resolve, 30)))
+    assert(!text(room.toJSON()).includes("Gönderilemedi") && text(room.toJSON()).includes("Kayıp mesaj"), "Retry delivers the message")
+    assert.deepEqual(sentTexts, ["Merhaba oda", "Kayıp mesaj", "Kayıp mesaj"])
+    assert.equal(busy, 0, "Chat requests never show the global loading overlay")
+    await act(async () => room.unmount())
+    unsubscribe()
+    fakeSocket.setAction(async () => ({}))
+    global.fetch = previousFetch
+  }
+
+  // Name/photo once per same-sender run; times merge only within the same minute.
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const previousFetch = global.fetch
+    const at = minute => new Date(Date.UTC(2030, 0, 1, 7, minute)).toISOString()
+    const msg = (id, who, minute) => ({ id, text: `t-${id}`, createdAt: new Date(Date.parse(at(minute)) + ["a2"].includes(id) * 20000).toISOString(), user: { id: who, firstName: who, lastName: "X" } })
+    global.fetch = async (url, options = {}) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === "/events/room-g/messages") return { ok: true, status: 200, json: async () => ({ items: [msg("a1", "ali", 0), msg("a2", "ali", 0), msg("a3", "ali", 1), msg("b1", "banu", 1)], nextCursor: null }) }
+      if (/^\/events\/room-g\/(messages\/reads|messages\/read|activity)$/.test(parsed.pathname)) return { ok: true, status: 200, json: async () => parsed.pathname.endsWith("activity") ? { waitlist: [], checkins: [] } : { items: [] } }
+      if (parsed.pathname === "/events/room-g") return { ok: true, status: 200, json: async () => ({ ...cardBase, id: "room-g", interest: { id: "film", slug: "film", name: "Film" }, locationName: "Sinema", confirmedParticipantCount: 2, minParticipants: 2, viewerParticipationStatus: "confirmed" }) }
+      return previousFetch(url, options)
+    }
+    const room = await mount("EventRoom", { eventId: "room-g" })
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+    const times = room.root.findAllByType("Text").map(n => [].concat(n.props.children).join("")).filter(value => /^\d{2}:\d{2}$/.test(value))
+    assert.equal(times.length, 3, "a1+a2 (same minute) share one time; a3 (next minute) and banu's message each get their own")
+    assert.equal(room.root.findAllByType("Text").filter(n => ["ali", "banu"].includes([].concat(n.props.children).join(""))).length, 2, "A run of the same sender shows the name once, whatever the minutes")
+    await act(async () => room.unmount())
+    global.fetch = previousFetch
+  }
+
+  // A just-sent message sorts last even though the server writes "+03:00" times and the device "Z".
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const previousFetch = global.fetch
+    const pad = n => String(n).padStart(2, "0")
+    const plus3 = date => { const t = new Date(date.getTime() + 3 * 3600000); return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}T${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}:${pad(t.getUTCSeconds())}.000+03:00` }
+    const earlier = plus3(new Date(Date.now() - 10 * 60000))
+    let release
+    const gate = new Promise(resolve => { release = resolve })
+    const fakeSocket = require("./mock-socket.cjs")
+    fakeSocket.setAction(async (name, payload) => name !== "chat:message" ? {} : (await gate, { id: "srv-new", text: payload.text, createdAt: plus3(new Date()), user: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" } }))
+    global.fetch = async (url, options = {}) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === "/events/room-o/messages") return { ok: true, status: 200, json: async () => ({ items: [{ id: "old", text: "Eski mesaj", createdAt: earlier, user: { id: "other", firstName: "Ece", lastName: "K" } }], nextCursor: null }) }
+      if (/^\/events\/room-o\/(messages\/reads|messages\/read|activity)$/.test(parsed.pathname)) return { ok: true, status: 200, json: async () => parsed.pathname.endsWith("activity") ? { waitlist: [], checkins: [] } : { items: [] } }
+      if (parsed.pathname === "/events/room-o") return { ok: true, status: 200, json: async () => ({ ...cardBase, id: "room-o", interest: { id: "film", slug: "film", name: "Film" }, locationName: "Sinema", confirmedParticipantCount: 2, minParticipants: 2, viewerParticipationStatus: "confirmed" }) }
+      return previousFetch(url, options)
+    }
+    const room = await mount("EventRoom", { eventId: "room-o" })
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+    await act(async () => room.root.findAllByType("TextInput").find(n => n.props.placeholder === "Bir mesaj yaz...").props.onChangeText("Yeni mesaj"))
+    await act(async () => room.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Mesaj gönder").props.onPress())
+    const order = () => { const all = text(room.toJSON()); return all.indexOf("Eski mesaj") < all.indexOf("Yeni mesaj") }
+    assert(order(), "While sending, the new message sits below the older one")
+    release(); await act(() => new Promise(resolve => setTimeout(resolve, 30)))
+    assert(order(), "After delivery the new message stays at the bottom")
+    await act(async () => room.unmount())
+    fakeSocket.setAction(async () => ({}))
+    global.fetch = previousFetch
+  }
+
+  // Room participants: sorted by name, active/passive from presence, tap opens the profile.
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const previousFetch = global.fetch
+    const fakeSocket = require("./mock-socket.cjs")
+    fakeSocket.setAction(async name => name === "event:presence" ? ["ali"] : {})
+    global.fetch = async (url, options = {}) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === "/events/room-u/messages") return { ok: true, status: 200, json: async () => ({ items: [], nextCursor: null }) }
+      if (/^\/events\/room-u\/(messages\/reads|messages\/read|activity)$/.test(parsed.pathname)) return { ok: true, status: 200, json: async () => parsed.pathname.endsWith("activity") ? { waitlist: [], checkins: [] } : { items: [] } }
+      if (parsed.pathname === "/events/room-u") return { ok: true, status: 200, json: async () => ({ ...cardBase, id: "room-u", owner: { id: "host", firstName: "Ev", lastName: "Sahibi" }, interest: { id: "film", slug: "film", name: "Film" }, locationName: "Sinema", confirmedParticipantCount: 3, minParticipants: 2, viewerParticipationStatus: "confirmed", participants: [{ id: "zeynep", firstName: "Zeynep", lastName: "Aydın" }, { id: "ali", firstName: "Ali", lastName: "Kaya" }, { id: "host", firstName: "Ev", lastName: "Sahibi" }] }) }
+      return previousFetch(url, options)
+    }
+    let opened
+    const room = await mount("EventRoom", { eventId: "room-u", navigate: (route, opts) => { opened = { route, opts } } })
+    await act(() => new Promise(resolve => setTimeout(resolve, 400)))
+    assert(!room.root.findAllByType("Modal").length, "The room sheet starts closed")
+    await act(async () => room.root.findAllByType("Pressable").find(n => String(n.props.accessibilityLabel).startsWith("Film · ")).props.onPress())
+    assert(room.root.findAllByType("Modal").length > 0 && text(room.toJSON()).replace(/\s+/g, " ").includes("Katılımcılar · 3"), "Tapping the room name opens the sheet with participants")
+    const rows = () => room.root.findAllByType("Pressable").filter(n => / profilini aç$/.test(String(n.props.accessibilityLabel)))
+    assert.deepEqual(rows().map(n => n.props.accessibilityLabel), ["Ali Kaya profilini aç", "Ev Sahibi profilini aç", "Zeynep Aydın profilini aç"], "Participants are sorted by name")
+    const status = name => text(rows().find(n => n.props.accessibilityLabel.startsWith(name))).includes("Aktif") ? "Aktif" : "Pasif"
+    assert.equal(status("Ali"), "Aktif", "Someone in the room shows as active")
+    assert.equal(status("Zeynep"), "Pasif", "Someone not in the room shows as passive")
+    const socket = fakeSocket.instances.at(-1)
+    await act(async () => socket.receive("chat:user_joined", { eventId: "room-u", userId: "zeynep" }))
+    assert.equal(status("Zeynep"), "Aktif", "Joining the room turns a member active live")
+    await act(async () => rows().find(n => n.props.accessibilityLabel.startsWith("Ali")).props.onPress())
+    assert.deepEqual(opened, { route: "profile", opts: { userId: "ali" } }, "Tapping a participant opens their profile")
+    assert(!room.root.findAllByType("Modal").length, "The sheet closes when a profile opens")
+    await act(async () => room.unmount())
+    fakeSocket.setAction(async () => ({}))
+    global.fetch = previousFetch
+  }
+
   // Rooms reloads only the user's own, joined and favourite events (on open and on pull).
   storage.set("event-app:access-token", "a"); current = "approved"
   const roomsTree = await mount("Rooms")
@@ -356,8 +672,28 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   calls.length = 0
   await act(async () => { roomsTree.root.findAll(n => n.props.refreshControl)[0].props.refreshControl.props.onRefresh() })
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
-  assert.deepEqual([...calls].sort(), ["/events/favorites", "/events/mine", "/events/participating"], "Rooms refresh loads only the personal event lists")
+  assert.deepEqual(calls, ["/events/rooms"], "Rooms refresh is a single light request")
   await act(async () => roomsTree.unmount())
+
+  // A room only known from /events/rooms is listed; a summary never wipes details already loaded.
+  {
+    const { mergeRoomSummaries, mapApiEvent } = require("../src/native/Store.tsx")
+    const room = { id: "room-only", ownerId: "host", interest: { id: "film", name: "Film" }, date: "22/10/2030", startTime: "20:30", locationName: "Sinema", status: "started", minParticipants: 2, maxParticipants: 8, confirmedParticipantCount: 3, participants: [{ id: "pending-user", firstName: "Bekleyen", lastName: "Üye" }], lastMessageAt: "2030-10-20T10:00:00.000Z", unreadCount: 2 }
+    global.__testRooms = [room]
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const onlyRooms = await mount("Rooms")
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)))
+    assert(text(onlyRooms.toJSON()).includes("Film · 22/10/2030"), "A room from /events/rooms appears in the list")
+    assert(onlyRooms.root.findAll(n => n.props.accessibilityLabel === "2 okunmamış mesaj").length > 0, "Its unread count comes from the summary")
+    await act(async () => onlyRooms.unmount())
+    global.__testRooms = undefined
+    const full = { ...mapApiEvent({ id: "room-only", owner: { id: "host", firstName: "Ev", lastName: "Sahibi" }, interest: { id: "film", slug: "film", name: "Film" }, level: null, date: "22/10/2030", startTime: "20:30", durationMinutes: 90, locationName: "Sinema", latitude: 41, longitude: 29, minParticipants: 2, maxParticipants: 8, coverPhoto: "https://example.com/cover.jpg", description: "Uzun açıklama", requirements: null, confirmedParticipantCount: 2, participants: [], isFavorite: true, status: { enum: "waiting_participants", name: "" }, viewerParticipationStatus: "confirmed" }) }
+    const [merged] = mergeRoomSummaries([full], [room])
+    assert.equal(merged.description, "Uzun açıklama", "A room summary keeps the loaded description")
+    assert.equal(merged.coverImage, "https://example.com/cover.jpg", "A room summary keeps the loaded cover")
+    assert.equal(merged.currentParticipants, 3, "A room summary updates the participant count")
+    assert.equal(merged.status, "started", "A room summary updates the status")
+  }
 
   // Pulling the home feed down reloads it from the server.
   storage.set("event-app:access-token", "a"); current = "approved"
@@ -365,10 +701,13 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   const pull = () => home.root.findAll(n => n.props.refreshControl)[0].props.refreshControl
   assert(pull(), "Home feed supports pull-to-refresh")
-  calls.length = 0
+  calls.length = 0; urls.length = 0
   await act(async () => { pull().props.onRefresh() })
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
-  assert.deepEqual(calls, ["/events"], "Discover pull-to-refresh reloads only the feed")
+  assert.deepEqual(calls, ["/events", "/events"], "Discover pull-to-refresh reloads only the feed")
+  const feedUrls = urls.map(url => new URL(url)).filter(url => url.pathname === "/events")
+  assert.equal(feedUrls[0].searchParams.get("includePhotos"), "false", "The list comes first, without the heavy covers")
+  assert.equal(feedUrls[1].searchParams.get("includePhotos"), null, "Covers follow in a second request")
   assert.equal(pull().props.refreshing, false, "Spinner stops once the reload finishes")
   // Distance sorts ask for the device location; without permission the order is unchanged.
   // Innermost pressable showing the text (the sheet backdrop also contains every option's text).

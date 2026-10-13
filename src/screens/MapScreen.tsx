@@ -212,7 +212,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
         </Svg>
       </View>}
     </View>
-    <TopNavBar navigate={navigate} fallback="discover" onBack={() => navigate("discover")} title="Harita" subtitle={`${visible.length} etkinlik görünümde`} floating />
+    <TopNavBar navigate={navigate} fallback="discover" title="Harita" subtitle={`${visible.length} etkinlik görünümde`} floating />
     <Box pointerEvents="box-none" style={[s.top, { paddingTop: 66 }]}>
       <Scroll horizontal style={s.filters}>
         <FilterChip solid label="Sana göre" selected={filterOpen || !!filters.place || !!filters.timeFrom || !!filters.interestIds.length || filters.datePreset !== "all"} onPress={() => { interacted.current = true; setFilterOpen(true) }} />

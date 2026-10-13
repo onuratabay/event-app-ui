@@ -56,6 +56,7 @@ module.exports = function () {
     else if (path.endsWith('/messages/read')) result = { eventId: path.split('/')[2], unreadCount: 0 }
     else if (path.endsWith('/messages')) { if (body) messages.push({ id: String(messages.length), text: body.text, user, createdAt: new Date().toISOString() }); result = body ? messages.at(-1) : { items: [...messages] } }
     else if (path === '/events/mine/suggestions') { if (body) suggestions.splice(suggestions.indexOf(body.text), 1); result = { items: [...suggestions] } }
+    else if (path === '/events/rooms') result = []
     else if (path === '/events' && body) { const event = { ...events[0], ...body, id: 'created-on-server', owner: user }; events.unshift(event); result = event }
     else if (path === '/events' || ['/events/mine','/events/participating','/events/favorites'].includes(path)) result = { items: [...events], total: events.length }
     else if (path.startsWith('/events/')) {

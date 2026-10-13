@@ -4,7 +4,7 @@ import { Alert, Platform } from "react-native";
 import * as Location from "expo-location";
 import { canCreateEvent, createEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions } from "../api/client";
 import { mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Avatar, AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
 import { CameraIcon, CheckIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, SearchIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
@@ -90,8 +90,9 @@ const REQUIREMENTS_SUGGESTIONS: {
   default: ["Rahat kıyafet yeterli."]
 };
 export default function CreateEventScreen({
-  navigate
-}: Props) {
+  navigate,
+  initialActivity
+}: Props & { initialActivity?: string }) {
   const {
     data: store,
     setData: setStore
@@ -150,6 +151,14 @@ export default function CreateEventScreen({
     setData(p => ({ ...p, activity, level: p.activity === activity ? p.level : "" }));
     setTimeout(() => setStep(hasLevels ? 1 : 2), 180);
   };
+  // Opened from an idea on an empty Discover: the activity is picked as soon as the catalog loads.
+  const appliedInitial = useRef(false);
+  useEffect(() => {
+    if (appliedInitial.current || !initialActivity || !activities.length) return;
+    appliedInitial.current = true;
+    const match = activities.find(a => a.name.toLocaleLowerCase("tr") === initialActivity.toLocaleLowerCase("tr"));
+    if (match) chooseActivity(match.name);
+  }, [activities, initialActivity]);
   const findPlace = async () => {
     if (findingPlace || !data.location.trim()) return;
     setFindingPlace(true);
@@ -187,7 +196,7 @@ export default function CreateEventScreen({
   };
   const next = () => setStep(s => s + 1);
   const back = () => {
-    if (step === 2 && !levels.length) setStep(0);else if (step > 0) setStep(s => s - 1);else navigate("discover");
+    if (step === 2 && !levels.length) setStep(0);else if (step > 0) setStep(s => s - 1);else navigate("discover", { back: true });
   };
   const selectAndNext = (key: string, value: string) => {
     setData(prev => ({

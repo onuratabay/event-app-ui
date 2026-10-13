@@ -1,5 +1,5 @@
 import { useOptionalGuest } from "../guest/GuestSession";
-import { usePathname } from "expo-router"
+import { useGlobalSearchParams, usePathname } from "expo-router"
 import { useNavigate } from "../native/navigation"
 import type { Screen } from "../types"
 import BottomNav, { useKeyboardVisible } from "./BottomNav"
@@ -9,6 +9,7 @@ const HIDDEN_ROUTES = new Set(["/", "/welcome", "/login", "/forgot-password", "/
 
 export default function AppBottomNav() {
   const pathname = usePathname()
+  const { userId } = useGlobalSearchParams<{ userId?: string }>()
   const navigate = useNavigate()
   const keyboardVisible = useKeyboardVisible()
   const guest = useOptionalGuest()
@@ -16,7 +17,8 @@ export default function AppBottomNav() {
   const active = pathname.slice(1) as Screen
   return <BottomNav active={active} navigate={(screen, opts) => {
     // Re-opening create-event from its own tab would reset the unfinished draft.
-    if (screen === active && screen === "create-event") return
+    // The open tab is not pushed again (own profile still opens from another member's profile).
+    if (screen === active && (screen !== "profile" || !userId)) return
     navigate(screen, opts)
   }} />
 }

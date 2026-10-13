@@ -17,6 +17,8 @@ export default function TopNavBar({
   right,
   floating = true,
   backLabel,
+  onTitlePress,
+  titleHint,
 }: {
   navigate: NavigateFn
   fallback: Screen
@@ -26,6 +28,8 @@ export default function TopNavBar({
   right?: ReactNode
   floating?: boolean
   backLabel?: string
+  onTitlePress?: () => void
+  titleHint?: string
 }) {
   return (
     <Box pointerEvents="box-none" style={[s.frame, floating && s.floatingFrame]}>
@@ -39,10 +43,17 @@ export default function TopNavBar({
           <ArrowLeftIcon size={backLabel ? 17 : 21} strokeWidth={1.75} style={s.icon} />
           {backLabel ? <Label style={s.backLabel}>{backLabel}</Label> : null}
         </Touch>
-        <Box style={s.copy}>
-          <Label style={s.title} numberOfLines={1}>{title}</Label>
-          {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
-        </Box>
+        {onTitlePress ? (
+          <Touch accessibilityLabel={title} accessibilityHint={titleHint} onPress={onTitlePress} style={s.copy}>
+            <Label style={s.title} numberOfLines={1}>{title}</Label>
+            {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
+          </Touch>
+        ) : (
+          <Box style={s.copy}>
+            <Label style={s.title} numberOfLines={1}>{title}</Label>
+            {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
+          </Box>
+        )}
         <Box style={s.right}>{right}</Box>
       </Box>
     </Box>
@@ -102,7 +113,7 @@ const s = StyleSheet.create({
     lineHeight: 16,
   },
   icon: { color: palette.text },
-  copy: { flex: 1, minWidth: 0, paddingHorizontal: 12 },
+  copy: { flex: 1, minWidth: 0, paddingHorizontal: 12, justifyContent: "center" },
   title: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15, lineHeight: 20 },
   subtitle: { color: "rgba(226,232,240,.62)", fontFamily: "Outfit", fontSize: 11, lineHeight: 15 },
   right: { minWidth: 44, alignItems: "flex-end", justifyContent: "center" },

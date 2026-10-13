@@ -19,6 +19,7 @@ import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
 import * as Location from "expo-location";
 import { isOpenForFeed, sortFeed, type SortOption } from "../discover/sort";
+import DiscoverEmptyState from "../components/DiscoverEmptyState";
 interface Props {
   navigate: NavigateFn;
 }
@@ -359,7 +360,8 @@ export default function DiscoverScreen({
           renderItem={({ item: event, index }) => <Box style={{ marginBottom: 16 }}><EventCard event={event} index={index} onPress={() => navigate("event-detail", {
             eventId: event.id
           })} onShare={() => setShareEvent(event)} /></Box>}
-          ListEmptyComponent={<Box style={{ padding: 20, gap: 12 }}><Label>Henüz gösterilecek etkinlik yok.</Label><Touch onPress={() => { void refreshFeed().catch(() => {}); }}><Label>Yenile</Label></Touch></Box>}
+          ListEmptyComponent={!store.feedLoaded ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 48 }} /> : <DiscoverEmptyState interests={store.user.interests} filterLabel={activeFilter !== "Sana Özel" && EVENTS.some(isOpenForFeed) ? activeFilter : undefined}
+            onClearFilter={() => setActiveFilter("Sana Özel")} onCreate={activity => navigate("create-event", activity ? { activity } : undefined)} />}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 20 }} /> : null}
           refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={() => { void pullToRefresh(); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={112} />}
           onEndReached={() => { void handleLoadMore(); }}

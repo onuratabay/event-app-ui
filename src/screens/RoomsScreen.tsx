@@ -23,13 +23,14 @@ export default function RoomsScreen({
   navigate
 }: Props) {
   const {
-    data: store, loadMoreEvents, moreEvents, refreshMyEvents
+    data: store, refreshRooms
   } = useStore();
-  // Own, joined and favourite events refresh when Rooms opens and on pull-to-refresh.
+  // The list is built from cached events: /events/rooms runs once per session (and on pull-to-refresh);
+  // socket events add new rooms, open them, and update last messages and unread counts.
   const [refreshing, setRefreshing] = useState(false);
   const reloadMine = async (pulled = false) => {
     if (pulled) setRefreshing(true);
-    try { await refreshMyEvents(); } catch { /* The store shows a retryable error notice. */ }
+    try { await refreshRooms(pulled); } catch { /* The store shows a retryable error notice. */ }
     finally { if (pulled) setRefreshing(false); }
   };
   useEffect(() => { void reloadMine(); }, []);
@@ -39,7 +40,7 @@ export default function RoomsScreen({
   const formingEvents = EVENTS.filter(e => !['closed', 'cancelled'].includes(e.status || '') && !isRoomReady(e) && isEventMember(e, store.user.id));
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground />
-      <TopNavBar navigate={navigate} fallback="discover" onBack={() => navigate("discover")} title="Etkinliklerim" subtitle="Katıldığın ve düzenlediğin etkinlikler" />
+      <TopNavBar navigate={navigate} fallback="discover" title="Etkinliklerim" subtitle="Katıldığın ve düzenlediğin etkinlikler" />
 
       <Scroll style={[[ui.relative, ui.hFull, ui.pb28], { paddingTop: 80 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void reloadMine(true); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={80} />}>
 
@@ -155,7 +156,6 @@ export default function RoomsScreen({
                 <Polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </Vector>} title="Etkinlik Sonrası Puanlama" subtitle="Birlikte geçirdiğin anları değerlendir, güveni birlikte inşa et." />
         </Box>
-        {moreEvents && <Touch onPress={() => void loadMoreEvents()} style={{ padding: 16 }}><Label>Daha fazla etkinlik yükle</Label></Touch>}
       </Scroll>
 
     </Box>;

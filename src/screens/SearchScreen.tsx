@@ -7,9 +7,9 @@ import { AtmoBackground } from "../components/GlassUI";
 import { ClockIcon, SearchIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, mapApiEvent, useStore } from "../native/Store";
-import { getApiErrorMessage, searchEventsByDate } from "../api/client";
+import { getApiErrorMessage, getMapInterests, searchEvents } from "../api/client";
 import { apiDate, localDate } from "../map/filters";
-import { GlassInput } from "../components/GlassUI";
+import { FilterChip, GlassInput } from "../components/GlassUI";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
@@ -59,6 +59,13 @@ export default function SearchScreen({
   const [dateError, setDateError] = useState("");
   const [dateResults, setDateResults] = useState<AppEvent[] | null>(null);
   const [loadingDates, setLoadingDates] = useState(false);
+  // Interest filter: several can be picked; the user's own interests are listed first.
+  const [interests, setInterests] = useState<Array<{ id: string; name: string }>>([]);
+  const [interestIds, setInterestIds] = useState<string[]>([]);
+  useEffect(() => { getMapInterests().then(rows => setInterests(rows.map(({ id, name }) => ({ id, name })))).catch(() => {}); }, []);
+  const mine = new Set(store.user.interests);
+  const interestOptions = [...interests].sort((a, b) => Number(mine.has(b.name)) - Number(mine.has(a.name)));
+  const toggleInterest = (id: string) => setInterestIds(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
   const chooseFrom = (value: string) => {
     if (value < today) { setDateError("Başlangıç tarihi bugünden önce olamaz."); return; }
     setDateError(""); setDateFrom(value);
@@ -70,12 +77,14 @@ export default function SearchScreen({
   };
   const clearDates = () => { setDateFrom(""); setDateTo(""); setDateError(""); };
   const dateActive = Boolean(dateFrom || dateTo);
-  // With a date range the server is asked (all events, not only the loaded ones).
+  const interestActive = interestIds.length > 0;
+  const filterActive = dateActive || interestActive;
+  // With a date range or interests the server is asked (all upcoming events, not only the loaded ones).
   useEffect(() => {
-    if (!dateActive) { setDateResults(null); return; }
+    if (!filterActive) { setDateResults(null); return; }
     let active = true;
     setLoadingDates(true);
-    searchEventsByDate(apiDate(dateFrom || today), dateTo ? apiDate(dateTo) : undefined).then(result => {
+    searchEvents(apiDate(dateFrom || today), dateTo ? apiDate(dateTo) : undefined, interestIds).then(result => {
       if (!active) return;
       const found = result.items.map(mapApiEvent);
       // Keep them in the shared list so the detail screen can open them (not added to the Discover feed).
@@ -84,9 +93,9 @@ export default function SearchScreen({
     }).catch(error => { if (active) setDateError(getApiErrorMessage(error, "Etkinlikler aranamadı.")); })
       .finally(() => { if (active) setLoadingDates(false); });
     return () => { active = false; };
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, interestIds.join(",")]);
   const EVENTS = dateResults ?? store.events;
-  const searching = Boolean(query.trim()) || dateActive;
+  const searching = Boolean(query.trim()) || filterActive;
   // No autofocus: the keyboard opens only when the user taps the search box.
   const inputRef = useRef<TextInput>(null);
   const filtered = !searching ? [] : !query.trim() ? EVENTS : EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase()) || e.category.toLowerCase().includes(query.toLowerCase()) || e.location.toLowerCase().includes(query.toLowerCase()));
@@ -121,6 +130,17 @@ export default function SearchScreen({
         {dateActive && <Touch accessibilityLabel="Tarih filtresini temizle" onPress={clearDates} style={[[ui.textXs, ui.textWhite40, ui.mt15], { alignSelf: "flex-start", minHeight: 32, textAlign: "left" }]}>Tarih filtresini temizle</Touch>}
       </Box>
 
+      {/* Interests */}
+      {interestOptions.length > 0 && <Box style={[[ui.pb3, ui.flexShrink0]]}>
+        <Box style={[[ui.flex, ui.itemsCenter, ui.px5, ui.mb2], { justifyContent: "space-between" }]}>
+          <Label style={[[ui.textXs, ui.textWhite40, ui.uppercase, ui.trackingWider]]}>İlgi alanı</Label>
+          {interestActive && <Touch accessibilityLabel="İlgi alanı filtresini temizle" onPress={() => setInterestIds([])} style={[[ui.textXs, ui.textWhite40], { minHeight: 28, justifyContent: "center" }]}>Temizle</Touch>}
+        </Box>
+        <Scroll horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
+          {interestOptions.map(interest => <FilterChip key={interest.id} label={interest.name} selected={interestIds.includes(interest.id)} onPress={() => toggleInterest(interest.id)} />)}
+        </Scroll>
+      </Box>}
+
       <Scroll style={[[ui.flex1, ui.px5, ui.pb10], { paddingBottom: 40 + navInset }]}>
         {/* No query — hint */}
         {!searching && <Box style={[[ui.textCenter, ui.py10]]} enter>
@@ -128,7 +148,7 @@ export default function SearchScreen({
               Etkinlik, aktivite veya konum ara
             </Label>
             <Label style={[[ui.textXs, ui.textWhite15, ui.mt1]]}>
-              Ya da yukarıdan bir tarih aralığı seç
+              Ya da yukarıdan bir tarih aralığı veya ilgi alanı seç
             </Label>
           </Box>}
 
@@ -147,10 +167,10 @@ export default function SearchScreen({
               </Box> : <Box>
                 <Box style={[[ui.textCenter, ui.py10]]}>
                   <Label style={[[ui.textSm, ui.textWhite25]]}>
-                    {query.trim() ? `"${query}" için sonuç bulunamadı` : "Bu tarih aralığında etkinlik yok"}
+                    {query.trim() ? `"${query}" için sonuç bulunamadı` : interestActive && !dateActive ? "Bu ilgi alanında yaklaşan etkinlik yok" : interestActive ? "Bu tarih ve ilgi alanında etkinlik yok" : "Bu tarih aralığında etkinlik yok"}
                   </Label>
                   <Label style={[[ui.textXs, ui.textWhite15, ui.mt1]]}>
-                    {query.trim() ? "Farklı bir kelime dene" : "Farklı tarihler seç"}
+                    {query.trim() ? "Farklı bir kelime dene" : interestActive ? "Başka bir ilgi alanı ya da tarih seç" : "Farklı tarihler seç"}
                   </Label>
                 </Box>
               </Box>}

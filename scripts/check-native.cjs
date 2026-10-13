@@ -7,6 +7,8 @@ const ts = require("typescript")
 const React = require("react")
 const { create, act } = require("react-test-renderer")
 global.IS_REACT_ACT_ENVIRONMENT = true
+// React Native provides requestAnimationFrame; Node does not.
+global.requestAnimationFrame = callback => setTimeout(() => callback(Date.now()), 0)
 global.__DEV__ = true
 // Swapping the fake server stands in for a different backend, so the app's in-memory
 // session cache (catalogs, settings) must not leak between suites.
@@ -53,7 +55,7 @@ class Value {
 const anim = () => ({ start() {}, stop() {} })
 const storage = new Map()
 Module._load = function (id, parent, isMain) {
-  if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]), usePathname: () => global.__testPathname || "/discover", useLocalSearchParams: () => global.__testParams || {}, useRootNavigationState: () => global.__testRootState, useRouter: () => ({ navigate: href => global.__testNavigations?.push(href.pathname ?? href), replace: href => global.__testNavigations?.push(href.pathname ?? href), push: href => global.__testNavigations?.push(href.pathname ?? href), back: () => global.__testNavigations?.push("back"), canGoBack: () => !!global.__testRootState && global.__testRootState.index > 0, canDismiss: () => true, dismissAll: () => global.__testNavigations?.push("dismissAll") }) }
+  if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]), usePathname: () => global.__testPathname || "/discover", useLocalSearchParams: () => global.__testParams || {}, useGlobalSearchParams: () => global.__testParams || {}, useRootNavigationState: () => global.__testRootState, useRouter: () => ({ navigate: href => { global.__testMethods?.push("navigate"); global.__testNavigations?.push(href.pathname ?? href) }, replace: href => { global.__testMethods?.push("replace"); global.__testNavigations?.push(href.pathname ?? href) }, push: href => { global.__testMethods?.push("push"); global.__testNavigations?.push(href.pathname ?? href) }, back: () => global.__testNavigations?.push("back"), canGoBack: () => { let state = global.__testRootState; while (state?.routes?.[state.index ?? 0]?.state) state = state.routes[state.index ?? 0].state; return (state?.index ?? 0) > 0 }, canDismiss: () => true, dismissAll: () => global.__testNavigations?.push("dismissAll") }) }
   if (id === "socket.io-client") return require("./mock-socket.cjs")
   if (id === "expo-notifications") { global.__expoNotificationsLoaded = true; return {} }
   if (id === "expo-location") return {
@@ -173,7 +175,7 @@ async function mount(name, props = {}) {
         null,
         React.createElement(Screen, { navigate: () => {}, ...props }),
       ),
-      { createNodeMock: () => ({ scrollToEnd() {}, scrollTo() {}, focus() {} }) },
+      { createNodeMock: () => ({ scrollToEnd() { global.__scrollToEndCalls = (global.__scrollToEndCalls || 0) + 1 }, scrollTo() {}, focus() {} }) },
     )
   })
   audit(tree.toJSON())
@@ -415,10 +417,52 @@ async function tap(tree, label) {
   assert(rooms.root.findAll(n => n.props.accessibilityLabel === "4 okunmamış mesaj").length > 0, "Own messages are never unread")
   assert(text(rooms.toJSON()).includes("Sohbetler") && text(rooms.toJSON()).includes(`${EVENTS[0].category} · 01/10/2030`), "Open room is named after the activity and date")
   await act(async () => rooms.unmount())
+  {
+    // The room list comes from cached events: /events/rooms runs once per session (or on pull-to-refresh),
+    // and a room joined elsewhere arrives over the socket with one /events/:id fetch.
+    const RoomsScreen = require("../src/screens/RoomsScreen.tsx").default
+    const roomsCalls = () => server.requests.filter(r => r.path === "/events/rooms").length
+    const view = show => React.createElement(StoreProvider, null, show ? React.createElement(RoomsScreen, { navigate: () => {} }) : null)
+    const settle = () => act(async () => { await new Promise(r => setTimeout(r, 50)) })
+    const before = roomsCalls()
+    let session
+    await act(async () => { session = create(view(true)) })
+    await settle()
+    assert.equal(roomsCalls(), before + 1, "Rooms load once when first opened")
+    await act(async () => session.update(view(false)))
+    await act(async () => session.update(view(true)))
+    await settle()
+    assert.equal(roomsCalls(), before + 1, "Reopening Rooms reuses the cached list")
+    await act(async () => session.root.findAll(n => n.props.refreshControl)[0].props.refreshControl.props.onRefresh())
+    await settle()
+    assert.equal(roomsCalls(), before + 2, "Pull-to-refresh reloads the rooms")
+    server.events.push({ ...server.events[0], id: "socket-room", interest: { id: "kahve", slug: "kahve", name: "Kahve Sohbeti" }, confirmedParticipantCount: 2, participants: [server.user], viewerParticipationStatus: "confirmed", unreadCount: 0 })
+    const socket = require("./mock-socket.cjs").instances.at(-1)
+    await act(async () => socket.receive("event:participant_joined", { eventId: "socket-room", userId: server.user.id }))
+    await settle()
+    assert(server.requests.some(r => r.path === "/events/socket-room" && r.method === "GET"), "A room joined elsewhere is fetched by id")
+    assert(text(session.toJSON()).includes("Kahve Sohbeti · 01/10/2030"), "The new room appears without /events/rooms")
+    await act(async () => socket.receive("event:participant_joined", { eventId: "socket-room", userId: server.user.id }))
+    await settle()
+    assert.equal(server.requests.filter(r => r.path === "/events/socket-room").length, 1, "A cached room is not fetched again")
+    assert.equal(roomsCalls(), before + 2, "Socket membership updates never call /events/rooms")
+    await act(async () => session.unmount())
+    server.events.pop()
+  }
   server.events[0].unreadCount = 0
   const room = await mount("EventRoom", { eventId: EVENTS[0].id })
   await act(async () => { await new Promise(r=>setTimeout(r,50)) })
   assert(server.requests.some(r => r.path === `/events/${EVENTS[0].id}/messages/read` && r.method === "POST"), "Opening a room marks it as read")
+  {
+    const press = async label => { const node = room.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === "function")[0]; assert(node, `Missing button: ${label}`); await act(async () => node.props.onPress({ stopPropagation() {} })) }
+    assert(!text(room.toJSON()).includes("Odayı sessize al"), "Room settings start closed")
+    assert(!room.root.findAll(n => ["Katılımcıları göster", "Oda bilgisini aç"].includes(n.props.accessibilityLabel)).length, "The header has no separate participants/⋯ buttons")
+    await press(`${EVENTS[0].category} · 01/10/2030`)
+    const sheet = text(room.toJSON())
+    assert(room.root.findAllByType("Modal").length > 0 && sheet.includes("Odayı sessize al") && sheet.includes("Katılımcılar ·") && /Aktif|Pasif/.test(sheet), "Tapping the room name opens info, participants and settings in one sheet")
+    await press("Oda bilgisini kapat")
+    assert(!text(room.toJSON()).includes("Odayı sessize al"), "Room settings sheet closes")
+  }
   await act(async () => room.unmount())
   storage.delete("event-app:access-token")
   server.events[0].confirmedParticipantCount = 1
@@ -520,6 +564,10 @@ async function tap(tree, label) {
   assert(!text(levelless.toJSON()).includes("Hangi seviyede"), "Interests without levels skip the level step")
   assert(text(levelless.toJSON()).includes("Ne zaman"), "Level-less interest goes straight to date and time")
   await act(async () => levelless.unmount())
+  const preselected = await mount("CreateEvent", { initialActivity: "kahve" })
+  await act(async () => { await new Promise(r=>setTimeout(r,250)) })
+  assert(text(preselected.toJSON()).includes("Ne zaman"), "An activity passed from Discover is picked automatically")
+  await act(async () => preselected.unmount())
   server.state.createBlocked = true
   const blockedCreate = await mount("CreateEvent")
   await act(async () => { await new Promise(r=>setTimeout(r,20)) })

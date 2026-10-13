@@ -222,14 +222,19 @@ export async function logout() {
   await removal
 }
 
-export async function getEvents(page = 1, limit = 20) {
-  return request<EventListResponse>(`/events?page=${page}&limit=${limit}`)
+/**
+ * Discover feed page. `photos: false` skips the base64 covers (the server reads them one by one),
+ * so the list arrives fast and the covers follow in a second, background request.
+ */
+export async function getEvents(page = 1, limit = 20, options: { photos?: boolean; background?: boolean } = {}) {
+  return request<EventListResponse>(`/events?page=${page}&limit=${limit}${options.photos === false ? "&includePhotos=false" : ""}`, { background: options.background })
 }
 
-/** Events between two dates (dd/mm/yyyy, inclusive) from the server, for search. */
-export function searchEventsByDate(dateFrom: string, dateTo?: string) {
+/** Events from the server for search: between two dates (dd/mm/yyyy, inclusive), optionally in some interests. */
+export function searchEvents(dateFrom: string, dateTo?: string, interestIds: string[] = []) {
   const params = new URLSearchParams({ page: "1", limit: "100", dateFrom })
   if (dateTo) params.set("dateTo", dateTo)
+  for (const id of interestIds) params.append("interestId", id)
   return request<EventListResponse>(`/events?${params.toString()}`)
 }
 
@@ -328,17 +333,18 @@ export const getUserProfile = (userId: string) => request<ApiUser & { interests:
 export interface NotificationPreferences { invites?: boolean; messages?: boolean; reminders?: boolean }
 export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; notifications?: NotificationPreferences; mutedRooms?: { ids: string[] } }
 // Startup asks for the account from several places at once; they share one request.
-export const getCurrentUser = () => shared('user:me', () => request<ApiUser>('/auth/me', { method: 'POST' }))
+// Background: startup never shows the global loader for account data; only the event feed matters there.
+export const getCurrentUser = () => shared('user:me', () => request<ApiUser>('/auth/me', { method: 'POST', background: true }))
 // profile_incomplete → approved once at least one interest is saved (photo optional).
 export const completeProfile = () => request<ApiUser>('/users/me/profile/complete', { method: 'POST' }).finally(() => clearSessionCache('user'))
-export const getUserInterests = () => request<Array<{ id: string; name: string }>>('/users/me/interests')
+export const getUserInterests = () => request<Array<{ id: string; name: string }>>('/users/me/interests', { background: true })
 export const setUserInterests = (interestIds: string[]) => request<Array<{ id: string; name: string }>>('/users/me/interests', { method: 'PUT', body: JSON.stringify({ interestIds }) })
 export const updateProfile = (value: Partial<ApiUser>) => request<ApiUser>('/users/me/profile', { method: 'PATCH', body: JSON.stringify(value) })
 // The server bumps the token version, so every session (this one too) must sign in again afterwards.
 export const changePassword = (oldPassword: string, newPassword: string) => request<{ message: string }>('/users/me/password', { method: 'PATCH', body: JSON.stringify({ oldPassword, newPassword, language: 'tr' }) })
 export const deleteAccount = (password: string) => request<{ message: string }>('/users/me', { method: 'DELETE', body: JSON.stringify({ password, language: 'tr' }) })
 export const setProfilePhoto = (photo: string) => request('/users/me/photo', { method: photo ? 'PUT' : 'DELETE', ...(photo ? { body: JSON.stringify({ photo }) } : {}) })
-export const getPreferences = () => shared('user:preferences', () => request<Preferences>('/users/me/preferences'))
+export const getPreferences = () => shared('user:preferences', () => request<Preferences>('/users/me/preferences', { background: true }))
 let preferenceWrites = Promise.resolve<unknown>(undefined)
 export function putPreference<K extends keyof Preferences>(key: K, value: NonNullable<Preferences[K]>) {
   const version = sessionVersion
@@ -349,7 +355,7 @@ export function putPreference<K extends keyof Preferences>(key: K, value: NonNul
   preferenceWrites = write
   return write
 }
-export const getEvent = (id: string) => request<ApiEvent>(`/events/${id}`)
+export const getEvent = (id: string, options: { background?: boolean } = {}) => request<ApiEvent>(`/events/${id}`, options)
 export const favoriteEvent = (id: string, saved: boolean) => request(`/events/${id}/favorite`, { method: saved ? 'PUT' : 'DELETE', background: true })
 // Favourite taps run in the background, one after another per event, so the server ends on the last tap.
 const favoriteQueue = new Map<string, Promise<unknown>>()
@@ -375,16 +381,19 @@ export const getInvitations = () => request<EventListResponse>('/events/invitati
 export const getEnums = (group: string) => cached(`enums:${group}`, 6 * HOURS, () => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`))
 export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value) })
 export interface ApiMessage { kind?: 'message' | 'announcement'; id: string; text: string; createdAt: string; editedAt?: string | null; deleted?: boolean; user: { id: string; firstName: string; lastName: string } }
-export const editMessage = (eventId: string, messageId: string, text: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ text }) })
-export const deleteMessage = (eventId: string, messageId: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'DELETE' })
+// Room requests run in the background: the chat screen never shows the global loading overlay.
+export const editMessage = (eventId: string, messageId: string, text: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ text }), background: true })
+export const deleteMessage = (eventId: string, messageId: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'DELETE', background: true })
 // When each other member last read the room ("görüldü").
-export const getMessageReads = (eventId: string) => request<{ items: Array<{ userId: string; readAt: string }> }>(`/events/${eventId}/messages/reads`)
+export const getMessageReads = (eventId: string) => request<{ items: Array<{ userId: string; readAt: string }> }>(`/events/${eventId}/messages/reads`, { background: true })
 export const reportUser = (userId: string, description: string) => request<{ message: string }>(`/reports/users/${userId}`, { method: 'POST', body: JSON.stringify({ description, language: 'tr' }) })
-export const getMessages = (id: string, signal?: AbortSignal, cursor?: string) => request<{ items: ApiMessage[]; nextCursor?: string | null }>(`/events/${id}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}&limit=30` : '?limit=30'}`, { signal })
-export const markRoomRead = (id: string) => request<{ eventId: string; unreadCount: number }>(`/events/${id}/messages/read`, { method: 'POST' })
-export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text }) })
-export async function getMyEvents(page = 1) {
-  const lists = await Promise.all(['mine', 'participating', 'favorites'].map(kind => request<EventListResponse>(`/events/${kind}?page=${page}&limit=30`)))
+// A room opens with its latest 20 messages; each older page is another 20.
+export const MESSAGE_PAGE_SIZE = 20
+export const getMessages = (id: string, signal?: AbortSignal, cursor?: string) => request<{ items: ApiMessage[]; nextCursor?: string | null }>(`/events/${id}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}&limit=${MESSAGE_PAGE_SIZE}` : `?limit=${MESSAGE_PAGE_SIZE}`}`, { signal, background: true })
+export const markRoomRead = (id: string) => request<{ eventId: string; unreadCount: number }>(`/events/${id}/messages/read`, { method: 'POST', background: true })
+export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text }), background: true })
+export async function getMyEvents(page = 1, options: { background?: boolean } = {}) {
+  const lists = await Promise.all(['mine', 'participating', 'favorites'].map(kind => request<EventListResponse>(`/events/${kind}?page=${page}&limit=30`, options)))
   return { items: lists.flatMap(list => list.items), hasMore: lists.some(list => page * 30 < list.total) }
 }
 
@@ -395,7 +404,15 @@ export async function getSocketToken(renew = false) {
   return AsyncStorage.getItem(ACCESS_TOKEN_KEY)
 }
 
-export const getEventActivity = (id: string) => request<{ waitlist: Array<{ userId: string; createdAt?: string }>; checkins: Array<{ userId: string; method?: string; createdAt?: string }> }>(`/events/${id}/activity`)
+/** Light room summaries (no description/cover) for the Rooms list: one request instead of three. */
+export interface RoomSummary {
+  id: string; ownerId: string; interest: { id: string; name: string }; date: string; startTime: string
+  locationName: string; status: string; minParticipants: number; maxParticipants: number
+  confirmedParticipantCount: number; participants: Array<{ id: string; firstName: string; lastName: string }>
+  lastMessageAt: string | null; unreadCount: number
+}
+export const getRooms = () => request<RoomSummary[]>('/events/rooms', { background: true })
+export const getEventActivity = (id: string) => request<{ waitlist: Array<{ userId: string; createdAt?: string }>; checkins: Array<{ userId: string; method?: string; createdAt?: string }> }>(`/events/${id}/activity`, { background: true })
 
 // "Etkinlik Takvimim": the user's private availability records (never a public listing).
 export interface ApiAvailability {
@@ -427,7 +444,7 @@ export interface AppNotification {
   id: string; type: string; title: string; body: string;
   eventId: string | null; actorId: string | null; readAt: string | null; createdAt: string;
 }
-export const getNotifications = (cursor?: string) => request<{ items: AppNotification[]; unreadCount: number; nextCursor: string | null }>(`/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)
+export const getNotifications = (cursor?: string) => request<{ items: AppNotification[]; unreadCount: number; nextCursor: string | null }>(`/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, { background: true })
 export const readNotification = (id: string) => request(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' })
 export const readAllNotifications = () => request('/notifications/read-all', { method: 'PATCH' })
 

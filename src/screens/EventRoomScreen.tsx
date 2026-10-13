@@ -5,7 +5,8 @@ import { useScreenActive } from '../native/useScreenActive';
 import { onSocket, retainEvent, socketAction, socketConnected } from '../services/socket';
 import TopNavBar from "../components/TopNavBar";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import { AtmoBackground } from "../components/GlassUI";
 import { deleteMessage, editMessage, getApiErrorMessage, getEvent, getEventActivity, getMessageReads, getMessages, markRoomRead, putPreference, reportUser, sendMessage, type ApiMessage } from "../api/client";
@@ -22,9 +23,19 @@ interface Props {
 const MAX_MESSAGE_LENGTH = 2000;
 const QUICK_REPLIES = ["Yoldayım 🚶", "5 dk gecikeceğim ⏱️", "Geldim 📍"];
 const REPORT_REASONS = ["Taciz veya hakaret", "Spam veya reklam", "Uygunsuz içerik", "Güvenliğimi tehdit ediyor"];
-type RoomMessage = ChatMessage & { announcement?: boolean; deleted?: boolean; edited?: boolean };
+type RoomMessage = ChatMessage & { announcement?: boolean; deleted?: boolean; edited?: boolean; pending?: boolean; failed?: boolean };
 type SheetOption = { label: string; onPress: () => void; danger?: boolean };
-const dayKey = (iso?: string) => (iso || "").slice(0, 10);
+// Times arrive as "+03:00" from REST but "Z" from the device (pending sends), so compare instants,
+// never the strings: as text, "09:31Z" sorted before "12:30+03:00" and a new message jumped to the top.
+const instant = (iso?: string) => Date.parse(iso || "") || 0;
+const dayKey = (iso?: string) => { const date = new Date(instant(iso)); return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`; };
+// Consecutive messages from the same person (same day) are grouped: name/photo once, tighter spacing.
+function sameSender(a: RoomMessage | undefined, b: RoomMessage | undefined) {
+  return !!a && !!b && !a.announcement && !b.announcement && a.user.id === b.user.id && dayKey(a.createdAt) === dayKey(b.createdAt);
+}
+// Inside a group only messages sent in the same minute share one time (shown under the last of them);
+// messages with different times each keep their own.
+const sameMinute = (a: RoomMessage | undefined, b: RoomMessage | undefined) => sameSender(a, b) && a!.time === b!.time;
 function dayLabel(iso?: string) {
   const date = new Date(iso || "");
   if (isNaN(date.getTime())) return "";
@@ -76,6 +87,9 @@ export default function EventRoomScreen({
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
+  // "Aktif" = has this room's chat open now. Snapshot from the server, then live join/leave events.
+  const [present, setPresent] = useState<Set<string>>(new Set());
   const [input, setInput] = useState("");
   const [editing, setEditing] = useState<RoomMessage | null>(null);
   const [sheet, setSheet] = useState<{ title?: string; options: SheetOption[] } | null>(null);
@@ -90,23 +104,29 @@ export default function EventRoomScreen({
   const stickToEnd = useRef(true);
   const mapMessage = (message: ApiMessage): RoomMessage => ({ id: message.id, createdAt: message.createdAt, announcement: message.kind === 'announcement', deleted: message.deleted === true, edited: Boolean(message.editedAt), text: message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}`.trim() } });
   const upsert = (incoming: RoomMessage[]) => setMessages(prev => [...new Map([...prev, ...incoming].map(m => [m.id, m])).values()]);
+  // Listeners read the signed-in id through a ref, so the room loads without waiting for the account.
+  const meIdRef = useRef(ME.id);
+  meIdRef.current = ME.id;
   const markSeen = (userId: string, at?: string) => {
-    if (!userId || userId === ME.id || !at) return;
+    if (!userId || userId === meIdRef.current || !at) return;
     setReads(prev => (Date.parse(prev[userId] || "") || 0) >= Date.parse(at) ? prev : { ...prev, [userId]: at });
   };
   useEffect(() => {
-    if (!eventId || !ME.id || !screenActive) return;
+    if (!eventId || !screenActive) return;
     let active = true;
     const controller = new AbortController();
     setLoading(true);
     const load = async () => {
+      // The three room requests start together; each fills its part of the screen when it arrives.
+      // Seen-by and activity are secondary: their failures never block the chat.
+      void getMessageReads(eventId).then(r => { if (active) setReads(Object.fromEntries(r.items.map(item => [item.userId, item.readAt]))); }).catch(() => {});
+      void getEventActivity(eventId).then(r => { if (active) { setCheckins(r.checkins.map(c => c.userId)); setWaitlist(r.waitlist.map(w => w.userId)); } }).catch(() => {});
       try {
         const result = await getMessages(eventId, controller.signal);
         if (!active) return;
         upsert(result.items.map(mapMessage)); setCursor(result.nextCursor || null); setError(''); setClosedReason(null);
-        // Secondary room data; failures here never block the chat.
-        void getMessageReads(eventId).then(r => { if (active) setReads(Object.fromEntries(r.items.map(item => [item.userId, item.readAt]))); }).catch(() => {});
-        void getEventActivity(eventId).then(r => { if (active) { setCheckins(r.checkins.map(c => c.userId)); setWaitlist(r.waitlist.map(w => w.userId)); } }).catch(() => {});
+        // Opening a room shows the newest message; a late second pass covers rows that render after layout.
+        if (stickToEnd.current) setTimeout(() => { if (stickToEnd.current) scrollRef.current?.scrollToEnd({ animated: false }); }, 80);
       }
       catch (cause) {
         if (!active) return;
@@ -115,8 +135,10 @@ export default function EventRoomScreen({
       }
       finally { if (active) setLoading(false); }
     };
-    if (!event) void getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(() => {});
+    if (!event) void getEvent(eventId, { background: true }).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(() => {});
     const release = retainEvent(eventId);
+    const loadPresence = () => { void socketAction<string[]>('event:presence', { eventId }).then(ids => { if (active && Array.isArray(ids)) setPresent(new Set(ids)); }).catch(() => {}); };
+    setTimeout(loadPresence, 300);
     // While the room is on screen everything counts as read; bursts are batched into one request.
     setOpenRoom(eventId);
     let readTimer: ReturnType<typeof setTimeout> | undefined;
@@ -129,7 +151,13 @@ export default function EventRoomScreen({
     const listeners = [
       onSocket('chat:message_created', payload => {
         if (payload.eventId !== eventId) return;
-        upsert([mapMessage(payload.message)]);
+        const incoming = mapMessage(payload.message);
+        // Our own message can arrive over the socket before the send ack; replace its pending copy.
+        if (incoming.user.id === meIdRef.current) setMessages(prev => {
+          const index = prev.findIndex(m => m.pending && m.text === incoming.text);
+          return index < 0 ? prev : prev.filter((_, i) => i !== index);
+        });
+        upsert([incoming]);
         void socketAction('chat:read', { eventId, messageId: payload.message.id }).catch(() => {});
         markRead(1000);
       }),
@@ -143,50 +171,84 @@ export default function EventRoomScreen({
       }),
       onSocket('event:checkin', payload => { if (payload.eventId === eventId) setCheckins(prev => prev.includes(payload.userId) ? prev : [...prev, payload.userId]); }),
       onSocket('chat:typing', payload => {
-        if (payload.eventId !== eventId || payload.userId === ME.id) return;
+        if (payload.eventId !== eventId || payload.userId === meIdRef.current) return;
         setTypingUserId(payload.typing === true ? payload.userId : null);
         if (typingExpiry.current) clearTimeout(typingExpiry.current);
         typingExpiry.current = setTimeout(() => setTypingUserId(null), 3000);
       }),
       onSocket('sync:required', () => { void load(); }),
-      onSocket('connection:changed', payload => { if (active) setLive(payload.connected === true); }),
+      onSocket('connection:changed', payload => { if (active) setLive(payload.connected === true); if (payload.connected === true) loadPresence(); }),
+      onSocket('chat:user_joined', payload => { if (payload.eventId === eventId) setPresent(prev => new Set(prev).add(payload.userId)); }),
+      onSocket('chat:user_left', payload => { if (payload.eventId === eventId) setPresent(prev => { const next = new Set(prev); next.delete(payload.userId); return next; }); }),
     ];
     setLive(socketConnected());
     void load();
     return () => { active = false; controller.abort(); release(); listeners.forEach(stop => stop()); if (typingExpiry.current) clearTimeout(typingExpiry.current); if (readTimer) { clearTimeout(readTimer); void markRoomRead(eventId).catch(() => {}); } setOpenRoom(null); };
-  }, [eventId, ME.id, screenActive]);
-  const sorted = useMemo(() => messages.slice().sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || "") || a.id.localeCompare(b.id)), [messages]);
+  }, [eventId, screenActive]);
+  const sorted = useMemo(() => messages.slice().sort((a, b) => instant(a.createdAt) - instant(b.createdAt) || a.id.localeCompare(b.id)), [messages]);
   const people = useMemo(() => new Map((event?.participants || []).concat(event ? [event.host] : []).map(person => [person.id, person])), [event]);
   const firstName = (userId: string) => people.get(userId)?.name.split(" ")[0] || "Bir katılımcı";
   const pinned = useMemo(() => [...sorted].reverse().find(m => m.announcement && !m.deleted), [sorted]);
-  const lastMine = useMemo(() => [...sorted].reverse().find(m => m.user.id === ME.id && !m.announcement && !m.deleted), [sorted, ME.id]);
+  const lastMine = useMemo(() => [...sorted].reverse().find(m => m.user.id === ME.id && !m.announcement && !m.deleted && !m.pending && !m.failed), [sorted, ME.id]);
   const muted = !!eventId && (store.mutedRooms || []).includes(eventId);
+  // Only a user's own scroll may page backwards, not the automatic scroll to the newest message.
+  const userScrolled = useRef(false);
+  const loadingOlder = useRef(false);
   const onScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
     nearBottom.current = nativeEvent.contentSize.height - nativeEvent.layoutMeasurement.height - nativeEvent.contentOffset.y < 120;
+    // Reaching the top loads the previous 20 messages; the button stays as a fallback.
+    if (userScrolled.current && nativeEvent.contentOffset.y < 60) void loadOlder();
   };
+  // Holding the visible message in place is only for prepending older pages; left on all the time it
+  // pinned the first message and cancelled the initial scroll to the newest one.
+  const [keepPosition, setKeepPosition] = useState(false);
+  // Scroll after the frame in which new rows are laid out; an immediate call landed before layout.
+  const scrollToNewest = (animated = false) => requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated }));
   const loadOlder = async () => {
-    if (!eventId || !cursor || loading) return;
-    setLoading(true); stickToEnd.current = false;
+    if (!eventId || !cursor || loading || loadingOlder.current) return;
+    loadingOlder.current = true;
+    setLoading(true); stickToEnd.current = false; setKeepPosition(true);
     try { const result = await getMessages(eventId, undefined, cursor); upsert(result.items.map(mapMessage)); setCursor(result.nextCursor || null); }
-    catch (cause) { setError(getApiErrorMessage(cause)); } finally { setLoading(false); }
+    catch (cause) { setError(getApiErrorMessage(cause)); } finally { loadingOlder.current = false; setLoading(false); requestAnimationFrame(() => setKeepPosition(false)); }
+  };
+  // Sends are optimistic: the message shows at once and the request runs in the background.
+  // Sends are chained so several quick messages keep their order on the server.
+  const sendQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const deliver = (local: RoomMessage) => {
+    if (!eventId) return;
+    const text = local.text;
+    sendQueue.current = sendQueue.current.catch(() => {}).then(async () => {
+      try {
+        // Socket first; REST only when the realtime connection is down (never after a timeout, to avoid duplicates).
+        const saved = socketConnected() ? await socketAction<ApiMessage>('chat:message', { eventId, text }) : await sendMessage(eventId, text);
+        setMessages(prev => [...prev.filter(m => m.id !== local.id && m.id !== saved.id), mapMessage(saved)]);
+        setError('');
+      } catch {
+        setMessages(prev => prev.map(m => m.id === local.id ? { ...m, pending: false, failed: true } : m));
+      }
+    });
   };
   const sendText = async (raw: string) => {
     const text = raw.trim();
-    if (!text || !eventId || sending) return;
-    setSending(true); stickToEnd.current = true;
-    try {
-      if (editing) {
-        upsert([mapMessage(await editMessage(eventId, editing.id, text))]);
-        setEditing(null); setInput('');
-        return;
-      }
-      // Socket first; REST only when the realtime connection is down (never after a timeout, to avoid duplicates).
-      const saved = socketConnected() ? await socketAction<ApiMessage>('chat:message', { eventId, text }) : await sendMessage(eventId, text);
-      upsert([mapMessage(saved)]); setInput(''); setError('');
-      void socketAction('chat:typing', { eventId, typing: false }).catch(() => {});
+    if (!text || !eventId) return;
+    stickToEnd.current = true;
+    if (editing) {
+      if (sending) return;
+      setSending(true);
+      try { upsert([mapMessage(await editMessage(eventId, editing.id, text))]); setEditing(null); setInput(''); }
+      catch (cause) { Alert.alert('Mesaj düzenlenemedi', getApiErrorMessage(cause)); }
+      finally { setSending(false); }
+      return;
     }
-    catch (cause) { Alert.alert(editing ? 'Mesaj düzenlenemedi' : 'Mesaj gönderilemedi', getApiErrorMessage(cause)); }
-    finally { setSending(false); }
+    const now = new Date().toISOString();
+    const local: RoomMessage = { id: `local-${now}-${Math.random().toString(36).slice(2, 8)}`, createdAt: now, text, pending: true, time: new Date(now).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...ME } };
+    upsert([local]); setInput('');
+    void socketAction('chat:typing', { eventId, typing: false }).catch(() => {});
+    deliver(local);
+  };
+  const retry = (msg: RoomMessage) => {
+    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, pending: true, failed: false } : m));
+    deliver(msg);
   };
   const send = () => sendText(input);
   const removeMessage = (msg: RoomMessage) => Alert.alert("Mesaj silinsin mi?", "Mesaj herkes için “Bu mesaj silindi” olarak görünür.", [
@@ -229,19 +291,26 @@ export default function EventRoomScreen({
   if (!event) return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}><TopNavBar navigate={navigate} fallback="rooms" title="Etkinlik Odası" /><Box style={{ paddingTop: 96, paddingHorizontal: 20 }}><Label>{error || 'Etkinlik yükleniyor…'}</Label></Box></Box>;
   const isOwner = event.host.id === ME.id;
   const typingName = typingUserId ? firstName(typingUserId) : null;
-  const members = [...people.values()].filter(person => person.id !== event.host.id);
+  const roster = [...people.values()].sort((a, b) => a.name.localeCompare(b.name, "tr"));
   const seenBy = lastMine ? Object.entries(reads).filter(([userId, at]) => userId !== ME.id && Date.parse(at) >= Date.parse(lastMine.createdAt || "")).map(([userId]) => firstName(userId)) : [];
   const subtitle = `${muted ? "🔕 " : ""}${event.location ? `${event.time} · ${event.location}` : event.time}`;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} title={roomTitle(event)} subtitle={subtitle}
-        right={<Box style={s.headerActions}>
-          <Touch accessibilityLabel={infoOpen ? "Oda bilgisini kapat" : "Oda bilgisini aç"} onPress={() => setInfoOpen(open => !open)} style={[s.headerAction, infoOpen && s.headerActionOn]}><UsersIcon size={18} style={{ color: palette.accent }} /></Touch>
-        </Box>} />
+        onTitlePress={() => setInfoOpen(true)} titleHint="Oda bilgisini ve katılımcıları gösterir" />
 
-      <Box style={s.body}>
-        {infoOpen && <Scroll style={s.info}>
-          <Scroll style={[[ui.flex, ui.gap2]]} horizontal>
+      {/* Tapping the room name opens one sheet: event info, participants and room settings. */}
+      {infoOpen && <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={() => setInfoOpen(false)}>
+          <Box style={s.sheetBackdrop}>
+            <Pressable accessibilityLabel="Oda bilgisini kapat" onPress={() => setInfoOpen(false)} style={StyleSheet.absoluteFill} />
+            {/* Safe area keeps the last rows above Android's system navigation bar. */}
+            <SafeAreaView edges={["bottom"]} style={s.peopleSheet}>
+              <Box style={s.peopleSheetHeader}>
+                <Label style={s.peopleSheetTitle} numberOfLines={1}>{roomTitle(event)}</Label>
+                <Touch accessibilityLabel="Oda bilgisini kapat" onPress={() => setInfoOpen(false)} style={s.peopleSheetClose}><Label style={s.peopleSheetCloseLabel}>Kapat</Label></Touch>
+              </Box>
+              <ScrollView style={{ maxHeight: Math.round(windowHeight * 0.7) }} contentContainerStyle={s.info}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8 }}>
             {[{ icon: <UsersIcon size={15} />, text: `${participantCount(event.currentParticipants, event.maxParticipants)} kişi` },
               ...(event.location ? [{ icon: <LocationIcon size={15} />, text: event.location }] : []),
               { icon: <ClockIcon size={15} />, text: `${event.date} · ${event.time}` },
@@ -249,7 +318,28 @@ export default function EventRoomScreen({
                 <Box style={{ color: palette.muted }}>{item.icon}</Box>
                 <Label style={s.chipLabel}>{item.text}</Label>
               </Box>)}
-          </Scroll>
+          </ScrollView>
+
+          <Label style={s.panelHeading}>Katılımcılar · {roster.length}</Label>
+          <Box style={s.people}>
+            {roster.map(person => {
+              const checked = checkins.includes(person.id);
+              const online = person.id === ME.id || present.has(person.id);
+              return <Box key={person.id} style={s.person}>
+                <Touch accessibilityLabel={`${person.name} profilini aç`} onPress={() => { setInfoOpen(false); navigate("profile", person.id === ME.id ? {} : { userId: person.id }); }} style={s.personLink}>
+                  <Box style={s.avatarWrap}>
+                    <Picture uri={person.avatar} accessibilityLabel={person.name} style={s.personAvatar} />
+                    <Box style={[s.statusDot, { backgroundColor: online ? palette.success : "rgba(255,255,255,.25)" }]} />
+                  </Box>
+                  <Box style={{ flex: 1, minWidth: 0 }}>
+                    <Label style={s.personName} numberOfLines={1}>{person.name}{person.id === event.host.id ? " · Organizatör" : ""}{checked ? " ✓" : ""}</Label>
+                    <Label style={[s.personStatus, { color: online ? palette.success : palette.muted }]}>{online ? "Aktif" : "Pasif"}</Label>
+                  </Box>
+                </Touch>
+                {isOwner && event.isActive && !checked && person.id !== event.host.id ? <Touch accessibilityLabel={`${person.name} girişini onayla`} disabled={busy} onPress={async () => { if (await runOwnerAction('event:checkin', { participantId: person.id })) setCheckins(prev => [...prev, person.id]); }} style={s.smallButton}><Label style={s.smallButtonLabel}>Onayla</Label></Touch> : null}
+              </Box>;
+            })}
+          </Box>
 
           <Box style={s.panelRow}>
             <Box style={s.panelCopy}><Label style={s.panelTitle}>Odayı sessize al</Label><Label style={s.panelDetail}>Bu odanın okunmamış mesaj rozeti gösterilmez.</Label></Box>
@@ -261,21 +351,6 @@ export default function EventRoomScreen({
           {!event.isActive ? <Label style={s.panelDetail}>Giriş onayı etkinlik başladığında açılır.</Label>
             : !isOwner ? <Label style={s.panelDetail}>{checkins.includes(ME.id) ? "Girişin onaylandı ✓" : "Vardığında “Geldim” yaz; organizatör girişini onaylayacak."}</Label>
             : null}
-          <Box style={s.people}>
-            <Box style={s.person}>
-              <Picture uri={event.host.avatar} accessibilityLabel={event.host.name} style={s.personAvatar} />
-              <Label style={s.personName} numberOfLines={1}>{event.host.name.split(" ")[0]} · Organizatör</Label>
-            </Box>
-            {members.map(person => {
-              const checked = checkins.includes(person.id);
-              return <Box key={person.id} style={s.person}>
-                <Picture uri={person.avatar} accessibilityLabel={person.name} style={s.personAvatar} />
-                <Label style={s.personName} numberOfLines={1}>{person.name.split(" ")[0]}{checked ? " ✓" : ""}</Label>
-                {isOwner && event.isActive && !checked ? <Touch accessibilityLabel={`${person.name} girişini onayla`} disabled={busy} onPress={async () => { if (await runOwnerAction('event:checkin', { participantId: person.id })) setCheckins(prev => [...prev, person.id]); }} style={s.smallButton}><Label style={s.smallButtonLabel}>Onayla</Label></Touch> : null}
-              </Box>;
-            })}
-          </Box>
-
           {isOwner ? <>
             <Label style={s.panelHeading}>Duyuru gönder</Label>
             <Field value={announcement} onChangeText={setAnnouncement} placeholder="Tüm katılımcılara duyuru…" placeholderTextColor="rgba(255,255,255,.35)" maxLength={MAX_MESSAGE_LENGTH} style={s.panelInput} />
@@ -288,7 +363,11 @@ export default function EventRoomScreen({
               </Box>)}
             </> : null}
           </> : null}
-        </Scroll>}
+              </ScrollView>
+            </SafeAreaView>
+          </Box>
+        </Modal>}
+      <Box style={s.body}>
 
         {closedReason ? <Box style={s.closed}>
           <Label style={s.closedIcon}>✦</Label>
@@ -303,8 +382,11 @@ export default function EventRoomScreen({
           </Touch> : null}
           {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
           {!live && !error ? <Label accessibilityLiveRegion="polite" style={s.connection}>Bağlantı yeniden kuruluyor… Mesajların yine de gönderilir.</Label> : null}
-          <Scroll ref={scrollRef} onScroll={onScroll} scrollEventThrottle={64} maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-            onContentSizeChange={() => { if (stickToEnd.current || nearBottom.current) scrollRef.current?.scrollToEnd({ animated: !stickToEnd.current }); stickToEnd.current = false; }}
+          {/* The newest message stays in view until the user scrolls up: content keeps growing after the
+              first render (messages, "Görüldü", fonts), so pinning only once left the last ones hidden. */}
+          <Scroll ref={scrollRef} onScroll={onScroll} onScrollBeginDrag={() => { userScrolled.current = true; stickToEnd.current = false; }} scrollEventThrottle={64} maintainVisibleContentPosition={keepPosition ? { minIndexForVisible: 0 } : undefined}
+            onContentSizeChange={() => { if (!keepPosition && (stickToEnd.current || nearBottom.current)) scrollToNewest(!stickToEnd.current); }}
+            onLayout={() => { if (stickToEnd.current) scrollToNewest(); }}
             style={s.list}>
             {cursor ? <Touch disabled={loading} onPress={() => void loadOlder()} style={s.older}><Label style={s.olderLabel}>{loading ? "Yükleniyor…" : "Önceki mesajları göster"}</Label></Touch> : null}
             {!sorted.length && !loading ? <Box style={s.empty}><Label style={s.emptyTitle}>Sohbet başladı</Label><Label style={s.emptyText}>İlk mesajı sen yaz; buluşma detaylarını burada konuşabilirsiniz.</Label></Box> : null}
@@ -319,8 +401,9 @@ export default function EventRoomScreen({
               </Touch>];
               const isMe = msg.user.id === ME.id;
               const isHost = msg.user.id === event.host.id;
-              // Consecutive messages from the same person are grouped; name and photo appear once.
-              const grouped = !newDay && previous && !previous.announcement && previous.user.id === msg.user.id;
+              // Same-person runs show name/photo once; a time shows under the last message of each minute.
+              const grouped = !newDay && sameSender(previous, msg);
+              const endsGroup = !sameMinute(msg, sorted[index + 1]);
               const person = people.get(msg.user.id);
               return [separator, <Box key={msg.id} style={[s.message, isMe && s.messageMine, grouped && s.messageGrouped]}>
                 {!isMe && (grouped ? <Box style={s.avatarSpacer} /> : <Picture uri={person?.avatar || ""} accessibilityLabel={msg.user.name} style={s.avatar} />)}
@@ -329,10 +412,11 @@ export default function EventRoomScreen({
                     <Label style={s.authorName}>{msg.user.name.split(" ")[0]}</Label>
                     {isHost && <Label style={s.hostBadge}>Organizatör</Label>}
                   </Box>}
-                  <Touch accessibilityLabel="Mesaj seçenekleri" accessibilityHint="Basılı tut" haptic={false} onLongPress={() => openActions(msg)} style={[s.bubble, msg.deleted ? s.bubbleDeleted : isMe ? s.bubbleMine : s.bubbleOther]}>
+                  <Touch accessibilityLabel="Mesaj seçenekleri" accessibilityHint="Basılı tut" haptic={false} onLongPress={() => { if (!msg.pending && !msg.failed) openActions(msg); }} style={[s.bubble, msg.deleted ? s.bubbleDeleted : isMe ? s.bubbleMine : s.bubbleOther, (msg.pending || msg.failed) && { opacity: 0.65 }]}>
                     <Label style={msg.deleted ? s.deletedText : isMe ? s.textMine : s.textOther}>{msg.deleted ? "Bu mesaj silindi" : msg.text}</Label>
                   </Touch>
-                  <Label style={s.time}>{msg.time}{msg.edited && !msg.deleted ? " · düzenlendi" : ""}</Label>
+                  {msg.failed ? <Touch accessibilityLabel="Mesajı tekrar gönder" onPress={() => retry(msg)} style={{ minHeight: 0, alignSelf: "flex-end" }}><Label style={[s.time, { color: palette.error }]}>Gönderilemedi · Tekrar dene</Label></Touch>
+                    : (endsGroup || msg.pending || msg.edited) ? <Label style={s.time}>{msg.time}{msg.pending ? " · Gönderiliyor…" : ""}{msg.edited && !msg.deleted ? " · düzenlendi" : ""}</Label> : null}
                   {lastMine && msg.id === lastMine.id ? <Label style={s.seen}>{seenBy.length ? `Görüldü · ${seenBy.slice(0, 2).join(", ")}${seenBy.length > 2 ? ` +${seenBy.length - 2}` : ""}` : "Gönderildi"}</Label> : null}
                 </Box>
               </Box>];
@@ -345,14 +429,14 @@ export default function EventRoomScreen({
               <Label style={s.editLabel} numberOfLines={1}>✎ Mesajı düzenliyorsun</Label>
               <Touch accessibilityLabel="Düzenlemeyi iptal et" onPress={() => { setEditing(null); setInput(''); }} style={s.editCancel}><Label style={s.editCancelLabel}>Vazgeç</Label></Touch>
             </Box> : <Scroll horizontal style={s.quickRow}>
-              {QUICK_REPLIES.map(reply => <Touch key={reply} accessibilityLabel={`Hızlı mesaj: ${reply}`} disabled={sending} onPress={() => void sendText(reply)} style={s.quick}><Label style={s.quickLabel}>{reply}</Label></Touch>)}
+              {QUICK_REPLIES.map(reply => <Touch key={reply} accessibilityLabel={`Hızlı mesaj: ${reply}`} onPress={() => void sendText(reply)} style={s.quick}><Label style={s.quickLabel}>{reply}</Label></Touch>)}
             </Scroll>}
             <Box style={s.composer} glass>
               <Field value={input} onChangeText={value => {
                 setInput(value);
                 if (eventId && !editing && Date.now() - lastTyping.current > 1000) { lastTyping.current = Date.now(); void socketAction('chat:typing', { eventId, typing: Boolean(value) }).catch(() => {}); }
               }} placeholder={editing ? "Mesajı düzenle..." : "Bir mesaj yaz..."} placeholderTextColor="rgba(255,255,255,.35)" multiline maxLength={MAX_MESSAGE_LENGTH} style={s.input} />
-              <Touch onPress={send} accessibilityLabel={editing ? "Düzenlemeyi kaydet" : "Mesaj gönder"} disabled={sending || !input.trim()} style={s.send} gradient={["#4d5bcb", "#6651c9"]}>
+              <Touch onPress={send} accessibilityLabel={editing ? "Düzenlemeyi kaydet" : "Mesaj gönder"} disabled={(editing && sending) || !input.trim()} style={s.send} gradient={["#4d5bcb", "#6651c9"]}>
                 {editing ? <Label style={s.sendCheck}>✓</Label> : <SendIcon size={20} style={{ color: palette.text }} />}
               </Touch>
             </Box>
@@ -365,10 +449,7 @@ export default function EventRoomScreen({
 }
 const s = StyleSheet.create({
   body: { flex: 1, paddingTop: 68 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
-  headerAction: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  headerActionOn: { backgroundColor: "rgba(105,120,255,.18)" },
-  info: { flexGrow: 0, maxHeight: "55%", gap: 12, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border, backgroundColor: "rgba(17,22,42,.96)" },
+  info: { gap: 12, paddingBottom: 8 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: "rgba(255,255,255,.05)", borderWidth: 1, borderColor: "rgba(255,255,255,.07)" },
   chipLabel: { color: "rgba(255,255,255,.6)", fontSize: 12, lineHeight: 16 },
   panelRow: { flexDirection: "row", alignItems: "center", gap: 12 },
@@ -381,7 +462,16 @@ const s = StyleSheet.create({
   panelButtonLabel: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 13 },
   people: { gap: 8 },
   person: { flexDirection: "row", alignItems: "center", gap: 8 },
-  personAvatar: { width: 26, height: 26, borderRadius: 13 },
+  peopleSheet: { backgroundColor: palette.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
+  peopleSheetHeader: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  peopleSheetTitle: { fontFamily: "Outfit-SemiBold", fontSize: 16, lineHeight: 22, color: palette.text },
+  peopleSheetClose: { minHeight: 44, justifyContent: "center", paddingHorizontal: 8 },
+  peopleSheetCloseLabel: { fontFamily: "Outfit", fontSize: 15, lineHeight: 20, color: palette.muted },
+  personLink: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44, justifyContent: "flex-start" },
+  avatarWrap: { position: "relative" },
+  personAvatar: { width: 34, height: 34, borderRadius: 17 },
+  statusDot: { position: "absolute", right: -1, bottom: -1, width: 11, height: 11, borderRadius: 6, borderWidth: 2, borderColor: palette.surface },
+  personStatus: { fontSize: 11, lineHeight: 14, fontFamily: "Outfit" },
   personName: { flex: 1, color: "rgba(255,255,255,.75)", fontSize: 13, lineHeight: 17 },
   smallButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: "rgba(111,208,182,.14)", borderWidth: 1, borderColor: "rgba(111,208,182,.35)" },
   smallButtonLabel: { color: palette.success, fontFamily: "Outfit-SemiBold", fontSize: 12, lineHeight: 16 },

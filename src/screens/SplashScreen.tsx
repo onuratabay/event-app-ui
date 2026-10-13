@@ -1,6 +1,7 @@
 import { useOptionalGuest } from "../guest/GuestSession";
 import { palette } from "../theme/palette";
 import { gatedScreen } from "../native/access";
+import { useStore } from "../native/Store";
 import type { Screen } from "../types";
 import { CategoryIcon } from "../components/Icons";
 import { getCurrentUser, hasSession, logout } from "../api/client";
@@ -17,6 +18,7 @@ export default function SplashScreen({
   navigate
 }: Props) {
   const guest = useOptionalGuest();
+  const { whenReady } = useStore();
   const orbit = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -36,6 +38,9 @@ export default function SplashScreen({
         await logout().catch(() => {});
         destination = "login";
       }
+      // Discover opens with its feed ready: the account load already runs during the animation;
+      // a slow network waits at most 6 s in total before the page opens and finishes loading there.
+      if (destination === "discover") await whenReady(Math.max(0, 6000 - (Date.now() - startedAt)));
       const wait = Math.max(0, 2850 - (Date.now() - startedAt));
       timer = setTimeout(() => { if (active) navigate(destination, { reset: true }); }, wait);
     };
