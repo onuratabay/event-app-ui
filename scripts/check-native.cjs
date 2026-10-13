@@ -60,7 +60,7 @@ Module._load = function (id, parent, isMain) {
   if (id === "expo-notifications") { global.__expoNotificationsLoaded = true; return {} }
   if (id === "expo-location") return {
     getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
-    Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => ({ coords: { latitude: 39.92, longitude: 32.85 } }), geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => [],
+    Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => ({ coords: { latitude: 39.92, longitude: 32.85 } }), geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => global.__testReverseGeocode || [],
   }
   if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker", Circle: "Circle" }
   if (id === "expo-constants") return { __esModule: true, default: { expoConfig: { hostUri: "192.168.1.15:8081" } } }
@@ -542,10 +542,24 @@ async function tap(tree, label) {
   await tap(createEvent,"1 saat")
   assert.equal(continueButton().props.disabled, false, "Valid date, time and duration enable continue")
   await tap(createEvent,"Devam Et")
-  const location=createEvent.root.findByType("TextInput")
-  await act(async()=>location.props.onChangeText("Native Test Mekanı"))
-  await tap(createEvent,"Adresi bul")
-  await tap(createEvent,"39.9200")
+  // The meeting point is chosen on a Google map: search moves the pin, a tap or drag refines it.
+  global.__testReverseGeocode = [{ region: "Ankara", subregion: "Çankaya", street: "Atatürk Bulvarı" }]
+  const locationMap = () => createEvent.root.find(n => n.props.testID === "event-location-map")
+  assert(locationMap(), "Location step shows a map")
+  assert.equal(continueButton().props.disabled, true, "A meeting point is required before continuing")
+  assert(createEvent.root.findAllByType("Pressable").some(n => String(n.props.accessibilityLabel).startsWith("Şehir:")), "City is chosen on the location step")
+  const addressSearch = createEvent.root.findAll(n => n.props.accessibilityLabel === "Adres veya mekan ara" && typeof n.props.onChangeText === "function")[0]
+  await act(async () => addressSearch.props.onChangeText("Kuğulu Park"))
+  await tap(createEvent, "Ara")
+  await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+  assert(text(createEvent.toJSON()).includes("Çankaya, Ankara"), "District and city come from the picked point")
+  const venueField = () => createEvent.root.findAll(n => n.props.accessibilityLabel === "Buluşma noktası (isteğe bağlı)" && typeof n.props.onChangeText === "function")[0]
+  assert.equal(venueField().props.value, "Kuğulu Park", "A searched place fills the venue name")
+  await act(async () => locationMap().props.onPress({ nativeEvent: { coordinate: { latitude: 39.9, longitude: 32.86 } } }))
+  await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+  await act(async () => venueField().props.onChangeText("Native Test Mekanı"))
+  assert.equal(continueButton().props.disabled, false)
+  global.__testReverseGeocode = undefined
   await tap(createEvent,"Devam Et")
   const maxCard = () => createEvent.root.findAllByType("Pressable").some(n => n.props.accessibilityLabel === "Maksimum artır")
   assert(!maxCard(), "Max card is hidden while min is 2")
@@ -596,7 +610,8 @@ async function tap(tree, label) {
   assert.deepEqual(server.poolInvites.map(invite => [invite.eventId, invite.userId]), [['created-on-server', 'cand-1']], "Chosen pool candidates are invited right after creation")
   assert.equal(server.events[0].id, 'created-on-server')
   assert.deepEqual(createdNavigation, { route: 'event-detail', opts: { eventId: 'created-on-server', aboveHome: true } }, 'New event detail opens with only home below it')
-  assert.equal(server.events[0].locationName, 'Native Test Mekanı')
+  assert.equal(server.events[0].locationName, 'Native Test Mekanı, Çankaya, Ankara', 'Venue, district and city are saved as the location')
+  assert.deepEqual([server.events[0].latitude, server.events[0].longitude], [39.9, 32.86], 'The tapped map point is saved')
   assert.equal(server.events[0].visibilityId, 'invite_only')
   assert.deepEqual(server.events[0].invitedUserIds, ['friend-1'], 'Selected friends are invited')
   assert.equal(server.events[0].durationMinutes, 60)

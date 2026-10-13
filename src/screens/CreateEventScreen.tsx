@@ -1,12 +1,11 @@
 import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
-import { Alert, Platform } from "react-native";
-import * as Location from "expo-location";
+import { Alert } from "react-native";
 import { canCreateEvent, createEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions } from "../api/client";
 import { mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useRef, useState } from "react";
 import { Avatar, AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
-import { CameraIcon, CheckIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, SearchIcon, UserPlusIcon } from "../components/Icons";
+import { CameraIcon, CheckIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
@@ -16,6 +15,7 @@ import TopNavBar from "../components/TopNavBar";
 import { useBottomNavInset } from "../components/BottomNav";
 import { DURATIONS, MAX_DURATION_MINUTES, formatDuration } from "../events/duration";
 import PoolCandidatesPicker from "../availability/PoolCandidatesPicker";
+import LocationPicker, { placeLabel, type PickedPlace } from "../events/LocationPicker";
 function StickyBar({
   children
 }: {
@@ -102,9 +102,9 @@ export default function CreateEventScreen({
   const [creating, setCreating] = useState(false);
   // People from the private availability pool to invite once the event exists.
   const [poolIds, setPoolIds] = useState<string[]>([]);
-  const [places, setPlaces] = useState<Array<{ latitude: number; longitude: number }>>([]);
-  const [coordinate, setCoordinate] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [findingPlace, setFindingPlace] = useState(false);
+  // The meeting point is picked on the map; `data.location` is the optional venue name typed next to it.
+  const [place, setPlace] = useState<PickedPlace | null>(null);
+  const [mapTouched, setMapTouched] = useState(false);
   const loadCatalog = () => Promise.all([getMapInterests(), getEnums('event_visibility')]).then(([a, v]) => { setActivities(a); setVisibilities(v); }).catch(error => Alert.alert('Seçenekler yüklenemedi', getApiErrorMessage(error)));
   // Personal suggestions are optional; the category defaults remain if they cannot load.
   const [personalSuggestions, setPersonalSuggestions] = useState<string[]>([]);
@@ -159,24 +159,12 @@ export default function CreateEventScreen({
     const match = activities.find(a => a.name.toLocaleLowerCase("tr") === initialActivity.toLocaleLowerCase("tr"));
     if (match) chooseActivity(match.name);
   }, [activities, initialActivity]);
-  const findPlace = async () => {
-    if (findingPlace || !data.location.trim()) return;
-    setFindingPlace(true);
-    try {
-      if (Platform.OS === 'android' && !(await Location.requestForegroundPermissionsAsync()).granted) throw new Error('Konum izni gerekli.');
-      const results = await Location.geocodeAsync(data.location);
-      // Geocoding results also carry altitude/accuracy, which the API rejects as unknown fields.
-      setPlaces(results.map(({ latitude, longitude }) => ({ latitude, longitude }))); setCoordinate(null);
-      if (!results.length) Alert.alert('Konum bulunamadı', 'Şehir ve açık adresle tekrar ara.');
-    } catch { Alert.alert('Konum aranamadı', 'Konum iznini ve bağlantını kontrol et.'); }
-    finally { setFindingPlace(false); }
-  };
   const publish = async () => {
     if (creating) return;
     const interest = activities.find(i => i.name === data.activity), level = levels.find(i => i.name === data.level), visibility = visibilities.find(i => i.name === data.privacy);
     const needsLevel = levels.length > 0;
-    const missing = [!interest && 'etkinlik türü', needsLevel && !level && 'seviye', !coordinate && 'konum', !visibility && 'görünürlük'].filter(Boolean);
-    if (!interest || needsLevel && !level || !visibility || !coordinate) { Alert.alert('Eksik bilgi', `Şunları seç: ${missing.join(', ')}.`); return; }
+    const missing = [!interest && 'etkinlik türü', needsLevel && !level && 'seviye', !place && 'konum', !visibility && 'görünürlük'].filter(Boolean);
+    if (!interest || needsLevel && !level || !visibility || !place) { Alert.alert('Eksik bilgi', `Şunları seç: ${missing.join(', ')}.`); return; }
     const inviteOnly = visibility.enum === INVITE_ONLY;
     if (inviteOnly && !invitedIds.length) { Alert.alert('Davet listesi boş', 'Davet etmek istediğin en az bir arkadaşını seç.'); setStep(6); return; }
     if (isPastStart(data.date, data.time)) { Alert.alert('Geçmiş tarih', 'Etkinlik zamanı geçmiş. Tarih ve saati ileri bir zamana güncelle.'); setStep(2); return; }
@@ -184,7 +172,7 @@ export default function CreateEventScreen({
     setCreating(true);
     try {
       const date = displayDate(data.date);
-      const event = await createEvent({ interestId: interest.id, ...(level ? { levelId: level.id } : {}), visibilityId: visibility.id, date, startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: coordinate.latitude, longitude: coordinate.longitude, locationName: data.location.trim(), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(inviteOnly ? { invitedUserIds: invitedIds } : {}), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
+      const event = await createEvent({ interestId: interest.id, ...(level ? { levelId: level.id } : {}), visibilityId: visibility.id, date, startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: place.latitude, longitude: place.longitude, locationName: placeLabel(data.location, place), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(inviteOnly ? { invitedUserIds: invitedIds } : {}), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
       // The creator sees the new event at the top of Discover right away.
       setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)], feedIds: [event.id, ...p.feedIds.filter(id => id !== event.id)] }));
       // The event already exists here; a failed invite must not look like a failed creation.
@@ -256,7 +244,7 @@ export default function CreateEventScreen({
               <Box style={[[ui.grid, ui.gap2, ui.textXs, ui.textWhite50]]} columns={2}>
                 {[{ icon: <ClockIcon size={16} />, text: `${displayDate(data.date) || "Tarih"} · ${data.time || "Saat"}` },
                   { icon: <ClockIcon size={16} />, text: data.durationMinutes ? formatDuration(data.durationMinutes) : "Süre" },
-                  { icon: <LocationIcon size={16} />, text: data.location || "Konum" },
+                  { icon: <LocationIcon size={16} />, text: placeLabel(data.location, place) || "Konum" },
                   ...(data.level ? [{ icon: <StarIcon size={16} />, text: data.level }] : []),
                   { icon: <UsersIcon size={16} />, text: data.maxParticipants ? `${data.minParticipants}-${data.maxParticipants} kişi` : `En az ${data.minParticipants} kişi` },
                   { icon: <LockIcon size={16} />, text: data.privacy ? `${data.privacy}${invitedIds.length && isInviteOnly ? ` · ${invitedIds.length} davetli` : ""}` : "Gizlilik" }
@@ -270,8 +258,8 @@ export default function CreateEventScreen({
 
           {(() => {
             const interest = activities.find(i => i.name === data.activity), level = levels.find(i => i.name === data.level);
-            if (!interest || !coordinate || levels.length > 0 && !level || isPastStart(data.date, data.time)) return null;
-            return <PoolCandidatesPicker selected={poolIds} onChange={setPoolIds} draft={{ interestId: interest.id, ...(level ? { levelId: level.id } : {}), date: displayDate(data.date), startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: coordinate.latitude, longitude: coordinate.longitude }} />;
+            if (!interest || !place || levels.length > 0 && !level || isPastStart(data.date, data.time)) return null;
+            return <PoolCandidatesPicker selected={poolIds} onChange={setPoolIds} draft={{ interestId: interest.id, ...(level ? { levelId: level.id } : {}), date: displayDate(data.date), startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: place.latitude, longitude: place.longitude }} />;
           })()}
 
           <Touch onPress={publish} disabled={creating} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.mb4], {
@@ -294,7 +282,7 @@ export default function CreateEventScreen({
       }]} gradient={["#4d5bcb", "#6651c9"]} gradientDirection="right" />
       </Box>
 
-      <Scroll style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull, ui.pb28], { paddingTop: 80 }, hasStickyBar && { paddingBottom: 176 }]}>
+      <Scroll scrollEnabled={!mapTouched} style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull, ui.pb28], { paddingTop: 80 }, hasStickyBar && { paddingBottom: 176 }]}>
         <Box style={[[ui.pt4, ui.px5]]}>
 
           {/* Step 0 - Activity */}
@@ -384,14 +372,8 @@ export default function CreateEventScreen({
               <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
                 Nerede{"\n"}buluşacaksınız?
               </Label>
-              <Box style={[[ui.relative]]}>
-                <SearchIcon size={15} strokeWidth={1.75} style={[[ui.fixed, ui.left35, ui.top12, ui.TranslateY12, ui.textWhite25, ui.z10]]} />
-                <Field placeholder="Adres veya mekan adı..." value={data.location} onChangeText={e => { setCoordinate(null); setPlaces([]); setData(p => ({ ...p, location: e })); }} style={[[ui.glass, ui.wFull, ui.roundedXl, ui.pl9, ui.pr4, ui.py35, ui.textWhite, ui.textSm]]} glass />
-              </Box>
-
-              <Box style={[[ui.h4]]} />
-              <Touch onPress={findPlace} disabled={findingPlace}><Label>{findingPlace ? 'Konum aranıyor…' : 'Adresi bul'}</Label></Touch>
-              {places.map((place, index) => <Touch key={index} onPress={() => setCoordinate(place)} style={{ padding: 12, backgroundColor: '#11162a', borderRadius: 12 }}><Label>{coordinate === place ? '✓ ' : ''}{data.location} · {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}</Label></Touch>)}
+              <LocationPicker value={place} venue={data.location} defaultCity={store.user.city} onChange={setPlace}
+                onVenueChange={location => setData(p => ({ ...p, location }))} onMapTouch={setMapTouched} />
             </Box>}
 
           {/* Step 4 - Participants & message */}
@@ -584,7 +566,7 @@ export default function CreateEventScreen({
 
       {/* Sticky CTA for steps that need explicit continue */}
       {hasStickyBar && <StickyBar>
-          <PrimaryButton onPress={step === 2 && customDurationOpen ? () => { setData(p => ({ ...p, durationMinutes: customMinutes })); next(); } : next} disabled={step === 6 && !invitedIds.length || step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !coordinate}>
+          <PrimaryButton onPress={step === 2 && customDurationOpen ? () => { setData(p => ({ ...p, durationMinutes: customMinutes })); next(); } : next} disabled={step === 6 && !invitedIds.length || step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !place}>
             Devam Et
           </PrimaryButton>
         </StickyBar>}

@@ -47,6 +47,12 @@
     "experiments": {
       "typedRoutes": true
     },
-    "icon": "./assets/brand/ewent-icon.png"
+    "icon": "./assets/brand/ewent-icon.png",
+    "extra": {
+      "eas": {
+        "projectId": "afed72bb-4bc3-48d3-b104-2159faa4313b"
+      }
+    },
+    "owner": "onuratabay"
   }
 }
