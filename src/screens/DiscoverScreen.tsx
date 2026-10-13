@@ -1,3 +1,5 @@
+import EventShareSheet from "../components/EventShareSheet";
+import NotificationButton from "../components/NotificationButton";
 import ActivityIndicator from "../components/LoadingSpinner";
 import { palette } from "../theme/palette";
 import { CategoryIcon } from "../components/Icons";
@@ -5,14 +7,12 @@ import { getApiErrorMessage, setFavorite } from "../api/client";
 import { Alert, FlatList, Platform, RefreshControl, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { Line, Path, Polyline } from "react-native-svg";
-import RecommendationsSheet from "../recommendations/RecommendationsSheet";
 import { BrandWordmark } from "../components/Brand";
 import FeedHeaderBackdrop from "../components/FeedHeaderBackdrop";
 import HeaderIconButton from "../components/HeaderIconButton";
 import { HeartButton, RippleButton, SpringButton } from "../components/Expressive";
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
-import { BellIcon, CalendarIcon, SearchIcon, SparklesIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
-import { copyEvent, shareEvent as shareNativeEvent } from "../native/media";
+import { CalendarIcon, SearchIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
 import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, isRoomReady, participantCount, useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -71,135 +71,6 @@ const SORT_OPTIONS: {
   label: "En Uzak Mesafe",
   sub: "Uzaktakiler önce"
 }];
-
-/* ─── Share sheet ─── */
-const SHARE_PLATFORMS = [{
-  label: "WhatsApp",
-  color: "#25D366",
-  icon: <Vector width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-        <Path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-        <Path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.12 1.529 5.845L.057 23.617a.5.5 0 0 0 .63.63l5.772-1.472A11.947 11.947 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22a9.944 9.944 0 0 1-5.073-1.388l-.364-.216-3.768.961.977-3.672-.236-.38A9.952 9.952 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
-      </Vector>
-}, {
-  label: "Facebook",
-  color: "#1877F2",
-  icon: <Vector width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-        <Path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-      </Vector>
-}, {
-  label: "X",
-  color: "#000000",
-  icon: <Vector width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <Path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.713 5.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-      </Vector>
-}, {
-  label: "Mail",
-  color: "#6B7280",
-  icon: <Vector width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <Path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-        <Polyline points="22,6 12,13 2,6" />
-      </Vector>
-}];
-function ShareSheet({
-  event,
-  onClose
-}: {
-  event: AppEvent;
-  onClose: () => void;
-}) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    setCopied(await copyEvent(event));
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return <Sheet onClose={onClose} style={[[ui.fixed, ui.inset0, ui.z100, ui.flex, ui.flexCol, ui.justifyEnd]]}>
-      <Box style={[[ui.fixed, ui.inset0], {
-      backgroundColor: "rgba(0,0,0,0.6)"
-    }]} glass />
-
-      <Touch onPress={e => e.stopPropagation()} style={[[ui.relative, ui.roundedT28px, ui.overflowHidden], {
-      backgroundColor: "rgba(10,10,22,0.92)",
-      borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.10)",
-      borderBottomWidth: 0,
-      borderBottomColor: "transparent"
-    }]} glass enter>
-        {/* Liquid glass shimmer on sheet */}
-        <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(255,255,255,0.04)", "transparent", "rgba(105,120,255,0.03)"]} pointerEvents="none" />
-
-        <Box style={[[ui.relative, ui.px5, ui.pt4, ui.pb10]]}>
-          {/* Handle */}
-          <Box style={[[ui.w10, ui.h1, ui.roundedFull, ui.bgWhite15, ui.mxAuto, ui.mb5]]} />
-
-          {/* Event preview card */}
-          <Box style={[[ui.rounded2xl, ui.overflowHidden, ui.mb5], {
-          backgroundColor: palette.surface,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.09)"
-        }]}>
-            <Box style={[[ui.relative, ui.h28, ui.overflowHidden]]}>
-              <Picture uri={event.coverImage} accessibilityLabel={event.title} style={[[ui.wFull, ui.hFull, ui.opacity80]]} />
-              <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(8,11,24,0.82)", "transparent"]} gradientDirection="up" />
-              <Box style={[[ui.fixed, ui.bottom3, ui.left3]]}>
-                <Label style={[[ui.fontDisplay, ui.textBase, ui.fontLight, ui.textWhite]]}>
-                  {event.title}
-                </Label>
-                <Label style={[[ui.textXs, ui.textWhite50, ui.mt05]]}>
-                  {event.date} · {event.time} · {event.location}
-                </Label>
-              </Box>
-              <Box style={[[ui.fixed, ui.top3, ui.right3, ui.px2, ui.py05, ui.roundedFull, ui.text10px, ui.fontMedium, isLivePhase(eventPhase(event)) ? [ui.bgEmerald50020, ui.border, ui.borderEmerald40030, ui.textEmerald300] : [ui.bgAmber50015, ui.border, ui.borderAmber40025, ui.textAmber300]]]}>
-                {eventPhase(event) === "forming" ? "◌ Bekleniyor" : EVENT_PHASE_LABEL[eventPhase(event)]}
-              </Box>
-            </Box>
-          </Box>
-
-          {/* Platform buttons */}
-          <Box style={[[ui.grid, ui.gap3, ui.mb4]]} columns={4}>
-            {SHARE_PLATFORMS.map(p => <Touch onPress={() => shareNativeEvent(event)} key={p.label} style={[[ui.flex, ui.flexCol, ui.itemsCenter, ui.gap2]]}>
-                <Box style={[[ui.w14, ui.h14, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-              backgroundColor: `${p.color}20`,
-              borderWidth: 1,
-              borderColor: `${p.color}30`,
-              color: p.color
-            }]}>
-                  {p.icon}
-                </Box>
-                <Label style={[[ui.text11px, ui.textWhite40]]}>{p.label}</Label>
-              </Touch>)}
-          </Box>
-
-          {/* Copy link */}
-          <Touch onPress={handleCopy} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.gap3, ui.px4, ui.py35, ui.rounded2xl], {
-          backgroundColor: palette.surface,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.09)"
-        }]}>
-            <Box style={[[ui.w9, ui.h9, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0], {
-            backgroundColor: "rgba(105,120,255,0.10)",
-            borderWidth: 1,
-            borderColor: "rgba(105,120,255,0.15)"
-          }]}>
-              {copied ? <Vector width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={palette.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <Polyline points="20 6 9 17 4 12" />
-                </Vector> : <Vector width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={palette.accent} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <Path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                  <Path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                </Vector>}
-            </Box>
-            <Box style={[[ui.flex1, ui.textLeft, ui.minW0]]}>
-              <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite70]]}>
-                {copied ? "Kopyalandı!" : "Bağlantıyı Kopyala"}
-              </Label>
-              <Label style={[[ui.textXs, ui.textWhite25]]} numberOfLines={1}>
-                Paylaşılabilir etkinlik bağlantısı
-              </Label>
-            </Box>
-          </Touch>
-        </Box>
-      </Touch>
-    </Sheet>;
-}
 
 /* ─── Sort sheet ─── */
 function SortSheet({
@@ -430,7 +301,6 @@ export default function DiscoverScreen({
   // Only the feed's own events; the shared list also holds joined/favourite events for Rooms.
   const feedIds = new Set(store.feedIds);
   const EVENTS = store.events.filter(event => feedIds.has(event.id));
-  const [recommendationsOpen, setRecommendationsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("Sana Özel");
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
   // Distance sorts use where the user is right now; asked only when such a sort is chosen.
@@ -461,7 +331,6 @@ export default function DiscoverScreen({
     return true;
   });
   const sortedEvents = sortFeed(visibleEvents, sortBy, { interests: store.user.interests, location: deviceLocation });
-  const sortLabel = SORT_OPTIONS.find(o => o.value === sortBy)?.label ?? "Önerilen";
   const isCustomSort = sortBy !== "recommended";
   // Pull down reloads only the feed (/events); account and personal lists load elsewhere.
   const [pullRefreshing, setPullRefreshing] = useState(false);
@@ -484,7 +353,7 @@ export default function DiscoverScreen({
         {/* Events */}
         <EventList
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingTop: isCustomSort ? 160 : 112, paddingHorizontal: 20, paddingBottom: 112, flexGrow: visibleEvents.length ? 0 : 1 }}
+          contentContainerStyle={{ paddingTop: 112, paddingHorizontal: 20, paddingBottom: 112, flexGrow: visibleEvents.length ? 0 : 1 }}
           data={sortedEvents}
           keyExtractor={event => event.id}
           renderItem={({ item: event, index }) => <Box style={{ marginBottom: 16 }}><EventCard event={event} index={index} onPress={() => navigate("event-detail", {
@@ -492,7 +361,7 @@ export default function DiscoverScreen({
           })} onShare={() => setShareEvent(event)} /></Box>}
           ListEmptyComponent={<Box style={{ padding: 20, gap: 12 }}><Label>Henüz gösterilecek etkinlik yok.</Label><Touch onPress={() => { void refreshFeed().catch(() => {}); }}><Label>Yenile</Label></Touch></Box>}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 20 }} /> : null}
-          refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={() => { void pullToRefresh(); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={isCustomSort ? 160 : 112} />}
+          refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={() => { void pullToRefresh(); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={112} />}
           onEndReached={() => { void handleLoadMore(); }}
           onEndReachedThreshold={0.45}
           initialNumToRender={4}
@@ -518,23 +387,12 @@ export default function DiscoverScreen({
           </Box>
           <Box style={{ width: 132, flexDirection: "row", justifyContent: "flex-end" }}>
             <HeaderIconButton plain label="Etkinlik Takvimim" onPress={() => navigate("availability")}><CalendarIcon size={20} strokeWidth={1.8} style={{ color: "#f4f5ff" }} /></HeaderIconButton>
-            <HeaderIconButton plain label="Sana özel öneriler" onPress={() => setRecommendationsOpen(true)}><SparklesIcon size={20} strokeWidth={1.8} style={{ color: "#c7ceff" }} /></HeaderIconButton>
-            <HeaderIconButton plain label="Bildirimler" onPress={() => navigate("notifications")}><BellIcon size={20} strokeWidth={1.8} style={{ color: "#f4f5ff" }} /></HeaderIconButton>
+            <NotificationButton onPress={() => navigate("notifications")} />
           </Box>
         </Box>
 
-        {/* Filter row + sort */}
+        {/* Filter row */}
         <Box style={[[ui.px5, ui.pb3]]} enter>
-          {isCustomSort && <Box glass style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.px3, ui.roundedXl, ui.mb2], {
-            width: 156,
-            height: 44,
-            backgroundColor: "rgba(105,120,255,.13)",
-            borderWidth: 1,
-            borderColor: "rgba(185,195,255,.32)",
-          }]}>
-            <Label style={[[ui.text10px, ui.fontMedium, ui.textC8a44a70]]} numberOfLines={1}>{sortLabel}</Label>
-            <Touch accessibilityLabel="Sıralamayı temizle" onPress={() => setSortBy("recommended")} style={[[ui.text10px, ui.textWhite55], { paddingLeft: 8 }]}>Temizle</Touch>
-          </Box>}
           <Box style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>
             {/* Scrollable filters */}
             <Scroll style={[[ui.flex, ui.gap2, ui.pb05, ui.flex1, ui.minW0]]} horizontal>
@@ -550,8 +408,7 @@ export default function DiscoverScreen({
       {sortOpen && <SortSheet current={sortBy} onChange={next => { void chooseSort(next); }} onClose={() => setSortOpen(false)} />}
 
       {/* Share sheet — z above everything */}
-      {shareEvent && <ShareSheet event={shareEvent} onClose={() => setShareEvent(null)} />}
+      {shareEvent && <EventShareSheet event={shareEvent} onClose={() => setShareEvent(null)} />}
 
-      {recommendationsOpen && <RecommendationsSheet navigate={navigate} onClose={() => setRecommendationsOpen(false)} />}
     </Box>;
 }

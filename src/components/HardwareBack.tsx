@@ -1,3 +1,4 @@
+import { useOptionalGuest } from "../guest/GuestSession";
 import { usePathname, useRouter } from "expo-router"
 import { useEffect } from "react"
 import { BackHandler, Platform } from "react-native"
@@ -10,9 +11,11 @@ export default function HardwareBack() {
   const router = useRouter()
   const pathname = usePathname()
   const previous = usePreviousRoute()
+  const guest = useOptionalGuest()
   useEffect(() => {
     if (Platform.OS !== "android") return
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (guest?.guest || pathname.startsWith("/guest-")) return true
       if (PRE_APP_ROUTES.has(pathname)) return false
       if (router.canGoBack() && canReturnTo(previous)) return false
       if (pathname === "/discover") return false
@@ -21,6 +24,6 @@ export default function HardwareBack() {
       return true
     })
     return () => subscription.remove()
-  }, [router, pathname, previous])
+  }, [router, pathname, previous, guest?.guest?.code])
   return null
 }

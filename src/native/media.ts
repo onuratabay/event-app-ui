@@ -29,25 +29,9 @@ export async function selectPhoto(camera = false): Promise<string | null> {
     return null
   }
 }
-export function eventLink(event: AppEvent) {
-  return `eventapp://event-detail?eventId=${encodeURIComponent(event.id)}`
+export async function shareEvent(event: AppEvent, url: string) {
+  await Share.share({ title: event.title, message: `${event.title}\n${event.date} · ${event.time}\n${event.location}\nMisafir olarak katıl: ${url}` })
 }
-export async function shareEvent(event: AppEvent) {
-  try {
-    await Share.share({
-      title: event.title,
-      message: `${event.title}\n${event.date} · ${event.time}\n${event.location}\n${eventLink(event)}`,
-    })
-  } catch {
-    Alert.alert("Paylaşılamadı", "Lütfen tekrar dene.")
-  }
-}
-export async function copyEvent(event: AppEvent) {
-  try {
-    await Clipboard.setStringAsync(eventLink(event))
-    return true
-  } catch {
-    Alert.alert("Kopyalanamadı", "Lütfen tekrar dene.")
-    return false
-  }
+export async function copyEvent(url: string) {
+  await Clipboard.setStringAsync(url)
 }

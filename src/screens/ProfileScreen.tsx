@@ -3,21 +3,22 @@ import CityPicker from "../components/CityPicker";
 import { CalendarIcon, StarIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
-import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getApiErrorMessage } from "../api/client";
+import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage } from "../api/client";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
 import { InstagramIcon } from "../components/Icons";
 
 import { selectPhoto } from "../native/media";
-import { useStore } from "../native/Store";
+import { EMPTY_USER, updateStoreUser, useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch, Vector, openExternal } from "../native/UI";
 import { ui } from "../theme/styles";
-import { NavigateFn } from "../types";
+import { AppUser, NavigateFn } from "../types";
 interface Props {
   navigate: NavigateFn;
   isOwn?: boolean;
+  userId?: string;
 }
 function InlineEditField({
   value,
@@ -133,7 +134,8 @@ function AboutMe({ bio, isOwn, onSave }: { bio: string; isOwn: boolean; onSave: 
 }
 export default function ProfileScreen({
   navigate,
-  isOwn = true
+  isOwn: ownProfile = true,
+  userId
 }: Props) {
   const {
     data: store,
@@ -142,9 +144,31 @@ export default function ProfileScreen({
     loadReferences
   } = useStore();
   const EVENTS = store.events;
-  const ME = store.user;
-  const user = store.user;
-  const interests = new Set(store.user.interests);
+  const isOwn = ownProfile && (!userId || userId === store.user.id);
+  const [otherUser, setOtherUser] = useState<AppUser | null>(null);
+  const [profileError, setProfileError] = useState("");
+  useEffect(() => {
+    if (isOwn || !userId) return;
+    let active = true;
+    setOtherUser(null);
+    setProfileError("");
+    getUserProfile(userId).then(remote => {
+      if (active) setOtherUser({ ...updateStoreUser(EMPTY_USER, remote), interests: remote.interests.map(item => item.name) });
+    }).catch(error => { if (active) setProfileError(getApiErrorMessage(error, "Profil yüklenemedi.")); });
+    return () => { active = false; };
+  }, [userId, isOwn]);
+  const user = isOwn ? store.user : otherUser || EMPTY_USER;
+  const interests = new Set(user.interests);
+  const [interestCatalog, setInterestCatalog] = useState<Array<{ id: string; name: string }> | null>(null);
+  const [loadingInterests, setLoadingInterests] = useState(false);
+  const interestSavePending = useRef(false);
+  const openInterests = async () => {
+    if (loadingInterests) return;
+    setLoadingInterests(true);
+    try { setInterestCatalog(await getMapInterests()); }
+    catch (error) { Alert.alert('İlgi alanları yüklenemedi', getApiErrorMessage(error)); }
+    finally { setLoadingInterests(false); }
+  };
   const [showReferences, setShowReferences] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const signOut = async () => {
@@ -159,7 +183,7 @@ export default function ProfileScreen({
   };
   // References come from the store: fetched on the first visit, then kept current by socket events.
   const references = (store.references || []).filter(item => item.status === 'approved');
-  useEffect(() => { void loadReferences().catch(() => {}); }, []);
+  useEffect(() => { if (isOwn) void loadReferences().catch(() => {}); }, [isOwn]);
   const update = async (key: string, value: string) => {
     try {
       if (key === 'avatar') await setProfilePhoto(value);
@@ -171,21 +195,28 @@ export default function ProfileScreen({
     } catch (error) { Alert.alert('Profil kaydedilemedi', getApiErrorMessage(error)); throw error; }
   };
   const toggleInterest = async (interest: string) => {
+    if (interestSavePending.current) return;
+    interestSavePending.current = true;
     try {
-      const catalog = await getMapInterests();
+      const catalog = interestCatalog || await getMapInterests();
       const chosen = new Set(store.user.interests);
       if (chosen.has(interest)) chosen.delete(interest); else chosen.add(interest);
       const saved = await setUserInterests(catalog.filter(i => chosen.has(i.name)).map(i => i.id));
       setStore(p => ({ ...p, user: { ...p.user, interests: saved.map(i => i.name) } }));
     } catch (error) { Alert.alert('İlgi alanları kaydedilemedi', getApiErrorMessage(error)); }
+    finally { interestSavePending.current = false; }
   };
-  const myEvents = EVENTS.filter(e => e.host.id === store.user.id || e.participants.some(p => p.id === store.user.id));
+  const myEvents = EVENTS.filter(e => e.host.id === user.id || e.participants.some(p => p.id === user.id));
+  if (!isOwn && !otherUser) return <Box style={[[ui.flex1, ui.bg06060e]]}>
+    <TopNavBar navigate={navigate} fallback="discover" title="Profil" onBack={() => navigate("discover", { back: true })} />
+    <Box style={{ padding: 24, paddingTop: 100 }}><Label>{profileError || "Profil yükleniyor…"}</Label></Box>
+  </Box>;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
       <TopNavBar
         navigate={navigate}
         fallback="discover"
-        onBack={() => navigate("discover")}
+        onBack={() => navigate("discover", { back: !!userId })}
         backLabel="Geri"
         title="Profil"
         right={isOwn ? <Box style={profileNavStyles.actions}>
@@ -253,7 +284,7 @@ export default function ProfileScreen({
         </Box>
 
         {/* Stats */}
-        <Box style={[[ui.px5, ui.mb4]]}>
+        {isOwn && <Box style={[[ui.px5, ui.mb4]]}>
           <Box style={[[ui.grid, ui.gap3]]} columns={3}>
             {[{
             value: user.stats.attended,
@@ -273,7 +304,7 @@ export default function ProfileScreen({
                 </Label>
               </GlassCard>)}
           </Box>
-        </Box>
+        </Box>}
 
         {/* Event Score */}
         <Box style={[[ui.px5, ui.mb4]]}>
@@ -293,11 +324,11 @@ export default function ProfileScreen({
                 {[1, 2, 3, 4, 5].map(i => <StarIcon key={i} size={19} filled={i <= Math.round(user.score)} style={{ color: palette.accent, opacity: i <= Math.round(user.score) ? 1 : .25 }} />)}
               </Box>
             </Box>
-            <Box style={[[ui.spaceY0]]}>
+            {isOwn && <Box style={[[ui.spaceY0]]}>
               <ScoreBadge score={user.scores.punctuality} label="Dakiklik & Güvenilirlik" />
               <ScoreBadge score={user.scores.communication} label="İletişim & Nezaket" />
               <ScoreBadge score={user.scores.community} label="Topluluk Uyumu" />
-            </Box>
+            </Box>}
             <Label style={[[ui.textXs, ui.textWhite25, ui.mt3, ui.leadingRelaxed]]}>
               Birlikte etkinliğe gittiğin kişilerin sana verdiği puanlardan
               oluşur.
@@ -315,9 +346,9 @@ export default function ProfileScreen({
               İlgi Alanları
             </Label>
             <Box style={[[ui.flex, ui.flexWrap, ui.gap2]]}>
-              {Array.from(interests).map(interest => <InterestChip key={interest} label={interest} selected onPress={() => isOwn && toggleInterest(interest)} />)}
-              {isOwn && <Touch onPress={() => navigate("interests")} style={[[ui.px3, ui.py2, ui.roundedXl, ui.textXs, ui.border, ui.borderDashed, ui.borderWhite15, ui.textWhite30]]}>
-                  + Ekle
+              {(isOwn && interestCatalog ? interestCatalog.map(item => item.name) : Array.from(interests)).map(interest => <InterestChip key={interest} label={interest} selected={interests.has(interest)} onPress={() => isOwn && toggleInterest(interest)} />)}
+              {isOwn && !interestCatalog && <Touch accessibilityLabel="İlgi alanı ekle" disabled={loadingInterests} onPress={() => void openInterests()} style={[[ui.px3, ui.py2, ui.roundedXl, ui.textXs, ui.border, ui.borderDashed, ui.borderWhite15, ui.textWhite30]]}>
+                  {loadingInterests ? "Yükleniyor…" : "+ Ekle"}
                 </Touch>}
             </Box>
           </GlassCard>

@@ -1,3 +1,4 @@
+import { useOptionalGuest } from "../guest/GuestSession"
 import { defaultEventCover } from "./images"
 import { startSocket, stopSocket, onSocket, watchEvent } from '../services/socket'
 import AsyncStorage from "@react-native-async-storage/async-storage"
@@ -112,7 +113,7 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     duration: event.durationMinutes ? `${event.durationMinutes} dk` : undefined,
   }
 }
-/** Lightweight map/AI payloads omit photos; keep an already loaded real cover. */
+/** Lightweight map payloads omit photos; keep an already loaded real cover. */
 export function mapApiEventPreservingCover(event: Parameters<typeof mapApiEvent>[0], previous?: AppEvent): AppEvent {
   const mapped = mapApiEvent(event)
   // List payloads carry no participant photos; keep ones already loaded on the detail screen.
@@ -146,29 +147,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const loadingMore = useRef(false)
   const loadingMoreFeed = useRef(false)
   const sessionGeneration = useRef(0)
+  const guestContext = useOptionalGuest()
+  const guestMode = !!guestContext && (!guestContext.ready || !!guestContext.guest)
+  const guestModeRef = useRef(guestMode)
+  if (guestModeRef.current !== guestMode) { sessionGeneration.current++; guestModeRef.current = guestMode }
   // A callback retained by an unmounted screen cannot write into the next account's view.
   const renderGeneration = sessionGeneration.current
   const setAccountData: React.Dispatch<React.SetStateAction<Data>> = update => {
-    if (renderGeneration === sessionGeneration.current) setData(update)
+    if (renderGeneration === sessionGeneration.current && !guestModeRef.current) setData(update)
   }
   const refreshEvents = async () => {
+    if (guestModeRef.current) return
     const generation = sessionGeneration.current
     try {
       const [remote, interests, preferences, events, mine] = await Promise.all([getCurrentUser(), getUserInterests(), getPreferences(), getEvents(), getMyEvents()])
       if (generation !== sessionGeneration.current) return
       // Migrate only preferences belonging to this authenticated account, never another account's data.
       const legacy = await AsyncStorage.getItem('event-app:v1')
-      let old: { user?: { id?: string; recommendationProfile?: import('../recommendations/model').RecommendationProfile }; events?: unknown[]; messages?: Record<string, unknown> } | null = null
+      let old: { user?: { id?: string }; events?: unknown[]; messages?: Record<string, unknown> } | null = null
       try { old = legacy ? JSON.parse(legacy) : null } catch { /* A malformed legacy cache must not block server data. */ }
       if (generation !== sessionGeneration.current) return
       if (old?.user?.id === remote.id) {
         await archiveLegacyData({ user: old.user, events: old.events || [], messages: old.messages || {} })
         if (generation !== sessionGeneration.current) return
-        if (!preferences.recommendationProfile && old.user.recommendationProfile) {
-          await putPreference('recommendationProfile', old.user.recommendationProfile)
-          if (generation !== sessionGeneration.current) return
-          preferences.recommendationProfile = old.user.recommendationProfile
-        }
         const oldFilters = await AsyncStorage.getItem('event-app:map-filters')
         if (generation !== sessionGeneration.current) return
         if (!preferences.mapFilters && oldFilters) await putPreference('mapFilters', JSON.parse(oldFilters))
@@ -176,7 +177,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (generation !== sessionGeneration.current) return
       if (!old?.user?.id || old.user.id === 'me' || old.user.id === remote.id) await AsyncStorage.multiRemove(['event-app:v1', 'event-app:map-filters'])
       const all = [...new Map([...events.items, ...mine.items].map(event => [event.id, event])).values()]
-      setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), interests: interests.map(i => i.name), recommendationProfile: preferences.recommendationProfile }, events: all.map(mapApiEvent), mutedRooms: preferences.mutedRooms?.ids || [], feedIds: events.items.map(event => event.id) }))
+      setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), interests: interests.map(i => i.name) }, events: all.map(mapApiEvent), mutedRooms: preferences.mutedRooms?.ids || [], feedIds: events.items.map(event => event.id) }))
       page.current = 1; setMoreEvents(mine.hasMore)
       feedPage.current = 1; setMoreFeedEvents(events.items.length < events.total)
       setStorageError(null)
@@ -186,6 +187,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }
   const refreshFeed = async () => {
+    if (guestModeRef.current) return
     const generation = sessionGeneration.current
     try {
       const result = await getEvents(1)
@@ -199,6 +201,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }
   const refreshMyEvents = async () => {
+    if (guestModeRef.current) return
     const generation = sessionGeneration.current
     try {
       const result = await getMyEvents(1)
@@ -212,6 +215,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }
   const referencesLoaded = useRef(false)
   const loadReferences = async (force = false) => {
+    if (guestModeRef.current) return
     if (referencesLoaded.current && !force) return
     const generation = sessionGeneration.current
     referencesLoaded.current = true
@@ -224,6 +228,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }
   const loadMoreEvents = async () => {
+    if (guestModeRef.current) return
     if (loadingMore.current || !moreEvents) return
     loadingMore.current = true
     const generation = sessionGeneration.current
@@ -236,6 +241,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     finally { loadingMore.current = false }
   }
   const loadMoreFeedEvents = async () => {
+    if (guestModeRef.current) return
     if (loadingMoreFeed.current || !moreFeedEvents) return
     loadingMoreFeed.current = true
     const generation = sessionGeneration.current
@@ -256,11 +262,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       loadingMoreFeed.current = false
     }
   }
-  useEffect(() => { void hasSession().then(active => { if (active) return refreshEvents() }).catch(() => {}) }, [])
-  useLayoutEffect(() => { if (data.user.id) startSocket(data.user.id); return stopSocket }, [data.user.id])
+  useEffect(() => { if (guestMode) return; void hasSession().then(active => { if (active && !guestModeRef.current) return refreshEvents() }).catch(() => {}) }, [guestMode])
+  useLayoutEffect(() => { if (!guestMode && data.user.id) startSocket(data.user.id); else stopSocket(); return stopSocket }, [data.user.id, guestMode])
   const watchKey = data.events.map(e => e.id).sort().slice(0, 100).join(',')
-  useEffect(() => { const releases = watchKey.split(',').filter(Boolean).map(watchEvent); return () => releases.forEach(release => release()) }, [watchKey, data.user.id])
+  useEffect(() => { if (guestMode) return; const releases = watchKey.split(',').filter(Boolean).map(watchEvent); return () => releases.forEach(release => release()) }, [watchKey, data.user.id, guestMode])
   useEffect(() => {
+    if (guestMode) return
     const patch = (name: string) => onSocket(name, delta => setData(current => ({ ...current, events: current.events.map(event => event.id !== delta.eventId ? event : {
       ...event,
       ...(name === 'event:participant_left' ? { participants: event.participants.filter(person => person.id !== delta.userId) } : {}),
@@ -283,9 +290,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       unreadCount: delta.userId === current.user.id || delta.eventId === openRoomId || (current.mutedRooms || []).includes(delta.eventId) ? event.unreadCount || 0 : (event.unreadCount || 0) + 1,
     }) })))
     return () => { cleanups.forEach(cleanup => cleanup()); roomMessage(); referenceCreated(); referenceUpdated() }
-  }, [])
-  return <Context.Provider value={{ data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, refreshFeed, refreshMyEvents, loadReferences, resetSession: () => { referencesLoaded.current = false; stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
-    {storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}
+  }, [guestMode])
+  return <Context.Provider value={{ data: guestMode ? initial : data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, refreshFeed, refreshMyEvents, loadReferences, resetSession: () => { referencesLoaded.current = false; stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
+    {!guestMode && storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}
     {children}
   </Context.Provider>
 }

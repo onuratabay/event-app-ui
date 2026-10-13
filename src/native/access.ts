@@ -11,4 +11,4 @@ export function gatedScreen(status?: string): Screen | null {
 }
 
 /** Sign-in and onboarding pages a pending account may still use. */
-export const PRE_APP_ROUTES = new Set(["/", "/welcome", "/login", "/forgot-password", "/onboarding-1", "/onboarding-2", "/onboarding-3", "/interests"])
+export const PRE_APP_ROUTES = new Set(["/", "/welcome", "/login", "/forgot-password", "/onboarding-1", "/onboarding-2", "/onboarding-3", "/interests", "/legal"])

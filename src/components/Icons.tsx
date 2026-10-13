@@ -461,9 +461,6 @@ export function MessageIcon({
   )
 }
 
-export function SparklesIcon({ size = 20, style, strokeWidth = 1.8 }: IconProps) {
-  return <Vector width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}><Path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z" /><Path d="M20 2v4M18 4h4" /></Vector>
-}
 export function CompassIcon({ size = 24, style, strokeWidth = 1.8 }: IconProps) {
   return <Vector width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style}><Circle cx="12" cy="12" r="9" /><Path d="m16 8-2.5 5.5L8 16l2.5-5.5L16 8Z" /></Vector>
 }

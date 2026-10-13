@@ -2,6 +2,7 @@ import { palette } from "../theme/palette";
 import { LockIcon } from "../components/Icons";
 import { BrandWordmark } from "../components/Brand";
 import { useSignedOutEntry } from "../native/session";
+import { useOpenLegal } from "../legal/links";
 import { AtmoBackground } from "../components/GlassUI";
 import { Box, Label, Picture, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -60,6 +61,7 @@ export default function WelcomeScreen({
   navigate
 }: Props) {
   const checkingSession = useSignedOutEntry(navigate);
+  const openLegal = useOpenLegal();
   if (checkingSession) return null;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
@@ -196,6 +198,8 @@ export default function WelcomeScreen({
             Üyelik Başvurusu Yap
           </Touch>
 
+          <Touch onPress={() => navigate("guest-entry")} style={[[ui.wFull, ui.py3, ui.textSm, ui.textWhite70]]}>Davet kodum var</Touch>
+
           <Touch onPress={() => navigate("login")} style={[[ui.wFull, ui.py35, ui.textSm, ui.textWhite50, ui.fontLight]]}>
             Zaten üye misin?{" "}
             <Label style={[[ui.textWhite70, ui.underline]]}>Giriş Yap</Label>
@@ -206,6 +210,14 @@ export default function WelcomeScreen({
           <LockIcon size={15} style={{ color: palette.muted }} />
           <Label style={[[ui.textXs, ui.textWhite50]]}>Referansla başlayan özel bir topluluk.</Label>
         </Box>
+
+        <Label style={[[ui.textXs, ui.textWhite40, ui.textCenter, ui.leadingRelaxed]]}>
+          Devam ederek{" "}
+          <Label accessibilityRole="link" onPress={() => openLegal("terms")} style={[[ui.textWhite70, ui.underline]]}>Kullanım Koşulları</Label>
+          'nı ve{" "}
+          <Label accessibilityRole="link" onPress={() => openLegal("privacy")} style={[[ui.textWhite70, ui.underline]]}>Gizlilik Politikası</Label>
+          'nı kabul etmiş olursun.
+        </Label>
       </Box>
     </Box>;
 }

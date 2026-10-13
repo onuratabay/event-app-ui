@@ -71,16 +71,24 @@ export function getApiErrorMessage(error: unknown, fallback = "Lütfen tekrar de
 }
 
 export const apiRequestCounts: Record<string, number> = {}
+let guestAccountIsolation: (() => boolean) | null = null
+export function registerGuestAccountIsolation(blocked: () => boolean) {
+  guestAccountIsolation = blocked
+  return () => { if (guestAccountIsolation === blocked) guestAccountIsolation = null }
+}
 /** `background`: the screen does not wait for this request, so the global loading overlay stays hidden. */
-type RequestOptions = RequestInit & { background?: boolean }
+type RequestOptions = RequestInit & { background?: boolean; guest?: boolean; memberReturn?: boolean }
 async function request<T>(path: string, requestOptions: RequestOptions = {}, retryAuth = true): Promise<T> {
-  const { background = false, ...options } = requestOptions
+  const { background = false, guest = false, memberReturn = false, ...options } = requestOptions
+  if (!guest && guestAccountIsolation?.() && !(memberReturn && path === '/auth/me')) {
+    throw new ApiConnectionError('Misafir oturumunda yalnızca davet edilen etkinliğe erişebilirsin.')
+  }
   if (!background) apiLoading.begin()
   const started = Date.now()
-  const counterKey = `${options.method || 'GET'} ${path.split('?')[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ':id')}`
+  const counterKey = `${options.method || 'GET'} ${path.split('?')[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ':id').replace(/EWT-[A-Za-z0-9_-]{24}/g, ':invite')}`
   if (__DEV__) apiRequestCounts[counterKey] = (apiRequestCounts[counterKey] || 0) + 1
   try {
-  const accessToken = await AsyncStorage.getItem(ACCESS_TOKEN_KEY)
+  const accessToken = guest ? null : await AsyncStorage.getItem(ACCESS_TOKEN_KEY)
   const controller = new AbortController()
   const cancel = () => controller.abort()
   if (options.signal?.aborted) cancel()
@@ -109,7 +117,7 @@ async function request<T>(path: string, requestOptions: RequestOptions = {}, ret
     options.signal?.removeEventListener("abort", cancel)
   }
 
-  if (response.status === 401 && retryAuth && !["/auth/login", "/auth/register", "/auth/refresh", "/auth/forgot-password", "/auth/reset-password"].includes(path)) {
+  if (response.status === 401 && !guest && retryAuth && !["/auth/login", "/auth/register", "/auth/refresh", "/auth/forgot-password", "/auth/reset-password"].includes(path)) {
     if (await refreshSession()) return request<T>(path, requestOptions, false)
   }
   if (!response.ok) {
@@ -184,6 +192,8 @@ export async function register(input: {
   password: string
   birthDate: string
   city: string
+  acceptedDocuments: LegalAcceptance[]
+  marketingConsent: boolean
 }) {
   const response = await request<AuthResponse>("/auth/register", {
     method: "POST",
@@ -297,9 +307,26 @@ export function resetPassword(token: string, newPassword: string) {
   return request<{ message: string }>("/auth/reset-password", { method: "POST", body: JSON.stringify({ token: token.trim(), newPassword, language: "tr" }) }, false)
 }
 
+export type LegalDocumentType = 'terms' | 'privacy' | 'kvkk' | 'community' | 'marketing'
+export interface LegalAcceptance { type: LegalDocumentType; version: number }
+export interface LegalDocumentSummary extends LegalAcceptance { title: string; required: boolean; publishedAt: string }
+export interface LegalConsentStatus {
+  documents: Array<LegalDocumentSummary & { accepted: boolean; acceptedVersion: number | null; acceptedAt: string | null }>
+  /** Required documents whose current version the user has not accepted yet. */
+  pending: LegalDocumentType[]
+  marketing: boolean
+}
+// Legal texts are public and versioned on the server; `guest` keeps them readable before sign-in and in guest mode.
+export const getLegalDocuments = () => request<{ items: LegalDocumentSummary[] }>('/legal/documents', { guest: true }, false)
+export const getLegalDocument = (type: LegalDocumentType) => request<LegalDocumentSummary & { body: string }>(`/legal/documents/${type}`, { guest: true }, false)
+export const getLegalConsents = () => request<LegalConsentStatus>('/legal/consents', { background: true })
+export const acceptLegalDocuments = (documents: LegalAcceptance[]) => request<LegalConsentStatus>('/legal/consents', { method: 'POST', body: JSON.stringify({ documents }) })
+export const setMarketingConsent = (granted: boolean) => request<LegalConsentStatus>('/legal/consents/marketing', { method: 'PUT', body: JSON.stringify({ granted }) })
+
 export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
+export const getUserProfile = (userId: string) => request<ApiUser & { interests: Array<{ id: string; name: string }> }>(`/users/${encodeURIComponent(userId)}/profile`)
 export interface NotificationPreferences { invites?: boolean; messages?: boolean; reminders?: boolean }
-export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; recommendationProfile?: import('../recommendations/model').RecommendationProfile; notifications?: NotificationPreferences; mutedRooms?: { ids: string[] } }
+export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; notifications?: NotificationPreferences; mutedRooms?: { ids: string[] } }
 // Startup asks for the account from several places at once; they share one request.
 export const getCurrentUser = () => shared('user:me', () => request<ApiUser>('/auth/me', { method: 'POST' }))
 // profile_incomplete → approved once at least one interest is saved (photo optional).
@@ -395,3 +422,29 @@ export const inviteEventCandidates = (eventId: string, userIds: string[]) => req
 // Before the event exists: pool members who fit the creation form's draft. Read-only; invitations go out after creation.
 export interface CandidateDraft { interestId: string; levelId?: string; date: string; startTime: string; durationMinutes?: number; latitude: number; longitude: number }
 export const previewEventCandidates = (draft: CandidateDraft) => request<{ items: EventCandidate[] }>('/events/candidates/preview', { method: 'POST', body: JSON.stringify(draft) })
+
+export interface AppNotification {
+  id: string; type: string; title: string; body: string;
+  eventId: string | null; actorId: string | null; readAt: string | null; createdAt: string;
+}
+export const getNotifications = (cursor?: string) => request<{ items: AppNotification[]; unreadCount: number; nextCursor: string | null }>(`/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)
+export const readNotification = (id: string) => request(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' })
+export const readAllNotifications = () => request('/notifications/read-all', { method: 'PATCH' })
+
+
+export interface EventShareLink { url: string; code: string; expiresAt: string; responsibilityAcceptedAt: string }
+export const createEventShare = (eventId: string) => request<EventShareLink>(`/events/${encodeURIComponent(eventId)}/share`, { method: 'POST', body: JSON.stringify({ acceptResponsibility: true }) })
+export const revokeEventShare = (code: string) => request(`/sharing/links/${encodeURIComponent(code)}`, { method: 'DELETE' })
+export interface GuestEvent {
+  id: string; title: string; category: string; date: string; time: string; location: string;
+  description: string; requirements: string | null; coverPhoto: string | null; status: string;
+  minParticipants: number; maxParticipants: number; participantCount: number; hostName: string;
+}
+export const getGuestEvent = (code: string) => request<{ event: GuestEvent; imageUrl: string }>(`/guest/events/${encodeURIComponent(code)}`, { guest: true })
+export const joinGuestEvent = (code: string, name: string, session?: string) => request<{ session: string; name: string; expiresAt?: string; resumed: boolean }>(`/guest/events/${encodeURIComponent(code)}/join`, { guest: true, method: 'POST', headers: session ? { 'x-guest-session': session } : {}, body: JSON.stringify({ name }) })
+export const leaveGuestEvent = (code: string, session: string) => request(`/guest/events/${encodeURIComponent(code)}/join`, { guest: true, method: 'DELETE', headers: { 'x-guest-session': session } })
+
+export const getGuestParticipation = (code: string, session: string) => request<{ joined: boolean; name: string; expiresAt: string }>(`/guest/events/${encodeURIComponent(code)}/participation`, { guest: true, headers: { 'x-guest-session': session } })
+
+/** The only account request allowed while leaving guest mode: validate the existing member. */
+export const getMemberForGuestReturn = () => request<ApiUser>('/auth/me', { method: 'POST', memberReturn: true })

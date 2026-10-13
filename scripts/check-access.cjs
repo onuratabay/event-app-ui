@@ -27,6 +27,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
       : path === "/interests" ? [{ id: "padel", name: "Padel", slug: "padel", levels: [] }]
       : path === "/users/me/interests" ? (options.body ? [{ id: "padel", name: "Padel" }] : [])
       : path === "/users/me/preferences" ? {}
+      : path === "/legal/documents" ? { items: [{ type: "terms", version: 1, required: true }, { type: "privacy", version: 1, required: true }, { type: "marketing", version: 3, required: false }] }
       : path === "/users/me/profile" ? { ...user(current), ...JSON.parse(options.body || "{}") }
       : path === "/events/participating" && global.__testJoinedEvent ? { items: [global.__testJoinedEvent], total: 1 }
       : path === "/events" && global.__testFeedEvents ? { items: global.__testFeedEvents, total: global.__testFeedEvents.length }
@@ -115,9 +116,14 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await act(async () => registration.root.findAll(n => n.props.mode === "date" && typeof n.props.onChangeText === "function")[0].props.onChangeText("1995-06-15"))
   await act(async () => registration.root.findAllByType("Pressable").find(n => String(n.props.accessibilityLabel).startsWith("Şehir:")).props.onPress())
   await act(async () => registration.root.findAllByType("Pressable").find(n => n.props.accessibilityState && "selected" in n.props.accessibilityState && text(n).includes("Ankara")).props.onPress())
-  await tap(registration, "Topluluk ilkelerini okudum")
+  await tap(registration, "Topluluk Kuralları")
+  await tap(registration, "KVKK Aydınlatma Metni")
+  await tap(registration, "ticari elektronik ileti")
   await tap(registration, "Devam Et")
   assert.equal(registered, "interests", "profile_incomplete registration opens profile completion")
+  const signUp = bodies.find(row => row.path === "/auth/register").body
+  assert.deepEqual(signUp.acceptedDocuments, [{ type: "terms", version: 1 }, { type: "privacy", version: 1 }, { type: "marketing", version: 3 }], "Opting in records the marketing text version too")
+  assert.equal(signUp.marketingConsent, true)
   await act(async () => registration.unmount())
 
   // Profile completion: an interest is required, the photo is not; saving approves and opens the app.
@@ -384,7 +390,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await pressLabel(home, "Sıralama ve filtre")
   await pressText(home, "En Yakın Mesafe")
   await act(() => new Promise(resolve => setTimeout(resolve, 20)))
-  assert(text(home.toJSON()).includes("En Yakın Mesafe") && text(home.toJSON()).includes("Temizle"), "With permission the feed sorts by distance from the user")
+  assert(home.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "Sıralama ve filtre").props.accessibilityState.selected, "With permission the distance sort is applied; the selected option is shown in the sorting menu")
   global.__testLocationPermission = undefined
   await act(async () => home.unmount())
 

@@ -53,7 +53,7 @@ class Value {
 const anim = () => ({ start() {}, stop() {} })
 const storage = new Map()
 Module._load = function (id, parent, isMain) {
-  if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]), usePathname: () => global.__testPathname || "/discover", useRootNavigationState: () => global.__testRootState, useRouter: () => ({ navigate: href => global.__testNavigations?.push(href.pathname ?? href), replace: href => global.__testNavigations?.push(href.pathname ?? href), push: href => global.__testNavigations?.push(href.pathname ?? href), back: () => global.__testNavigations?.push("back"), canGoBack: () => !!global.__testRootState && global.__testRootState.index > 0, canDismiss: () => true, dismissAll: () => global.__testNavigations?.push("dismissAll") }) }
+  if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]), usePathname: () => global.__testPathname || "/discover", useLocalSearchParams: () => global.__testParams || {}, useRootNavigationState: () => global.__testRootState, useRouter: () => ({ navigate: href => global.__testNavigations?.push(href.pathname ?? href), replace: href => global.__testNavigations?.push(href.pathname ?? href), push: href => global.__testNavigations?.push(href.pathname ?? href), back: () => global.__testNavigations?.push("back"), canGoBack: () => !!global.__testRootState && global.__testRootState.index > 0, canDismiss: () => true, dismissAll: () => global.__testNavigations?.push("dismissAll") }) }
   if (id === "socket.io-client") return require("./mock-socket.cjs")
   if (id === "expo-notifications") { global.__expoNotificationsLoaded = true; return {} }
   if (id === "expo-location") return {
@@ -73,6 +73,7 @@ Module._load = function (id, parent, isMain) {
       ScrollView: "ScrollView",
       TextInput: "TextInput",
       Modal: "Modal",
+      Switch: "Switch",
       Platform: { OS: process.env.TEST_PLATFORM || "ios" },
       useWindowDimensions: () => ({ width: global.__testWindowWidth || 390, height: 844, scale: 3, fontScale: 1 }),
       Alert: { alert() {} },
@@ -82,7 +83,7 @@ Module._load = function (id, parent, isMain) {
       AccessibilityInfo: { isReduceMotionEnabled: async () => false, announceForAccessibility() {}, getRecommendedTimeoutMillis: async value => value },
       Easing: { linear: value => value, quad: value => value ** 2, cubic: value => value ** 3, out: easing => easing, inOut: easing => easing },
       Linking: { openURL: async url => { global.__openedUrl = url }, canOpenURL: async () => true },
-      Share: { share: async () => {} },
+      Share: { share: async value => { global.__lastShare = value; return {} } },
       StyleSheet: {
         create: (s) => s,
         flatten,
@@ -122,13 +123,14 @@ Module._load = function (id, parent, isMain) {
       default: {
         getItem: async (k) => storage.get(k) || null,
         setItem: async (k, v) => storage.set(k, v),
+        removeItem: async (k) => storage.delete(k),
         multiRemove: async (keys) => keys.forEach(key => storage.delete(key)),
         multiSet: async (entries) => entries.forEach(([k, v]) => storage.set(k, v)),
       },
     }
   if (id === "expo-image-picker")
     return { launchImageLibraryAsync: async () => ({ canceled: true }) }
-  if (id === "expo-clipboard") return { setStringAsync: async () => {} }
+  if (id === "expo-clipboard") return { setStringAsync: async value => { global.__clipboard = value } }
   if (id === "expo-file-system")
     return { File: class {}, Paths: { document: "/mock" } }
   return originalLoad.call(this, id, parent, isMain)
@@ -279,12 +281,13 @@ async function tap(tree, label) {
   const ankara = { latitude: 39.92, longitude: 32.85 }
   assert.deepEqual(order("distance-near", ankara), ["soon-film", "old-padel", "new-yoga", "new-padel"], "Nearest to the user first; events without a location last")
   assert.deepEqual(order("distance-far", ankara), ["new-yoga", "old-padel", "soon-film", "new-padel"], "Farthest from the user first; events without a location last")
-  console.log("PASS: category cover fallback, real photo priority and image preservation across map/AI navigation.")
+  console.log("PASS: category cover fallback, real photo priority and image preservation across map navigation.")
   global.fetch = server.fetch;
   const originalFetch = global.fetch
   let registrationRequest
   global.fetch = async (url, options) => {
     if (url.endsWith("/events?page=1&limit=20")) return { ok: true, json: async () => ({ items: [] }) }
+    if (url.endsWith("/legal/documents")) return { ok: true, json: async () => ({ items: [{ type: "terms", version: 2, title: "Kullanım Koşulları", required: true }, { type: "community", version: 1, title: "Topluluk Kuralları", required: true }, { type: "privacy", version: 1, title: "Gizlilik Politikası", required: true }, { type: "kvkk", version: 1, title: "KVKK", required: true }, { type: "marketing", version: 1, title: "Ticari İleti", required: false }] }) }
     registrationRequest = { url, body: JSON.parse(options.body) }
     return { ok: true, json: async () => ({ user: { id: "registered-user" }, tokens: { accessToken: "test-access", refreshToken: "test-refresh" } }) }
   }
@@ -317,9 +320,18 @@ async function tap(tree, label) {
   const options = registration.root.findAllByType("Pressable").filter(n => n.props.accessibilityState && "selected" in n.props.accessibilityState)
   assert.deepEqual(options.map(n => text(n).trim()), ["İzmir"], "Searching 'izmir' finds İzmir")
   await act(async () => options[0].props.onPress())
-  await tap(registration, "Topluluk ilkelerini okudum")
+  await act(async () => birthField().props.onChangeText("2015-06-15"))
+  assert(text(registration.toJSON()).includes("en az 18 yaşında"), "Members must be at least 18")
+  await act(async () => birthField().props.onChangeText("1995-06-15"))
+  assert(!text(registration.toJSON()).includes("en az 18 yaşında"))
+  await tap(registration, "Topluluk Kuralları")
+  await tap(registration, "Devam Et")
+  assert.equal(registrationRequest, undefined, "Registration waits for every required consent")
+  await tap(registration, "KVKK Aydınlatma Metni")
   await tap(registration, "Devam Et")
   assert.equal(destination, "onboarding-2")
+  assert.deepEqual(registrationRequest.body.acceptedDocuments, [{ type: "terms", version: 2 }, { type: "community", version: 1 }, { type: "privacy", version: 1 }, { type: "kvkk", version: 1 }], "The accepted server versions are sent; marketing stays opt-in")
+  assert.equal(registrationRequest.body.marketingConsent, false)
   assert.equal(registrationRequest.url, "http://192.168.1.15:3000/auth/register")
   assert.equal(registrationRequest.body.birthDate, "15/06/1995")
   assert.equal(registrationRequest.body.city, "İzmir", "The chosen city is sent with the registration")
@@ -334,10 +346,10 @@ async function tap(tree, label) {
   await require("./check-map.cjs")({ mount, tap, act, text, storage })
   await require("./check-session.cjs")({ mount, tap, act, text, storage })
   await require("./check-access.cjs")({ mount, tap, act, text, storage })
-  await require("./check-recommendations.cjs")({ mount, tap, act, text, storage })
   await require("./check-password-reset.cjs")({ mount, tap, act, text, storage })
   await require("./check-server-state.cjs")({ mount, tap, act, text, storage })
   await require("./check-availability.cjs")({ mount, tap, act, text, storage })
+  await require("./check-legal.cjs")({ mount, tap, act, text, storage })
   const names = [
     "Splash",
     "Welcome",
@@ -368,12 +380,24 @@ async function tap(tree, label) {
   await act(async () => input.props.onChangeText("zzzz-no-match"))
   assert(text(search.toJSON()).includes("sonuç bulunamadı"))
   await act(async () => search.unmount())
-  const detail = await mount("EventDetail", { eventId: EVENTS[0].id })
+  const profileNavigations = []
+  const detail = await mount("EventDetail", { eventId: EVENTS[0].id, navigate: (screen, options) => profileNavigations.push({ screen, options }) })
+  await tap(detail, "Profil")
+  assert.deepEqual(profileNavigations.pop(), { screen: "profile", options: { userId: server.events[0].owner.id } }, "Host profile button selects the host instead of the signed-in user")
   await tap(detail, "Katıl")
   assert(text(detail.toJSON()).includes("Katıldın"))
   assert(!text(detail.toJSON()).includes("Odaya Katıl"), "No room button below the minimum")
   assert(text(detail.toJSON()).includes("minimum katılımcı sayısına ulaştığında oda açılacak"), "Explains when the room opens")
   await act(async () => detail.unmount())
+  const originalGetUserProfile = api.getUserProfile
+  api.getUserProfile = async id => ({ id, firstName: "Ada", lastName: "Misafir", city: "İzmir", bio: "Tenis severim", rank: 4.5, interests: [{ id: "tennis", name: "Tenis" }] })
+  const memberProfile = await mount("Profile", { userId: "other-member" })
+  assert(text(memberProfile.toJSON()).includes("Ada Misafir"), "Selected member's name is displayed")
+  assert(text(memberProfile.toJSON()).includes("Tenis severim"), "Selected member's bio is displayed")
+  assert(text(memberProfile.toJSON()).includes("Tenis"), "Selected member's interests are displayed")
+  for (const ownAction of ["Ayarlar", "Çıkış", "+ Ekle", "Referanslarım", "Etkinlik Takvimim"]) assert(!text(memberProfile.toJSON()).includes(ownAction), `Member profile hides ${ownAction}`)
+  await act(async () => memberProfile.unmount())
+  api.getUserProfile = originalGetUserProfile
   server.events[0].confirmedParticipantCount = server.events[0].minParticipants
   const restored = await mount("EventDetail", { eventId: EVENTS[0].id })
   await act(async () => { await new Promise(r=>setTimeout(r,20)) })
@@ -503,9 +527,21 @@ async function tap(tree, label) {
   assert(!text(blockedCreate.toJSON()).includes("Ne yapmak"), "Creation steps are hidden while blocked")
   await act(async () => blockedCreate.unmount())
   server.state.createBlocked = false
-  const notifications = await mount("Notifications")
+  server.notifications.push({ id: "notice-1", type: "participant_joined", title: "Etkinliğine yeni katılımcı", body: "Ayşe etkinliğine katıldı.", eventId: server.events[0].id, actorId: "other", readAt: null, createdAt: new Date().toISOString() })
+  const notificationNavigations = []
+  const notifications = await mount("Notifications", { navigate: (screen, options) => notificationNavigations.push({ screen, options }) })
   await act(async () => { await new Promise(r=>setTimeout(r,20)) })
   assert(text(notifications.toJSON()).includes("etkinliğine davet etti"), "Pending invitations are listed")
+  assert(text(notifications.toJSON()).includes("Etkinliğine yeni katılımcı"), "Persisted notifications are loaded")
+  await tap(notifications, "Etkinliğine yeni katılımcı")
+  assert(server.notifications[0].readAt, "Opening a notification persists its read state")
+  assert.deepEqual(notificationNavigations.pop(), { screen: "event-detail", options: { eventId: server.events[0].id } }, "Notification opens its related event")
+  server.notifications.push({ id: "notice-2", type: "reference_response", title: "Referans isteğin yanıtlandı", body: "Referans onaylandı", eventId: null, actorId: "other", readAt: null, createdAt: new Date().toISOString() })
+  const fakeSocket = require("./mock-socket.cjs").instances.at(-1)
+  await act(async () => { fakeSocket.receive("notification:created", server.notifications.at(-1)); await new Promise(resolve => setTimeout(resolve, 20)) })
+  assert(text(notifications.toJSON()).includes("Referans isteğin yanıtlandı"), "Remote realtime notifications appear without reopening")
+  await tap(notifications, "Tümünü oku")
+  assert(server.notifications.every(row => row.readAt), "Read-all persists for every notification")
   await tap(notifications,"Kabul et")
   assert(server.requests.some(r => r.path === '/events/invite-1/join' && r.method === 'POST'), "Accepting an invitation joins the event")
   assert.equal(server.invitations.length, 0)
@@ -515,6 +551,7 @@ async function tap(tree, label) {
   const routes=fs.readdirSync(path.join(__dirname,"../app"))
   for(const screen of [...names.filter(n=>n!=="Splash"&&n!=="Onboarding").map(n=>n.replace(/[A-Z]/g,(c,i)=>(i?"-":"")+c.toLowerCase())),"onboarding-1","onboarding-2","onboarding-3"]){assert(routes.includes(screen+".tsx"),`Missing route ${screen}`)}
   await act(async () => createEvent.unmount())
+  await require("./check-guest-sharing.cjs")({ act, text, storage, tap, audit })
   await require("./check-socket.cjs")({ storage })
   assert.equal(errors.length, 0, errors.join("\n"))
   console.log(

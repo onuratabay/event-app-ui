@@ -1,5 +1,6 @@
+import ActivityIndicator from "../components/LoadingSpinner";
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { ActivityIndicator, Alert, Platform, StyleSheet } from "react-native"
+import { Alert, Platform, StyleSheet } from "react-native"
 import * as Location from "expo-location"
 import MapView, { Circle, Marker } from "react-native-maps"
 import { MAP_PROVIDER } from "../map/provider"

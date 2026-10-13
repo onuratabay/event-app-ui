@@ -27,7 +27,7 @@ export function useNavigate(): NavigateFn {
       if (opts?.back && router.canGoBack() && canReturnTo(previous)) { router.back(); return }
       const href = {
         pathname: screen === "splash" ? "/" : `/${screen}`,
-        params: opts?.eventId ? { eventId: opts.eventId } : {},
+        params: { ...(opts?.eventId ? { eventId: opts.eventId } : {}), ...(opts?.userId ? { userId: opts.userId } : {}) },
       } as Href
       // Crossing the sign-in boundary clears history, so back can never return to login (or into the app after logout).
       // A blocked back (previous page is login or a finished creation flow) also clears it, landing on the fallback.
@@ -43,7 +43,8 @@ export function useNavigate(): NavigateFn {
         router.push(href)
         return
       }
-      if (opts?.back || screen === "welcome" || screen === "discover" || roots.has(screen))
+      if (screen === "profile" && opts?.userId) router.push(href)
+      else if (opts?.back || screen === "welcome" || screen === "discover" || roots.has(screen))
         router.replace(href)
       else router.navigate(href)
     },

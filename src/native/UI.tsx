@@ -306,7 +306,7 @@ export function Touch({
     >
       <AnimatedPressable
         {...props}
-        accessibilityRole="button"
+        accessibilityRole={props.accessibilityRole || "button"}
         accessibilityState={{ ...props.accessibilityState, disabled }}
         disabled={disabled}
         hitSlop={8}

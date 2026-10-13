@@ -16,8 +16,6 @@ import { AppEvent, NavigateFn } from "../types";
 interface Props {
   navigate: NavigateFn;
 }
-const SUGGESTED = ["Padel maçı", "Kahve buluşması", "Hiking turu", "Fotoğraf yürüyüşü", "Elektronik müzik", "Yoga dersi", "Bisiklet turu", "Teknoloji buluşması"];
-const RECENT = ["Padel After Work", "Sunday Hiking"];
 function EventRow({
   event,
   onPress
@@ -92,7 +90,6 @@ export default function SearchScreen({
   // No autofocus: the keyboard opens only when the user taps the search box.
   const inputRef = useRef<TextInput>(null);
   const filtered = !searching ? [] : !query.trim() ? EVENTS : EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase()) || e.category.toLowerCase().includes(query.toLowerCase()) || e.location.toLowerCase().includes(query.toLowerCase()));
-  const suggestions = query.trim() ? SUGGESTED.filter(s => s.toLowerCase().includes(query.toLowerCase())) : SUGGESTED;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="discover" title="Ara" />
@@ -125,79 +122,14 @@ export default function SearchScreen({
       </Box>
 
       <Scroll style={[[ui.flex1, ui.px5, ui.pb10], { paddingBottom: 40 + navInset }]}>
-        {/* No query — recent + suggestions */}
-        {!searching && <Box style={[[ui.spaceY6]]} enter>
-            {/* Recent */}
-            <Box>
-              <Label style={[[ui.textXs, ui.textWhite25, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-                Son aramalar
-              </Label>
-              <Box style={[[ui.gapY1, ui.wFull]]}>
-                {RECENT.map(r => <Touch key={r} onPress={() => setQuery(r)} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.gap3, ui.py25, ui.textLeft, ui.roundedXl, ui.px2]]}>
-                    <Box style={[[ui.w7, ui.h7, ui.roundedLg, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0], {
-                backgroundColor: "rgba(255,255,255,0.05)",
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.07)"
-              }]}>
-                      <ClockIcon size={13} strokeWidth={1.75} style={[[ui.textWhite25]]} />
-                    </Box>
-                    <Label style={[[ui.flex1, ui.textSm, ui.textWhite55, ui.textLeft]]}>{r}</Label>
-                  </Touch>)}
-              </Box>
-            </Box>
-
-            {/* Suggestions */}
-            <Box>
-              <Label style={[[ui.textXs, ui.textWhite25, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-                Önerilen aramalar
-              </Label>
-              <Box style={[[ui.flex, ui.flexWrap, ui.gap2]]}>
-                {SUGGESTED.map(s => <Touch key={s} onPress={() => setQuery(s)} style={[[ui.px35, ui.py2, ui.roundedXl, ui.textSm, ui.textWhite55], {
-              backgroundColor: "rgba(255,255,255,0.05)",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.08)"
-            }]}>
-                    {s}
-                  </Touch>)}
-              </Box>
-            </Box>
-
-            {/* Category pills */}
-            <Box>
-              <Label style={[[ui.textXs, ui.textWhite25, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-                Kategoriler
-              </Label>
-              <Box style={[[ui.grid, ui.gap2]]} columns={2}>
-                {[{
-              label: "Spor & Aktivite",
-              count: "84 etkinlik",
-              color: "rgba(146,125,255,0.10)"
-            }, {
-              label: "Müzik & Sanat",
-              count: "52 etkinlik",
-              color: "rgba(105,120,255,0.10)"
-            }, {
-              label: "Yemek & Kahve",
-              count: "38 etkinlik",
-              color: "rgba(52,211,153,0.08)"
-            }, {
-              label: "Doğa & Outdoor",
-              count: "61 etkinlik",
-              color: "rgba(96,165,250,0.08)"
-            }].map(cat => <Touch key={cat.label} style={[[ui.p35, ui.rounded2xl, ui.textLeft], {
-              backgroundColor: cat.color,
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.07)"
-            }]}>
-                    <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite75]]}>
-                      {cat.label}
-                    </Label>
-                    <Label style={[[ui.textXs, ui.textWhite35, ui.mt05]]}>
-                      {cat.count}
-                    </Label>
-                  </Touch>)}
-              </Box>
-            </Box>
+        {/* No query — hint */}
+        {!searching && <Box style={[[ui.textCenter, ui.py10]]} enter>
+            <Label style={[[ui.textSm, ui.textWhite25]]}>
+              Etkinlik, aktivite veya konum ara
+            </Label>
+            <Label style={[[ui.textXs, ui.textWhite15, ui.mt1]]}>
+              Ya da yukarıdan bir tarih aralığı seç
+            </Label>
           </Box>}
 
         {/* Results */}
@@ -213,20 +145,6 @@ export default function SearchScreen({
             })} />)}
                 </Box>
               </Box> : <Box>
-                {/* Query suggestions */}
-                {suggestions.length > 0 && <Box style={[[ui.mb5]]}>
-                    <Label style={[[ui.textXs, ui.textWhite25, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-                      Öneriler
-                    </Label>
-                    <Box style={[[ui.gapY1]]}>
-                      {suggestions.map(s => <Touch key={s} onPress={() => setQuery(s)} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.gap3, ui.py25, ui.textLeft, ui.roundedXl, ui.px2, ui.Mx2]]}>
-                          <SearchIcon size={13} strokeWidth={1.75} style={[[ui.textWhite20, ui.flexShrink0]]} />
-                          <Label style={[[ui.textSm, ui.textWhite50]]}>
-                            {s}
-                          </Label>
-                        </Touch>)}
-                    </Box>
-                  </Box>}
                 <Box style={[[ui.textCenter, ui.py10]]}>
                   <Label style={[[ui.textSm, ui.textWhite25]]}>
                     {query.trim() ? `"${query}" için sonuç bulunamadı` : "Bu tarih aralığında etkinlik yok"}

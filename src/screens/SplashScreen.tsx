@@ -1,3 +1,4 @@
+import { useOptionalGuest } from "../guest/GuestSession";
 import { palette } from "../theme/palette";
 import { gatedScreen } from "../native/access";
 import type { Screen } from "../types";
@@ -15,9 +16,11 @@ interface Props {
 export default function SplashScreen({
   navigate
 }: Props) {
+  const guest = useOptionalGuest();
   const orbit = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    if (guest && (!guest.ready || guest.guest)) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const startedAt = Date.now();
@@ -38,7 +41,7 @@ export default function SplashScreen({
     };
     void resolveDestination();
     return () => { active = false; if (timer) clearTimeout(timer); };
-  }, [navigate]);
+  }, [navigate, guest?.ready, guest?.guest?.code]);
   useEffect(() => {
     // The lightweight native-host test shim does not implement animation loops.
     if (typeof Animated.loop !== "function") return;

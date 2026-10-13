@@ -1,3 +1,5 @@
+import { GuestProvider } from "../src/guest/GuestSession";
+import GuestRouteBoundary from "../src/guest/GuestRouteBoundary";
 import { BlurSurface } from "../src/native/SharedBlur";
 import { palette } from "../src/theme/palette";
 import { useFonts } from "expo-font"
@@ -19,6 +21,7 @@ import { ErrorNoticeProvider } from "../src/components/ErrorNotice"
 import ApiLoadingOverlay from "../src/components/ApiLoadingOverlay"
 import AppBottomNav from "../src/components/AppBottomNav"
 import AccessGuard from "../src/components/AccessGuard"
+import LegalConsentGate from "../src/components/LegalConsentGate"
 import HardwareBack from "../src/components/HardwareBack"
 void SplashScreen.preventAutoHideAsync()
 export default function RootLayout() {
@@ -50,7 +53,7 @@ export default function RootLayout() {
             style={s.root}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
-            <BlurSurface overlay={<ApiLoadingOverlay />}><StoreProvider>
+            <BlurSurface overlay={<ApiLoadingOverlay />}><GuestProvider><StoreProvider><GuestRouteBoundary>
               <Stack
                 screenOptions={{
                   headerShown: false,
@@ -61,8 +64,9 @@ export default function RootLayout() {
               />
               <AppBottomNav />
               <AccessGuard />
+              <LegalConsentGate />
               <HardwareBack />
-            </StoreProvider></BlurSurface>
+            </GuestRouteBoundary></StoreProvider></GuestProvider></BlurSurface>
           </KeyboardAvoidingView>
         </ErrorNoticeProvider>
       </SafeAreaView>

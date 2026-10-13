@@ -68,7 +68,8 @@ export default function EventRoomScreen({
   const [error, setError] = useState('');
   // The backend decides whether the room is open (minimum participants, cancellation, membership).
   const [closedReason, setClosedReason] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
+  // Messages arrive over the socket; while it reconnects the room says so instead of offering a refresh.
+  const [live, setLive] = useState(socketConnected());
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const typingExpiry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTyping = useRef(0);
@@ -148,10 +149,12 @@ export default function EventRoomScreen({
         typingExpiry.current = setTimeout(() => setTypingUserId(null), 3000);
       }),
       onSocket('sync:required', () => { void load(); }),
+      onSocket('connection:changed', payload => { if (active) setLive(payload.connected === true); }),
     ];
+    setLive(socketConnected());
     void load();
     return () => { active = false; controller.abort(); release(); listeners.forEach(stop => stop()); if (typingExpiry.current) clearTimeout(typingExpiry.current); if (readTimer) { clearTimeout(readTimer); void markRoomRead(eventId).catch(() => {}); } setOpenRoom(null); };
-  }, [eventId, reload, ME.id, screenActive]);
+  }, [eventId, ME.id, screenActive]);
   const sorted = useMemo(() => messages.slice().sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || "") || a.id.localeCompare(b.id)), [messages]);
   const people = useMemo(() => new Map((event?.participants || []).concat(event ? [event.host] : []).map(person => [person.id, person])), [event]);
   const firstName = (userId: string) => people.get(userId)?.name.split(" ")[0] || "Bir katılımcı";
@@ -228,13 +231,11 @@ export default function EventRoomScreen({
   const typingName = typingUserId ? firstName(typingUserId) : null;
   const members = [...people.values()].filter(person => person.id !== event.host.id);
   const seenBy = lastMine ? Object.entries(reads).filter(([userId, at]) => userId !== ME.id && Date.parse(at) >= Date.parse(lastMine.createdAt || "")).map(([userId]) => firstName(userId)) : [];
-  const refreshButton = <Touch accessibilityLabel="Mesajları yenile" disabled={loading || sending} onPress={() => { stickToEnd.current = true; setReload(value => value + 1); }} style={s.headerAction}><Label style={s.headerActionLabel}>↻</Label></Touch>;
   const subtitle = `${muted ? "🔕 " : ""}${event.location ? `${event.time} · ${event.location}` : event.time}`;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} title={roomTitle(event)} subtitle={subtitle}
         right={<Box style={s.headerActions}>
-          {refreshButton}
           <Touch accessibilityLabel={infoOpen ? "Oda bilgisini kapat" : "Oda bilgisini aç"} onPress={() => setInfoOpen(open => !open)} style={[s.headerAction, infoOpen && s.headerActionOn]}><UsersIcon size={18} style={{ color: palette.accent }} /></Touch>
         </Box>} />
 
@@ -301,6 +302,7 @@ export default function EventRoomScreen({
             <Label style={s.pinnedText} numberOfLines={pinnedOpen ? undefined : 2}>{pinned.text}</Label>
           </Touch> : null}
           {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
+          {!live && !error ? <Label accessibilityLiveRegion="polite" style={s.connection}>Bağlantı yeniden kuruluyor… Mesajların yine de gönderilir.</Label> : null}
           <Scroll ref={scrollRef} onScroll={onScroll} scrollEventThrottle={64} maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             onContentSizeChange={() => { if (stickToEnd.current || nearBottom.current) scrollRef.current?.scrollToEnd({ animated: !stickToEnd.current }); stickToEnd.current = false; }}
             style={s.list}>
@@ -366,7 +368,6 @@ const s = StyleSheet.create({
   headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
   headerAction: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   headerActionOn: { backgroundColor: "rgba(105,120,255,.18)" },
-  headerActionLabel: { color: palette.accent, fontSize: 20, lineHeight: 24 },
   info: { flexGrow: 0, maxHeight: "55%", gap: 12, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border, backgroundColor: "rgba(17,22,42,.96)" },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: "rgba(255,255,255,.05)", borderWidth: 1, borderColor: "rgba(255,255,255,.07)" },
   chipLabel: { color: "rgba(255,255,255,.6)", fontSize: 12, lineHeight: 16 },
@@ -431,6 +432,7 @@ const s = StyleSheet.create({
   sendCheck: { color: palette.text, fontSize: 20, lineHeight: 24 },
   counter: { alignSelf: "flex-end", color: palette.muted, fontSize: 11, lineHeight: 14, marginRight: 8 },
   error: { color: palette.error, fontSize: 13, lineHeight: 19, paddingHorizontal: 20, paddingTop: 8 },
+  connection: { color: palette.muted, fontSize: 12, lineHeight: 17, paddingHorizontal: 20, paddingTop: 8, textAlign: "center" },
   danger: { color: palette.error },
   sheetBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.55)" },
   sheet: { gap: 4, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.border },

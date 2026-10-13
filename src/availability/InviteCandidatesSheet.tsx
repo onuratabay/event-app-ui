@@ -1,5 +1,6 @@
+import ActivityIndicator from "../components/LoadingSpinner";
 import { useState } from "react"
-import { ActivityIndicator, StyleSheet } from "react-native"
+import { StyleSheet } from "react-native"
 import { getApiErrorMessage, getEventCandidates, inviteEventCandidates, type EventCandidate } from "../api/client"
 import { Avatar } from "../components/GlassUI"
 import { CalendarIcon, CheckIcon, CloseIcon, UserPlusIcon } from "../components/Icons"

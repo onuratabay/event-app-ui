@@ -28,7 +28,8 @@ export function startSocket(userId: string) {
   stopSocket(); if (!userId) return
   account = userId
   const version = generation
-  const current = socket = io(API_URL, { autoConnect: false, transports: ['websocket'], reconnectionAttempts: 5, reconnectionDelay: 1500, reconnectionDelayMax: 15000,
+  // No attempt limit: after a backend restart or a network gap the chat must come back on its own.
+  const current = socket = io(API_URL, { autoConnect: false, transports: ['websocket'], reconnectionDelay: 1500, reconnectionDelayMax: 15000,
     auth: callback => { void getSocketToken().then(token => { if (version === generation) callback({ token }) }).catch(() => {}) },
   })
   const renew = async () => {
@@ -41,13 +42,20 @@ export function startSocket(userId: string) {
   current.on('connect', () => {
     renewalAttempts = 0
     debug('[SOCKET CONNECT]', current.id || '')
+    dispatch('connection:changed', { connected: true })
     syncWatches()
     for (const eventId of rooms.keys()) void socketAction('event:join', { eventId }).catch(() => {})
     // Only mounted consumers synchronize their critical data after a real gap.
     if (connectedBefore) dispatch('sync:required', {})
     connectedBefore = true
   })
-  current.on('disconnect', reason => debug('[SOCKET DISCONNECT]', reason))
+  current.on('disconnect', reason => {
+    debug('[SOCKET DISCONNECT]', reason)
+    if (version !== generation) return
+    dispatch('connection:changed', { connected: false })
+    // socket.io never reconnects after a server-side disconnect (e.g. an expired token); renew and reconnect.
+    if (reason === 'io server disconnect') void renew()
+  })
   current.on('auth:expired', () => { current.disconnect(); void renew() })
   current.on('connect_error', error => { if (error.message === 'UNAUTHORIZED') void renew() })
   current.onAny((name, payload) => { if (version !== generation) return; debug('[SOCKET EVENT RECEIVED]', name); dispatch(name, payload) })

@@ -9,7 +9,7 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
     return {}
   })
   storage.clear(); storage.set('event-app:access-token', 'valid-session')
-  const legacy = { user: { id: server.user.id, recommendationProfile: { equipmentByCity: { izmir: ['racket'] }, activitiesByPlace: {}, trip: { placeId: 'izmir', datePreset: 'week', dateFrom: '', dateTo: '' } } }, events: [] }
+  const legacy = { user: { id: server.user.id, bio: 'Eski profil' }, events: [] }
   storage.set('event-app:v1', JSON.stringify(legacy))
   let tree = await mount('Profile')
   assert(text(tree.toJSON()).includes('Sunucu Kullanıcısı'))
@@ -17,7 +17,7 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   assert(text(tree.toJSON()).includes('Ankara'))
   assert(text(tree.toJSON()).includes('Sunucu profili'), 'Bio from the server is shown in About me')
   assert.equal(storage.has('event-app:v1'), false)
-  assert(server.preferences.recommendationProfile.equipmentByCity.izmir.includes('racket'))
+  assert(server.requests.some(request => request.path === '/users/me/legacy-data' && request.method === 'PUT'), 'Owned legacy data is archived before the device cache is removed')
   await act(async () => tree.unmount())
   server.user.city = 'Başka cihazda güncellendi'
   tree = await mount('Profile')
@@ -50,10 +50,16 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   tree = await mount('EventRoom', { eventId: server.events[0].id })
   global.setInterval = nativeInterval
   assert.equal(intervals, 0, 'Chat must not schedule background polling')
-  const beforeRefresh = server.requests.filter(r => r.path.endsWith('/messages') && r.method === 'GET').length
-  const refresh = tree.root.findAllByType('Pressable').find(n => n.props.accessibilityLabel === 'Mesajları yenile')
-  await act(async () => refresh.props.onPress())
-  assert.equal(server.requests.filter(r => r.path.endsWith('/messages') && r.method === 'GET').length, beforeRefresh + 1)
+  assert(!tree.root.findAllByType('Pressable').some(n => n.props.accessibilityLabel === 'Mesajları yenile'), 'Chat is realtime; there is no refresh button')
+  // A dropped connection is shown in the room; reconnecting fetches the gap once, without a manual refresh.
+  const liveSocket = sockets.instances.at(-1)
+  const historyLoads = () => server.requests.filter(r => r.path.endsWith('/messages') && r.method === 'GET').length
+  const beforeReconnect = historyLoads()
+  await act(async () => { liveSocket.disconnect() })
+  assert(text(tree.toJSON()).includes('Bağlantı yeniden kuruluyor'), 'The room shows that it is reconnecting')
+  await act(async () => { liveSocket.connect(); await new Promise(resolve => setTimeout(resolve, 20)) })
+  assert(!text(tree.toJSON()).includes('Bağlantı yeniden kuruluyor'))
+  assert.equal(historyLoads(), beforeReconnect + 1, 'Messages missed while offline are loaded after reconnecting')
   const beforePush = server.requests.length
   await act(async () => sockets.instances.at(-1).receive('chat:message_created', { eventId: server.events[0].id, message: { id: 'push', text: 'Canlı mesaj', createdAt: new Date().toISOString(), user: server.user } }))
   assert(text(tree.toJSON()).includes('Canlı mesaj'))

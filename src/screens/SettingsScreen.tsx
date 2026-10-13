@@ -4,7 +4,8 @@ import Constants from "expo-constants"
 import { Box, Field, Label, Scroll, Touch, openExternal } from "../native/UI"
 import { DEFAULT_PREFERENCES, usePreferences, type AppPreferences } from "../native/preferences"
 import { useStore } from "../native/Store"
-import { changePassword, deleteAccount, getApiErrorMessage, getPreferences, logout, putPreference, type NotificationPreferences } from "../api/client"
+import { changePassword, deleteAccount, getApiErrorMessage, getLegalConsents, getPreferences, logout, putPreference, setMarketingConsent, type NotificationPreferences } from "../api/client"
+import { LEGAL_TITLES, useOpenLegal } from "../legal/links"
 import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground } from "../components/GlassUI"
 import { BRAND_NAME, BRAND_URL } from "../components/Brand"
@@ -46,6 +47,9 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
   const [repeatPassword, setRepeatPassword] = useState("")
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deletePassword, setDeletePassword] = useState("")
+  const openLegal = useOpenLegal()
+  const [marketing, setMarketing] = useState(false)
+  const [marketingReady, setMarketingReady] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -53,6 +57,9 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
       .then(result => { if (active) setNotifications({ ...DEFAULT_NOTIFICATIONS, ...result.notifications }) })
       .catch(() => {})
       .finally(() => { if (active) setNotificationsReady(true) })
+    getLegalConsents()
+      .then(result => { if (active) { setMarketing(result.marketing); setMarketingReady(true) } })
+      .catch(() => {})
     return () => { active = false }
   }, [])
 
@@ -66,6 +73,10 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
     const next = { ...notifications, [key]: value }
     setNotifications(next); setError(null)
     try { await putPreference("notifications", next) } catch (e) { setNotifications(previous); setError(getApiErrorMessage(e, "Bildirim tercihin kaydedilemedi.")) }
+  }
+  const saveMarketing = async (value: boolean) => {
+    setMarketing(value); setError(null)
+    try { setMarketing((await setMarketingConsent(value)).marketing) } catch (e) { setMarketing(!value); setError(getApiErrorMessage(e, "İzin tercihin kaydedilemedi.")) }
   }
   const openSystemSettings = () => { void Linking.openSettings().catch(() => Alert.alert("Ayarlar açılamadı", `Telefonunun Ayarlar uygulamasından ${BRAND_NAME}’i seçebilirsin.`)) }
   const endSession = async (target: "welcome" | "login") => {
@@ -144,9 +155,18 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
       </Section>
 
       <Section title="Gizlilik ve izinler">
+        <Toggle title="Kampanya ve duyurular" detail="E-posta ve SMS ile ticari ileti izni · İstediğin zaman geri çekebilirsin" value={marketing} disabled={!marketingReady} onChange={v => void saveMarketing(v)} />
         <Row title="Konum erişimi" detail="Yakındaki etkinlikler ve harita için" onPress={openSystemSettings} />
         <Row title="Kamera ve fotoğraflar" detail="Profil ve etkinlik görselleri için" onPress={openSystemSettings} />
         <Row title="Kişiler" detail="Referans seçimi için rehber erişimi" onPress={openSystemSettings} />
+      </Section>
+
+      <Section title="Sözleşmeler ve politikalar">
+        <Row title={LEGAL_TITLES.terms} detail="Üyelik, etkinlikler ve sorumluluklar" onPress={() => openLegal("terms")} />
+        <Row title={LEGAL_TITLES.community} detail="Üyelik onayı, etkinlik oluşturma ve davranış kuralları" onPress={() => openLegal("community")} />
+        <Row title={LEGAL_TITLES.privacy} detail="Hangi verileri neden işlediğimiz ve kimin gördüğü" onPress={() => openLegal("privacy")} />
+        <Row title={LEGAL_TITLES.kvkk} detail="Kişisel verilerin korunması ve başvuru hakların" onPress={() => openLegal("kvkk")} />
+        <Row title={LEGAL_TITLES.marketing} detail="Kampanya ve duyuru izninin metni" onPress={() => openLegal("marketing")} />
       </Section>
 
       <Section title="Yardım ve hakkında">

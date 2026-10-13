@@ -12,4 +12,4 @@ class FakeSocket extends EventEmitter {
   timeout() { return { emit: (name, payload, ack) => { Promise.resolve().then(() => action(name, payload)).then(data => ack(null, { ok: true, data }), error => ack(error)) } } }
   receive(name, payload) { this.any.forEach(fn => fn(name, payload)) }
 }
-module.exports = { instances, setAction(fn) { action = fn }, io() { const socket = new FakeSocket(); instances.push(socket); return socket } }
+module.exports = { instances, setAction(fn) { action = fn }, io(url, options) { const socket = new FakeSocket(); socket.options = options; instances.push(socket); return socket } }

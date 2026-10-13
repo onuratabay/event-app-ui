@@ -4,13 +4,14 @@ import SignOutButton from "../components/SignOutButton";
 import { updateProfile } from "../api/client";
 import TopNavBar from "../components/TopNavBar";
 import EditorialQuote from "../components/EditorialQuote";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AccordionItem, AtmoBackground, Avatar, GlassCard, GlassInput, ProgressStepper } from "../components/GlassUI";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { CheckIcon, ChevronDownIcon, InstagramIcon, KeyIcon, ScrollIcon, UsersIcon } from "../components/Icons";
+import { CheckIcon, ChevronDownIcon, InstagramIcon, ScrollIcon, UsersIcon } from "../components/Icons";
 import { ReferencePicker } from "../components/ReferencePicker";
 import { useStore } from "../native/Store";
-import { getApiErrorMessage, register } from "../api/client";
+import { getApiErrorMessage, getLegalDocuments, register, type LegalDocumentSummary } from "../api/client";
+import { useOpenLegal } from "../legal/links";
 import { Box, Label, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
@@ -51,6 +52,24 @@ const isFutureDate = (value: string) => {
   const iso = toPickerDate(value);
   return !!iso && new Date(`${iso}T00:00:00`).getTime() > Date.now();
 };
+// Membership starts at 18 (the backend enforces the same rule).
+const MIN_MEMBER_AGE = 18;
+const isUnderAge = (value: string) => {
+  const iso = toPickerDate(value);
+  if (!iso || isFutureDate(value)) return false;
+  const [year, month, day] = iso.split("-").map(Number);
+  const now = new Date();
+  const age = now.getFullYear() - year - (now.getMonth() + 1 < month || (now.getMonth() + 1 === month && now.getDate() < day) ? 1 : 0);
+  return age < MIN_MEMBER_AGE;
+};
+function ConsentCheck({ checked, onToggle, label, children }: { checked: boolean; onToggle: () => void; label: string; children: ReactNode }) {
+  return <Touch accessibilityRole="checkbox" accessibilityState={{ checked }} accessibilityLabel={label} onPress={onToggle} style={[[ui.mt3, ui.flex, ui.itemsStart, ui.gap3, ui.wFull, ui.textLeft]]}>
+    <Box style={[[ui.mt05, ui.w5, ui.h5, ui.roundedMd, ui.flexShrink0, ui.border, ui.flex, ui.itemsCenter, ui.justifyCenter, checked ? [ui.bgC8a44a, ui.borderC8a44a] : [ui.borderWhite25, ui.bgWhite5]]]}>
+      {checked && <CheckIcon size={12} strokeWidth={2.5} style={[[ui.text1a1200]]} />}
+    </Box>
+    <Label style={[[ui.flex1, ui.textSm, ui.textWhite55, ui.leadingRelaxed]]}>{children}</Label>
+  </Touch>;
+}
 function phoneDigits(value: string) {
   const raw = value.replace(/\D/g, "")
   const local = raw.startsWith("90") ? raw.slice(2) : raw.startsWith("0") ? raw.slice(1) : raw
@@ -132,7 +151,26 @@ function Step1({
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [principlesOpen, setPrinciplesOpen] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<number | null>(null);
-  const [accepted, setAccepted] = useState(false);
+  const openLegal = useOpenLegal();
+  const [rulesAccepted, setRulesAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [marketing, setMarketing] = useState(false);
+  const [documents, setDocuments] = useState<LegalDocumentSummary[] | null>(null);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [documentsAttempt, setDocumentsAttempt] = useState(0);
+  // The versions shown here are the ones recorded as accepted.
+  useEffect(() => {
+    if (store.onboarding.accountId) return;
+    let active = true;
+    setDocumentsError(null);
+    getLegalDocuments()
+      .then(result => { if (active) setDocuments(result.items); })
+      .catch(cause => { if (active) setDocumentsError(getApiErrorMessage(cause, "Sözleşme metinleri yüklenemedi.")); });
+    return () => { active = false; };
+  }, [documentsAttempt, store.onboarding.accountId]);
+  const marketingDocument = documents?.find(doc => doc.type === "marketing");
+  const acceptedDocuments = (documents ?? []).filter(doc => doc.required || (marketing && doc.type === "marketing")).map(({ type, version }) => ({ type, version }));
+  const accepted = rulesAccepted && privacyAccepted && documents !== null;
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const continueRegistration = async () => {
@@ -141,7 +179,7 @@ function Step1({
     try {
       // profile_incomplete accounts go straight to photo + interests; others continue with references.
       if (store.onboarding.accountId) { navigate(store.user.status === "profile_incomplete" ? "interests" : "onboarding-2"); return; }
-      const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: `+90${phoneDigits(form.telefon)}`, password: form.sifre, birthDate: form.dogum, city: form.sehir });
+      const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: `+90${phoneDigits(form.telefon)}`, password: form.sifre, birthDate: form.dogum, city: form.sehir, acceptedDocuments, marketingConsent: marketing && !!marketingDocument });
       const id = String((response.user as { id: string }).id);
       const status = (response.user as { status?: { enum: string } }).status?.enum;
       setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}`, status } }));
@@ -149,7 +187,7 @@ function Step1({
     } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
     finally { if (mounted.current) setCreating(false); }
   };
-  const allFilled = Object.values(form).every(v => v.trim().length > 0) && phoneDigits(form.telefon).length === 10 && !isFutureDate(form.dogum);
+  const allFilled = Object.values(form).every(v => v.trim().length > 0) && phoneDigits(form.telefon).length === 10 && !isFutureDate(form.dogum) && !isUnderAge(form.dogum);
   const canContinue = Boolean(store.onboarding.accountId) || (allFilled && accepted);
   return <Box style={{
     flex: 1
@@ -200,6 +238,9 @@ function Step1({
             {isFutureDate(form.dogum) && <Label style={[[ui.textXs], { color: palette.error }]}>
                 Doğum tarihi gelecekte olamaz.
               </Label>}
+            {isUnderAge(form.dogum) && <Label style={[[ui.textXs], { color: palette.error }]}>
+                {`Üye olmak için en az ${MIN_MEMBER_AGE} yaşında olmalısın.`}
+              </Label>}
             <Box>
               <CityPicker value={form.sehir} onChange={sehir => setForm(p => ({ ...p, sehir }))} />
             </Box>
@@ -236,15 +277,27 @@ function Step1({
                 </Box>}
             </GlassCard>
 
-            {/* Accept checkbox */}
-            <Touch onPress={() => setAccepted(!accepted)} style={[[ui.mt3, ui.flex, ui.itemsStart, ui.gap3, ui.wFull, ui.textLeft]]}>
-              <Box style={[[ui.mt05, ui.w5, ui.h5, ui.roundedMd, ui.flexShrink0, ui.border, ui.flex, ui.itemsCenter, ui.justifyCenter, accepted ? [ui.bgC8a44a, ui.borderC8a44a] : [ui.borderWhite25, ui.bgWhite5]]]}>
-                {accepted && <CheckIcon size={12} strokeWidth={2.5} style={[[ui.text1a1200]]} />}
-              </Box>
-              <Label style={[[ui.textSm, ui.textWhite55, ui.leadingRelaxed]]}>
-                Topluluk ilkelerini okudum ve kabul ediyorum.
-              </Label>
-            </Touch>
+            {/* Consents — versions come from the server and are recorded with the account */}
+            <ConsentCheck checked={rulesAccepted} onToggle={() => setRulesAccepted(!rulesAccepted)} label="Kullanım Koşulları ve Topluluk Kuralları onayı">
+              <Label accessibilityRole="link" onPress={() => openLegal("terms")} style={[[ui.textWhite85, ui.underline]]}>Kullanım Koşulları</Label>
+              {" ve "}
+              <Label accessibilityRole="link" onPress={() => openLegal("community")} style={[[ui.textWhite85, ui.underline]]}>Topluluk Kuralları</Label>
+              'nı okudum ve kabul ediyorum.
+            </ConsentCheck>
+            <ConsentCheck checked={privacyAccepted} onToggle={() => setPrivacyAccepted(!privacyAccepted)} label="Gizlilik Politikası ve KVKK Aydınlatma Metni onayı">
+              <Label accessibilityRole="link" onPress={() => openLegal("privacy")} style={[[ui.textWhite85, ui.underline]]}>Gizlilik Politikası</Label>
+              {" ve "}
+              <Label accessibilityRole="link" onPress={() => openLegal("kvkk")} style={[[ui.textWhite85, ui.underline]]}>KVKK Aydınlatma Metni</Label>
+              'ni okudum.
+            </ConsentCheck>
+            {(!documents || marketingDocument) && <ConsentCheck checked={marketing} onToggle={() => setMarketing(!marketing)} label="Ticari elektronik ileti izni (isteğe bağlı)">
+              Kampanya ve duyurular için{" "}
+              <Label accessibilityRole="link" onPress={() => openLegal("marketing")} style={[[ui.textWhite85, ui.underline]]}>ticari elektronik ileti</Label>
+              {" "}almak istiyorum. (İsteğe bağlı)
+            </ConsentCheck>}
+            {documentsError && !store.onboarding.accountId && <Box style={[[ui.mt3]]}>
+                <ErrorNotice title="Metinler yüklenemedi" message={documentsError} onDismiss={() => setDocumentsError(null)} onRetry={() => setDocumentsAttempt(value => value + 1)} />
+              </Box>}
           </Box>
         </Box>
       </Scroll>
@@ -272,11 +325,8 @@ function Step2({
   const { data: store, setData: setStore, refreshEvents } = useStore();
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [method, setMethod] = useState<"instagram" | "code" | "reference" | null>(null);
+  const [method, setMethod] = useState<"instagram" | "reference" | null>(null);
   const [instagram, setInstagram] = useState("");
-  const [code, setCode] = useState("");
-  const [codeValid, setCodeValid] = useState<boolean | null>(null);
-  const validateCode = () => { setCodeValid(false); setSubmitError("Davet koduyla üyelik şu anda kullanılamıyor. Referans isteğiyle devam edebilirsin."); };
   const submitApplication = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -334,40 +384,6 @@ function Step2({
                 </Touch>}
             </GlassCard>
 
-            {/* Invite code */}
-            <GlassCard onPress={() => setMethod(method === "code" ? null : "code")} style={[[ui.p4, method === "code" ? [ui.borderC8a44a35] : []]]}>
-              <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-                <IconBadge color="gold">
-                  <KeyIcon size={18} />
-                </IconBadge>
-                <Box style={[[ui.flex1]]}>
-                  <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>
-                    Davet Kodu
-                  </Label>
-                  <Label style={[[ui.textXs, ui.textWhite40]]}>
-                    Kodunu gir
-                  </Label>
-                </Box>
-                {codeValid === true && <Box style={[[ui.flex, ui.itemsCenter, ui.gap1, ui.textEmerald400]]}>
-                    <CheckIcon size={14} strokeWidth={2} />
-                    <Label style={[[ui.textXs]]}>Geçerli</Label>
-                  </Box>}
-                {method === "code" && codeValid !== true && <Box style={[[ui.w2, ui.h2, ui.roundedFull, ui.bgC8a44a]]} />}
-              </Box>
-              {method === "code" && <Touch onPress={e => e.stopPropagation()} style={[[ui.mt3, ui.flex, ui.gap2]]} enter>
-                  <GlassInput placeholder="EVENT2026" value={code} onChangeText={e => {
-                setCode(e);
-                setCodeValid(null);
-              }} style={[[ui.flex1, ui.uppercase, ui.trackingWidest]]} />
-                  <Touch onPress={validateCode} style={[[ui.px4, ui.py3, ui.roundedXl, ui.textSm, ui.fontMedium, ui.text1a1200, ui.flexShrink0], {}]} gradient={["#4d5bcb", "#6651c9"]}>
-                    Doğrula
-                  </Touch>
-                </Touch>}
-              {codeValid === false && <Label style={[[ui.mt2, ui.textXs, ui.textRed400, ui.pl1]]}>
-                  Geçersiz kod. Lütfen tekrar dene.
-                </Label>}
-            </GlassCard>
-
             {/* Reference */}
             <GlassCard style={[[ui.p4]]}>
               <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
@@ -417,20 +433,15 @@ function Step3({
 }: {
   navigate: NavigateFn;
 }) {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  const stages = [{
-    label: "Başvuru Alındı",
-    state: "done"
-  }, {
-    label: "Referans Bekleniyor",
-    state: "current"
-  }, {
-    label: "Onay",
-    state: "future"
-  }];
+  const { data: store } = useStore();
+  // References are done once the account moves on to security review.
+  const current = store.user.status === "security_review" ? 2 : 1;
+  const stages = ["Başvuru Alındı", "Referans Bekleniyor", "Onay"].map((label, i) => ({
+    label,
+    state: i < current ? "done" : i === current ? "current" : "future"
+  }));
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
-    <TopNavBar navigate={navigate} fallback="onboarding-2" onBack={() => { if (timer.current) clearTimeout(timer.current); navigate("onboarding-2", { back: true }); }} title="Üyelik Başvurusu" floating />
+    <TopNavBar navigate={navigate} fallback="onboarding-2" onBack={() => navigate("onboarding-2", { back: true })} title="Üyelik Başvurusu" floating />
     <Scroll style={[[ui.flex1, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.px6], { paddingTop: 84 }]}>
       <AtmoBackground variant="violet" />
 

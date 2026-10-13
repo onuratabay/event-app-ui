@@ -1,113 +1,116 @@
-import { UsersIcon, ClockIcon, StarIcon, LockIcon } from "../components/Icons";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { BellIcon, CheckIcon, MessageIcon, UsersIcon } from "../components/Icons";
 import { useBottomNavInset } from "../components/BottomNav";
 import { palette } from "../theme/palette";
-import { CloseIcon } from "../components/Icons";
 import { ReferenceNotifications } from "../components/ReferenceNotifications";
 import { EventInvitations } from "../components/EventInvitations";
 import { AtmoBackground } from "../components/GlassUI";
-import { CheckIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
-import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
+import { ErrorNotice } from "../components/ErrorNotice";
+import { getNotifications, readAllNotifications, readNotification, getEvent, getApiErrorMessage, hasSession, type AppNotification } from "../api/client";
+import { mapApiEvent, useStore } from "../native/Store";
+import { onSocket } from "../services/socket";
+import { Box, Label, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
-import { NavigateFn } from "../types";
-interface Props {
-  navigate: NavigateFn;
-}
-const NOTIFS: Array<{ id: number; type: string; title: string; body: string; time: string; unread: boolean; avatar: string | null }> = [];
-const TYPE_ICONS: Record<string, {
-  bg: string;
-  color: string;
-  symbol: React.ReactNode;
-}> = {
-  join: {
-    bg: "rgba(146,125,255,0.12)",
-    color: "#a09cf5",
-    symbol: <UsersIcon size={20} />
-  },
-  active: {
-    bg: "rgba(52,211,153,0.10)",
-    color: "#6ee7b7",
-    symbol: <CheckIcon size={20} />
-  },
-  reference: {
-    bg: "rgba(105,120,255,0.12)",
-    color: palette.accent,
-    symbol: <LockIcon size={20} />
-  },
-  reminder: {
-    bg: "rgba(96,165,250,0.10)",
-    color: "#93c5fd",
-    symbol: <ClockIcon size={20} />
-  },
-  score: {
-    bg: "rgba(105,120,255,0.10)",
-    color: palette.accent,
-    symbol: <StarIcon size={20} />
-  }
-};
-export default function NotificationsScreen({
-  navigate
-}: Props) {
+import type { NavigateFn } from "../types";
+
+export default function NotificationsScreen({ navigate }: { navigate: NavigateFn }) {
   const navInset = useBottomNavInset();
-  const unreadCount = NOTIFS.filter(n => n.unread).length;
+  const { data, setData } = useStore();
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const generation = useRef(0);
+  const pending = useRef(false);
+  const refreshVersion = useRef(0);
+  const refresh = useCallback(async () => {
+    const current = generation.current;
+    const version = ++refreshVersion.current;
+    try {
+      if (!await hasSession()) { if (current === generation.current) setLoading(false); return; }
+      const result = await getNotifications();
+      if (current !== generation.current || version !== refreshVersion.current) return;
+      setNotifications(result.items); setUnreadCount(result.unreadCount); setNextCursor(result.nextCursor); setError(null);
+    } catch (cause) { if (current === generation.current) setError(getApiErrorMessage(cause, "Bildirimler yüklenemedi.")); }
+    finally { if (current === generation.current) setLoading(false); }
+  }, []);
+  useEffect(() => {
+    generation.current++;
+    setNotifications([]); setUnreadCount(0); setNextCursor(null); setLoading(true); setError(null); setBusy(false); pending.current = false;
+    const created = onSocket("notification:created", (row: AppNotification) => {
+      refreshVersion.current++;
+      setNotifications(current => [row, ...current.filter(item => item.id !== row.id)]);
+      void refresh();
+    });
+    const read = onSocket("notification:read", () => { void refresh(); });
+    const sync = onSocket("sync:required", () => { void refresh(); });
+    return () => { generation.current++; created(); read(); sync(); };
+  }, [data.user.id, refresh]);
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh, data.user.id]));
+  const markAll = async () => {
+    if (pending.current) return;
+    pending.current = true; setBusy(true);
+    const current = generation.current;
+    try { await readAllNotifications(); if (current === generation.current) await refresh(); }
+    catch (cause) { if (current === generation.current) setError(getApiErrorMessage(cause, "Bildirimler okundu işaretlenemedi.")); }
+    finally { if (current === generation.current) { pending.current = false; setBusy(false); } }
+  };
+  const open = async (notification: AppNotification) => {
+    if (pending.current) return;
+    pending.current = true; setBusy(true);
+    const current = generation.current;
+    try {
+      if (!notification.readAt) {
+        await readNotification(notification.id);
+        if (current !== generation.current) return;
+        setNotifications(rows => rows.map(row => row.id === notification.id ? { ...row, readAt: new Date().toISOString() } : row));
+        void refresh();
+      }
+      if (notification.eventId) {
+        const event = await getEvent(notification.eventId);
+        if (current !== generation.current) return;
+        setData(store => ({ ...store, events: [mapApiEvent(event), ...store.events.filter(row => row.id !== event.id)] }));
+        navigate(notification.type === "message" || notification.type === "announcement" ? "event-room" : "event-detail", { eventId: event.id });
+      } else if (notification.actorId && !notification.type.startsWith("reference_")) navigate("profile", { userId: notification.actorId });
+    } catch (cause) { if (current === generation.current) setError(getApiErrorMessage(cause, "Bildirim açılamadı.")); }
+    finally { if (current === generation.current) { pending.current = false; setBusy(false); } }
+  };
+  const loadMore = async () => {
+    if (pending.current || !nextCursor || !notifications.length) return;
+    pending.current = true; setBusy(true);
+    const current = generation.current;
+    try {
+      const result = await getNotifications(nextCursor);
+      if (current !== generation.current) return;
+      setNotifications(rows => [...new Map([...rows, ...result.items].map(row => [row.id, row])).values()]); setNextCursor(result.nextCursor);
+    } catch (cause) { if (current === generation.current) setError(getApiErrorMessage(cause)); }
+    finally { if (current === generation.current) { pending.current = false; setBusy(false); } }
+  };
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
-      <AtmoBackground />
-      <TopNavBar navigate={navigate} fallback="discover" title="Bildirimler" subtitle={unreadCount > 0 ? `${unreadCount} yeni bildirim` : undefined} right={<Touch style={[[ui.textXs, ui.textWhite50, ui.px2]]}>Tümünü oku</Touch>} />
-
-      {/* List */}
-      <Scroll style={[[ui.flex1, ui.px5, ui.pb10, ui.spaceY2], { paddingTop: 80, paddingBottom: 40 + navInset }]} enter>
-        <EventInvitations navigate={navigate} />
-        <ReferenceNotifications />
-        {NOTIFS.map(notif => {
-        const style = TYPE_ICONS[notif.type];
-        return <Box key={notif.id} style={[[ui.flex, ui.itemsStart, ui.gap3, ui.p4, ui.rounded2xl], {
-          backgroundColor: notif.unread ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)",
-          borderWidth: 1,
-          borderColor: notif.unread ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.05)"
-        }]} glass>
-              {/* Icon / avatar */}
-              <Box style={[[ui.flexShrink0, ui.relative]]}>
-                {notif.avatar ? <Picture uri={notif.avatar} accessibilityLabel="" style={[[ui.w10, ui.h10, ui.roundedFull]]} /> : <Box style={[[ui.w10, ui.h10, ui.roundedFull, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textSm, ui.fontMedium], {
-              backgroundColor: style.bg,
-              color: style.color
-            }]}>
-                    {style.symbol}
-                  </Box>}
-                {notif.unread && <Box style={[[ui.fixed, ui.Top05, ui.Right05, ui.w25, ui.h25, ui.roundedFull, ui.bgC8a44a, ui.border2, ui.border06060e]]} />}
-              </Box>
-
-              {/* Content */}
-              <Box style={[[ui.flex1, ui.minW0]]}>
-                <Label style={[[ui.textSm, ui.fontMedium, ui.leadingSnug, notif.unread ? [ui.textWhite85] : [ui.textWhite55]]]}>
-                  {notif.title}
-                </Label>
-                <Label style={[[ui.textXs, ui.textWhite35, ui.mt05, ui.leadingRelaxed]]}>
-                  {notif.body}
-                </Label>
-                <Label style={[[ui.text10px, ui.textWhite20, ui.mt15]]}>
-                  {notif.time}
-                </Label>
-              </Box>
-
-              {/* Action for reference */}
-              {notif.type === "reference" && notif.unread && <Box style={[[ui.flex, ui.flexCol, ui.gap15, ui.flexShrink0, ui.ml1]]}>
-                  <Touch style={[[ui.w8, ui.h8, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-              backgroundColor: "rgba(52,211,153,0.15)",
-              borderWidth: 1,
-              borderColor: "rgba(52,211,153,0.25)"
-            }]}>
-                    <CheckIcon size={14} strokeWidth={2} style={[[ui.textEmerald400]]} />
-                  </Touch>
-                  <Touch style={[[ui.w8, ui.h8, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite25], {
-              backgroundColor: "rgba(255,255,255,0.05)",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.07)"
-            }]}>
-                    <CloseIcon size={16} style={{ color: palette.muted }} />
-                  </Touch>
-                </Box>}
-            </Box>;
-      })}
-      </Scroll>
-    </Box>;
+    <AtmoBackground />
+    <TopNavBar navigate={navigate} fallback="discover" title="Bildirimler" subtitle={unreadCount ? `${unreadCount} yeni bildirim` : undefined} right={<Touch accessibilityLabel="Tüm bildirimleri okundu işaretle" disabled={busy || !unreadCount} onPress={() => void markAll()} style={[[ui.textXs, ui.textWhite50, ui.px2]]}>Tümünü oku</Touch>} />
+    <Scroll style={[[ui.flex1, ui.px5, ui.spaceY2], { paddingTop: 80, paddingBottom: 40 + navInset }]}>
+      <EventInvitations navigate={navigate} />
+      <ReferenceNotifications />
+      {error && <ErrorNotice title="Bildirimler yüklenemedi" message={error} onDismiss={() => setError(null)} />}
+      {loading && <Label style={[[ui.textSm, ui.textWhite50, ui.py4]]}>Bildirimler yükleniyor…</Label>}
+      {!loading && !error && !notifications.length && <Label style={[[ui.textSm, ui.textWhite50, ui.py4]]}>Henüz yeni uyarın yok.</Label>}
+      {notifications.map(notification => <Touch key={notification.id} disabled={busy} accessibilityLabel={`${notification.readAt ? "" : "Yeni bildirim: "}${notification.title}`} onPress={() => void open(notification)} style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 16, borderRadius: 18, backgroundColor: notification.readAt ? palette.surface : palette.elevated, borderWidth: 1, borderColor: notification.readAt ? palette.border : "rgba(185,195,255,.35)" }}>
+        <Box style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: palette.selected }}>
+          {notification.type === "message" ? <MessageIcon size={18} style={{ color: palette.accent }} /> : notification.type.startsWith("participant_") || notification.type.startsWith("friend_") ? <UsersIcon size={18} style={{ color: palette.accent }} /> : notification.type === "room_ready" ? <CheckIcon size={18} style={{ color: palette.success }} /> : <BellIcon size={18} style={{ color: palette.accent }} />}
+        </Box>
+        <Box style={{ flex: 1, minWidth: 0, gap: 5 }}>
+          <Label style={{ color: palette.text, fontSize: 14, fontFamily: "Outfit-SemiBold", textAlign: "left" }}>{notification.title}</Label>
+          <Label style={{ color: palette.muted, fontSize: 12, lineHeight: 18, textAlign: "left" }}>{notification.body}</Label>
+          <Label style={{ color: palette.muted, fontSize: 10, textAlign: "left" }}>{new Date(notification.createdAt).toLocaleString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</Label>
+        </Box>
+        {!notification.readAt && <Box accessibilityLabel="Okunmamış" style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: palette.accent, marginTop: 5 }} />}
+      </Touch>)}
+      {nextCursor && <Touch disabled={busy} onPress={() => void loadMore()} style={[[ui.textSm, ui.textWhite60, ui.py3]]}>Daha fazla göster</Touch>}
+    </Scroll>
+  </Box>;
 }

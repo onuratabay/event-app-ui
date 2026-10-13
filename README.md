@@ -6,7 +6,7 @@ Expo SDK 57, React Native 0.86 and TypeScript application for iOS and Android.
 
 Use Node.js 22. Run `npm install`, then `npx expo start`. Open the QR code with Expo Go for SDK 57. The phone and computer should share a network. `npm run ios` and `npm run android` open an available simulator/emulator.
 
-The application uses Expo Go-compatible native modules. A development build is not required for the implemented features. The custom `eventapp://` scheme is registered in an installed application build; Expo Go uses Expo development URLs. Shared event links load the event from the backend, subject to the viewer's access rights.
+The application uses Expo Go-compatible native modules for screen and API development. An installed native build is required to verify the custom `eventapp://` scheme and HTTPS Universal/App Links; Expo Go uses Expo development URLs. Personal event invitations open a restricted native guest screen. Store, domain and device requirements are described in [Guest event sharing](../vibe-us/docs/guest-sharing.md).
 
 ## API connection during development
 
@@ -37,7 +37,7 @@ Application data is owned by the Vibeus backend. Profile fields, photos, interes
 
 Event creation loads types/levels/visibility from API catalogs and requires an explicitly selected geocoding result. Selected photos are uploaded as data URIs; the app no longer copies them into its document directory. Messages are fetched on entering a room and using the explicit refresh button, with the latest 100 displayed. No periodic chat requests run in the background. Only the owner or confirmed participants can access chat. Push notifications are not implemented; mock notifications and mock reference people are no longer shown.
 
-On authenticated startup, the old `event-app:v1` cache is migrated only if its user ID matches the server account. Its user/event/message records are archived server-side at `GET /users/me/legacy-data` so local-only prototype records are not silently lost or mistaken for real memberships. Map and recommendation preferences move to active server preferences before the old cache is removed. Another account's legacy cache is retained until that account logs in; failed transfers retain their source for retry. Sample `me` records are discarded. Legacy archives are historical records, not active events; old prototype events had no validated catalog IDs or coordinates.
+On authenticated startup, the old `event-app:v1` cache is migrated only if its user ID matches the server account. Its user/event/message records are archived server-side at `GET /users/me/legacy-data` so local-only prototype records are not silently lost or mistaken for real memberships. Map preferences move to active server preferences before the old cache is removed. Another account's legacy cache is retained until that account logs in; failed transfers retain their source for retry. Sample `me` records are discarded. Legacy archives are historical records, not active events; old prototype events had no validated catalog IDs or coordinates.
 
 The backend must run migration `1790000000000-ServerOwnedUserData` before using this app version. It adds user city/bio fields, event location names, user preference storage and shared chat messages. Offline/API failures display errors; the app never falls back to sample accounts or events.
 
@@ -73,12 +73,6 @@ Startup reads persisted tokens before choosing a screen. Signed-in users open Di
 
 The bottom navigation uses Discover, Map, Create, Rooms and Profile. Search is next to Notifications in the Discover header. Map filter chips use opaque backgrounds, brighter text and a gold selected state.
 
-### Personal recommendations
-
-The sparkle button beside Search opens a preference and recommendations sheet. The device profile remembers equipment separately for Ankara/İzmir, preferred activities separately for Ankara/İzmir/Eymir/Çeşme, and the trip's explicit calendar dates. Existing profile interests prefill activity preferences. Eymir/Çeşme coordinates are resolved by native geocoding rather than invented venue locations.
-
-Recommendations currently use deterministic matching of live API events to the selected dates, location, activities and city-specific equipment, with equipment matches ranked first, then distance. Completed/cancelled/full events are excluded. Results are capped at five, but all counts and explanations reflect actual matches. This does not call an external LLM or invent events. Preferences persist in the authenticated user's backend account.
-
 Header actions use 20px icons, 1.8px strokes and 44px touch targets. Bottom navigation glyphs use 24px icons with the same stroke weight.
 
 ### Password recovery and back navigation
@@ -89,7 +83,7 @@ Actual email delivery requires the backend SMTP environment variables described 
 
 A shared 44px back control is available throughout login, recovery, registration, application status, approval and interest selection. History-aware navigation returns to the actual preceding screen with a fallback for direct entry. The initial welcome/splash screens have no preceding step. Map, Profile and Rooms provide an explicit return to Discover; detail screens retain history-based back actions.
 
-Map/recommendation queries request `includePhotos=false`, so MySQL never reads cover BLOBs for those calls. A query fetches at most 500 events; the map warns when filters need narrowing. Covers appear when opening full event detail. Traffic regression tests verify the image-free query, page budget and absence of chat polling.
+Map queries request `includePhotos=false`, so MySQL never reads cover BLOBs for those calls. A query fetches at most 500 events; the map warns when filters need narrowing. Covers appear when opening full event detail. Traffic regression tests verify the image-free query, page budget and absence of chat polling.
 
 ### Gerçek zamanlı veri
 
@@ -99,9 +93,17 @@ Tek bağlantı `src/services/socket.ts` içindedir. Veri polling'i yoktur: sohbe
 
 Backend'deki `docs/realtime-traffic.md` olay sözleşmesini, ölçüm sınırlarını ve gereken `1790020000000-RealtimeEventActivity` migration'ını açıklar. Migration bu çalışma sırasında canlı DB'ye uygulanmadı. Yeni backend ile kullanmadan önce uygulanmalıdır. Mevcut backend/Expo servisleri kapalı bırakıldı.
 
+## Etkinlik paylaşımı ve misafir erişimi
+
+Etkinlik detayındaki Paylaş paneli, misafir katılım sorumluluğu onayından sonra üyeye ait HTTPS davet bağlantısı oluşturur. Bağlantı WhatsApp ve diğer uygulamalarda paylaşılabilir veya kopyalanabilir. Onay sürümü/zamanı ve paylaşan üye sunucuda saklanır; panelde oluşturulan davet iptal edilebilir.
+
+Misafirler yalnızca davet edildiği etkinliği görür, adını girerek katılır ve katılımını iptal edebilir. Üye tokenları ve Store/socket trafiği misafir akışından ayrıdır; önceki gerçek üyelik oturumu sunucuda doğrulanarak üyeliğe dönüş yapılabilir. Tarayıcı sayfası indirme/açma ekranıdır. Henüz mağaza URL'leri yoktur. Kurulumdan sonra otomatik etkinlik açılışı garanti edilmez; aynı bağlantıya yeniden dokunma veya **Davet kodum var** üzerinden kod/bağlantı girme yolu vardır.
+
+Ortam değişkenleri, API sınırları, migration'lar, `/.well-known` doğrulama uçları ve production domain/release signing/gerçek cihaz kontrolleri [Misafir davetleri kurulum belgesinde](../vibe-us/docs/guest-sharing.md) açıklanır. Native build ve association uçlarının hazırlanması, domain veya mağaza dağıtımının tamamlandığı anlamına gelmez.
+
 ## Brand
 
-The display name is `ewent.app`; the website is https://ewent.app. Supplied original artwork is stored in `assets/brand/`. The transparent wordmark appears above the Welcome headline at 150 × 50 and centered in the Discover action row at 104 × 35. Discover actions run left to right: search, sorting/filters, wordmark, recommendations, notifications. Its blur fades below the action row without a divider. Splash retains its original orbit animation. The supplied square icon is used only as the installed app icon. Navigation and action buttons retain their functional icons. Existing application identifiers and `eventapp://` links remain compatible. HTTPS event sharing requires a deployed domain landing page and verified iOS/Android domain association before activation. Native app icon changes require a new application build; Expo Go retains its own launcher icon.
+The display name is `ewent.app`; the website is https://ewent.app. Supplied original artwork is stored in `assets/brand/`. The transparent wordmark appears above the Welcome headline at 150 × 50 and centered in the Discover action row at 104 × 35. Discover actions run left to right: search, sorting/filters, wordmark, event calendar, notifications. Its blur fades below the action row without a divider. Splash retains its original orbit animation. The supplied square icon is used only as the installed app icon. Navigation and action buttons retain their functional icons. Existing application identifiers and `eventapp://` links remain compatible. HTTPS event invitation configuration and deployment requirements are documented in [Guest event sharing](../vibe-us/docs/guest-sharing.md). Native app icon changes require a new application build; Expo Go retains its own launcher icon.
 
 ### ewent görsel tema
 
