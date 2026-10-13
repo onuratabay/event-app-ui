@@ -13,7 +13,7 @@ import HeaderIconButton from "../components/HeaderIconButton";
 import { HeartButton, RippleButton, SpringButton } from "../components/Expressive";
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
 import { CalendarIcon, SearchIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
-import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, capacityTarget, isRoomReady, participantCount, useStore } from "../native/Store";
+import { eventPhase, isRoomReady, participantCount, useStore, type EventPhase } from "../native/Store";
 import { Box, Label, Picture, Scroll, Sheet, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { AppEvent, NavigateFn } from "../types";
@@ -132,6 +132,16 @@ function SortSheet({
 }
 
 /* ─── Event card ─── */
+// Event state as the card border colour (no status text on the card).
+const PHASE_BORDER: Record<EventPhase, string> = {
+  started: "rgba(52,211,153,.6)",
+  active: "rgba(52,211,153,.6)",
+  forming: "rgba(251,191,36,.5)",
+  cancelled: "rgba(243,155,175,.45)",
+  closed: "rgba(183,197,255,.12)",
+};
+// Screen readers still hear the state the border shows.
+const PHASE_A11Y: Record<EventPhase, string> = { started: "başladı", active: "aktif", forming: "katılımcı bekleniyor", cancelled: "iptal edildi", closed: "sona erdi" };
 function EventCard({
   event,
   onPress,
@@ -163,19 +173,15 @@ function EventCard({
   const progress = event.currentParticipants / event.minParticipants;
   // Still gathering people only while below the minimum; status turns "started" later, at the start time.
   const isForming = !isRoomReady(event) && !['cancelled', 'closed'].includes(event.status || '');
-  // Without a maximum the minimum is the goal, so the energy reflects progress towards it.
-  const fillRate = Math.min(1, event.currentParticipants / Math.max(1, capacityTarget(event)));
-  const excitement = event.isActive && fillRate >= .7 ? "high" : event.isActive || fillRate >= .45 ? "medium" : "low";
-  const energy = excitement === "high"
-    ? { label: "Yüksek enerji", color: "#b9c3ff", border: "rgba(105,120,255,.25)", background: "rgba(105,120,255,.17)" }
-    : excitement === "medium"
-      ? { label: "Canlanıyor", color: "#a9a5ff", border: "rgba(160,156,245,.28)", background: "rgba(146,125,255,.13)" }
-      : { label: "Sakin akış", color: "rgba(226,232,240,.68)", border: "rgba(226,232,240,.16)", background: "rgba(255,255,255,.06)" };
+  // The card's border shows its state instead of status/energy labels: green once the room is open,
+  // amber while it gathers people, muted when it ended or was cancelled.
+  const phase = eventPhase(event);
+  const stateBorder = PHASE_BORDER[phase];
   return <Box style={[[], {}]} enter>
-      <RippleButton onPress={onPress} rippleColor="rgba(255,255,255,0.06)" style={[[ui.wFull, ui.textLeft, ui.rounded2xl, ui.overflowHidden], {
+      <RippleButton onPress={onPress} accessibilityLabel={`${event.title}, ${PHASE_A11Y[phase]}`} rippleColor="rgba(255,255,255,0.06)" style={[[ui.wFull, ui.textLeft, ui.rounded2xl, ui.overflowHidden], {
       backgroundColor: palette.surface,
-      borderWidth: 1,
-      borderColor: palette.border
+      borderWidth: 1.5,
+      borderColor: stateBorder
     }]} glass>
         {/* Cover */}
         <Box style={[[ui.relative, ui.h44, ui.overflowHidden, ui.bgGray900]]}>
@@ -183,17 +189,6 @@ function EventCard({
           opacity: isForming ? 0.65 : 1
         }]} />
           <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(8,11,24,0.9)", "transparent"]} gradientDirection="up" />
-
-          {/* Status */}
-          <Box style={[[ui.fixed, ui.top3, ui.left3]]}>
-            <Box style={[[ui.px25, ui.py1, ui.roundedFull, ui.textXs, ui.fontMedium, isLivePhase(eventPhase(event)) ? [ui.textEmerald300] : [ui.textAmber300]], {
-            backgroundColor: isLivePhase(eventPhase(event)) ? "rgba(52,211,153,0.15)" : "rgba(251,191,36,0.12)",
-            borderWidth: 1,
-            borderColor: isLivePhase(eventPhase(event)) ? "rgba(52,211,153,0.25)" : "rgba(251,191,36,0.2)"
-          }]} glass>
-              {EVENT_PHASE_LABEL[eventPhase(event)]}
-            </Box>
-          </Box>
 
           {/* Action buttons */}
           <Touch onPress={e => e.stopPropagation()} style={[[ui.fixed, ui.top3, ui.right3, ui.flex, ui.gap2]]}>
@@ -251,14 +246,7 @@ function EventCard({
                 {participantCount(event.currentParticipants, event.maxParticipants)} kişi
               </Label>
             </Box>
-            <Label style={[[ui.text10px, ui.px2, ui.py05, ui.roundedFull, ui.fontMedium], {
-            backgroundColor: energy.background,
-            color: energy.color,
-            borderWidth: 1,
-            borderColor: energy.border
-          }]}>
-              {energy.label}{event.level ? ` · ${event.level}` : ""}
-            </Label>
+            {event.level ? <Label style={[[ui.textXs, ui.textWhite40]]}>{event.level}</Label> : null}
           </Box>
 
           {isForming && <Box style={[[ui.mt3]]}>

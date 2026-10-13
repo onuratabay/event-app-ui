@@ -299,12 +299,18 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   let cards = await mount("Discover")
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   assert(text(cards.toJSON()).includes("Sinema") && !text(cards.toJSON()).includes("kişi daha"), "A card past its minimum shows no 'X kişi daha' (was -1)")
+  // No status or energy labels on cards; the state is the card's border colour.
+  const cardStyle = node => Object.assign({}, ...[].concat(node.props.style).flat(Infinity).filter(Boolean))
+  const cardFor = tree => tree.root.findAllByType("Pressable").find(node => /^Film, /.test(String(node.props.accessibilityLabel)))
+  assert(!/Sakin akış|Canlanıyor|Yüksek enerji|Katılımcı Bekleniyor|● Aktif/.test(text(cards.toJSON())), "Feed cards carry no status or energy labels")
+  assert.equal(cardStyle(cardFor(cards)).borderColor, "rgba(52,211,153,.6)", "An event past its minimum has a green border")
   await act(async () => cards.unmount())
   global.__testFeedEvents = [feedEvent("short", "Film", "Sinema", 1, 4)]
   cards = await mount("Discover")
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   assert(text(cards.toJSON()).replace(/\s+/g, " ").includes("3 kişi daha"), "A card below its minimum shows how many are missing")
   assert(text(cards.toJSON()).replace(/\s+/g, " ").includes("Ev Sahibi düzenliyor"), "Someone else's event names its organizer")
+  assert.equal(cardStyle(cardFor(cards)).borderColor, "rgba(251,191,36,.5)", "An event below its minimum has an amber border")
   await act(async () => cards.unmount())
   // My own event: "Sen düzenliyorsun" instead of my name.
   global.__testFeedEvents = [{ ...feedEvent("mine", "Film", "Sinema", 1, 4), owner: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" } }]

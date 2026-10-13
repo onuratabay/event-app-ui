@@ -433,6 +433,12 @@ async function tap(tree, label) {
     assert.deepEqual(["45 dk", "60 dk", "90 dk", "150 dk", undefined].map(durationLabel), ["45 dk", "1 saat", "1 saat 30 dk", "2 saat 30 dk", "Belirtilmedi"], "Durations read naturally")
     const info = text(detail.toJSON()).replace(/\s+/g, " ")
     assert(info.includes("Süre 1 saat") && !info.includes("Mesafe"), "Event detail shows Süre instead of Mesafe")
+    // All meta boxes share one height, and the participant list has no "+" placeholder seats.
+    const flat = node => Object.assign({}, ...[].concat(node.props.style).flat(Infinity).filter(Boolean))
+    const boxHeight = label => { let node = detail.root.findAll(n => n.type === "Text" && text(n) === label)[0]; while (node && !flat(node).height) node = node.parent; return node && flat(node).height }
+    const metaHeights = ["Tarih & Saat", "Konum", "Süre"].map(boxHeight)
+    assert(metaHeights.every(Number.isFinite) && new Set(metaHeights).size === 1, "Meta boxes have equal heights")
+    assert(!detail.root.findAll(node => node.type === "Text" && node.children.join("") === "+").length, "No + placeholder seats")
   }
   await tap(detail, "Katıl")
   assert(text(detail.toJSON()).includes("Katıldın"))

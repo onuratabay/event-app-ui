@@ -161,8 +161,19 @@ module.exports = async function ({ mount, act, text, storage }) {
   const detail = await mount("EventDetail", { eventId: "own-event" })
   await wait(50)
   const detailPress = async label => { const all = detail.root.findAllByType("Pressable"); const node = all.find(item => item.props.accessibilityLabel === label) || all.filter(item => text(item).includes(label)).at(-1); assert(node, `Missing control: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })); await wait() }
+  assert(text(detail.toJSON()).includes("Şu anda 1 kişi buraya katılmayı bekliyor"), "The organizer sees how many pool members wait to join")
+  assert(!server.requests.some(request => request.path === "/events/own-event/candidates"), "The count does not load candidate cards")
+  {
+    // The participants card invites only from the availability pool; the guest link stays in the top bar.
+    let card = detail.root.findAll(node => node.type === "Text" && text(node).trim() === "Katılımcılar")[0]
+    while (card && !text(card).includes("Havuzdan seç")) card = card.parent
+    assert(card && !text(card).includes("Açıklama"), "The pool invite sits in the participants card")
+    assert(text(card).includes("katılmayı bekliyor") && !text(card).includes("Davet linki"), "No guest link inside the participants card")
+    assert(detail.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "Paylaş"), "The guest link is shared from the top bar")
+  }
   await detailPress("Kişi ekle")
-  await detailPress("Uygun kişilerden davet et")
+  await wait(20)
+  assert(text(detail.toJSON()).includes("Takvim havuzundan davet et"), "The invite sheet opens straight on the availability pool")
   content = text(detail.toJSON())
   assert(content.includes("Ece Aday") && content.includes("Etkinlik saatinde müsait"), "Candidates show visible profile data and a fit summary")
   assert(content.includes("Davet yer ayırmaz"), "The invite explains it does not reserve a place")
@@ -172,7 +183,11 @@ module.exports = async function ({ mount, act, text, storage }) {
   assert.deepEqual(sent.body, { userIds: ["cand-1"] }, "Only the chosen candidate is invited")
   assert(text(detail.toJSON()).includes("1 kişiye davet gönderildi") && !text(detail.toJSON()).includes("Ece Aday"), "Invited candidates leave the list")
   await act(async () => detail.unmount())
-  // "Kişi ekle" only while seats remain: up to the max, or up to the min (organizer included) when no max was set.
+  const afterInvite = await mount("EventDetail", { eventId: "own-event" })
+  await wait(50)
+  assert(text(afterInvite.toJSON()).includes("takvim havuzunda bu etkinliğe uyan kimse yok"), "The invite stays open and says nobody is waiting")
+  await act(async () => afterInvite.unmount())
+  // The invitation stays open until the event is full: up to the max, always when no max was set.
   const ownEvent = server.events.find(event => event.id === "own-event")
   const hasInvite = async (confirmed, max) => {
     Object.assign(ownEvent, { confirmedParticipantCount: confirmed, minParticipants: 2, maxParticipants: max })
@@ -183,13 +198,42 @@ module.exports = async function ({ mount, act, text, storage }) {
     return shown
   }
   assert.equal(await hasInvite(1, 100000), true, "Min 2, no max: the organizer can still invite one person")
-  assert.equal(await hasInvite(2, 100000), false, "Min 2, no max: once one person joins the organizer, Kişi ekle disappears")
+  assert.equal(await hasInvite(2, 100000), true, "No max: the invitation stays open after the minimum is reached")
   assert.equal(await hasInvite(2, 4), true, "With a max, inviting continues past the minimum")
   assert.equal(await hasInvite(4, 4), false, "Kişi ekle disappears when the max is reached")
   const guestView = await mount("EventDetail", { eventId: server.events[0].id })
   await wait(50)
   assert(!guestView.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "Kişi ekle"), "Only the organizer sees Kişi ekle")
+  assert(!text(guestView.toJSON()).includes("katılmayı bekl"), "Only the organizer sees the pool count")
+  assert(!text(guestView.toJSON()).includes("Davet açık"), "Only the organizer invites from the pool")
   await act(async () => guestView.unmount())
+
+  // A cancelled event can be updated and created again: its details prefill the form.
+  server.events.push({ ...server.events[0], id: "cancelled-own", owner: { id: server.user.id, firstName: "Sunucu", lastName: "Kullanıcısı" }, status: { enum: "cancelled" }, viewerParticipationStatus: "confirmed",
+    date: "01/01/2020", startTime: "09:00", durationMinutes: 90, locationName: "Eski Buluşma, Çankaya, Ankara", latitude: 39.91, longitude: 32.86, minParticipants: 3, maxParticipants: 6, description: "İptal edilen etkinliğin açıklaması", visibility: { id: "public", enum: "public", name: "Herkese Açık" } })
+  let recreateNavigation
+  const cancelledView = await mount("EventDetail", { eventId: "cancelled-own", navigate: (route, opts) => { recreateNavigation = { route, opts } } })
+  await wait(50)
+  const recreate = cancelledView.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "Güncelle ve yeniden oluştur")
+  assert(recreate, "The organizer of a cancelled event can create it again")
+  await act(async () => recreate.props.onPress())
+  assert.deepEqual(recreateNavigation, { route: "create-event", opts: { eventId: "cancelled-own" } })
+  await act(async () => cancelledView.unmount())
+  const copy = await mount("CreateEvent", { copyFromEventId: "cancelled-own" })
+  await wait(80)
+  const copied = text(copy.toJSON())
+  assert(copied.includes("İptal ettiğin etkinliğin bilgileri dolduruldu"), "The form says it was prefilled")
+  assert(copied.includes("Ne kadar sürecek"), "The organizer lands on the date step to set a new time")
+  const copyContinue = () => copy.root.findAllByType("Pressable").find(node => text(node).includes("Devam Et"))
+  assert.equal(copyContinue().props.disabled, false, "A past date is replaced with an upcoming one, so the copy can continue")
+  await act(async () => copyContinue().props.onPress())
+  const venue = copy.root.findAll(node => node.props.accessibilityLabel === "Buluşma noktası (isteğe bağlı)" && typeof node.props.onChangeText === "function")[0]
+  assert.equal(venue.props.value, "Eski Buluşma, Çankaya, Ankara", "The location is copied")
+  assert.equal(copyContinue().props.disabled, false, "The copied map point is already selected")
+  await act(async () => copyContinue().props.onPress())
+  assert(copy.root.findAllByType("TextInput").some(node => node.props.value === "İptal edilen etkinliğin açıklaması"), "The description is copied")
+  await act(async () => copy.unmount())
+  assert(!server.events.some(event => event.id === "cancelled-own" && event.status.enum !== "cancelled"), "The cancelled event itself stays cancelled")
 
   // Invitee: countdown, place note, conflict lock; the server stays the authority on accept.
   server.invitations.splice(0, server.invitations.length,

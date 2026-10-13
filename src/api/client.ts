@@ -32,6 +32,7 @@ export interface ApiEvent {
   participants: Array<{ id: string; firstName: string; lastName: string; profilePhoto?: string | null }>
   isFavorite: boolean
   status: { enum: string; name: string }
+  visibility?: { id: string; enum: string; name: string }
   createdAt?: string
   // Latest chat message time; only sent to room members.
   lastMessageAt?: string | null
@@ -459,6 +460,8 @@ export const setAvailabilityPaused = (id: string, paused: boolean) => request<Ap
 export const deleteAvailability = (id: string) => request<{ message: string }>(`/users/me/availability/${id}`, { method: 'DELETE' })
 // Organizer only: people from the private pool who fit this event. No contact or location data is returned.
 export interface EventCandidate { user: { id: string; firstName: string; lastName: string; profilePhoto: string | null; rank: number }; match: { activity: string; level: string | null; summary: string[] } }
+// Organizer only: how many pool members match the event and have not been invited yet (no cards, no photos).
+export const getEventCandidateCount = (eventId: string) => request<{ count: number }>(`/events/${eventId}/candidates/count`, { background: true })
 export const getEventCandidates = (eventId: string) => request<{ capacity: { confirmed: number; max: number; spotsLeft: number }; items: EventCandidate[] }>(`/events/${eventId}/candidates`)
 // An invitation is not a seat: invitees still pass the capacity check when they accept.
 export const inviteEventCandidates = (eventId: string, userIds: string[]) => request<{ invited: number; expiresAt: string }>(`/events/${eventId}/invitations`, { method: 'POST', body: JSON.stringify({ userIds }) })

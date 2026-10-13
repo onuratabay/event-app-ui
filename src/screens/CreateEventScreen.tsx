@@ -1,8 +1,8 @@
 import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
 import { Alert } from "react-native";
-import { canCreateEvent, createEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions } from "../api/client";
-import { mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
+import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions } from "../api/client";
+import { isUnlimitedCapacity, mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useRef, useState } from "react";
 import { Avatar, AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
 import { CameraIcon, CheckIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, UserPlusIcon } from "../components/Icons";
@@ -91,8 +91,9 @@ const REQUIREMENTS_SUGGESTIONS: {
 };
 export default function CreateEventScreen({
   navigate,
-  initialActivity
-}: Props & { initialActivity?: string }) {
+  initialActivity,
+  copyFromEventId
+}: Props & { initialActivity?: string; copyFromEventId?: string }) {
   const {
     data: store,
     setData: setStore
@@ -151,6 +152,37 @@ export default function CreateEventScreen({
     setData(p => ({ ...p, activity, level: p.activity === activity ? p.level : "" }));
     setTimeout(() => setStep(hasLevels ? 1 : 2), 180);
   };
+  // Opened from a cancelled event: its details fill the form once the catalogs load, and the
+  // organizer lands on the date step to set a new time before creating the event again.
+  const appliedCopy = useRef(false);
+  const [copiedFrom, setCopiedFrom] = useState(false);
+  useEffect(() => {
+    if (appliedCopy.current || !copyFromEventId || !activities.length || !visibilities.length) return;
+    appliedCopy.current = true;
+    getEvent(copyFromEventId).then(source => {
+      const activity = activities.find(a => a.id === source.interest.id);
+      const level = activity?.levels?.find(l => l.enum === source.level?.enum);
+      const visibility = visibilities.find(v => v.enum === source.visibility?.enum && PRIVACY_OPTIONS[v.enum]);
+      const sourceDate = source.date.split("/").reverse().join("-");
+      const keepTime = !isPastStart(sourceDate, source.startTime);
+      setData(p => ({
+        ...p,
+        coverImage: source.coverPhoto || "",
+        activity: activity?.name || "",
+        level: level?.name || "",
+        ...(keepTime ? { date: sourceDate, time: source.startTime } : {}),
+        durationMinutes: source.durationMinutes,
+        location: source.locationName || "",
+        minParticipants: Math.max(MIN_PARTICIPANTS, source.minParticipants),
+        maxParticipants: isUnlimitedCapacity(source.maxParticipants) ? null : source.maxParticipants,
+        description: source.description || "",
+      }));
+      setPlace({ latitude: source.latitude, longitude: source.longitude, city: "", district: "", address: "" });
+      if (visibility) { if (visibility.enum === INVITE_ONLY) chooseInviteOnly(visibility.name); else setData(p => ({ ...p, privacy: visibility.name })); }
+      setCopiedFrom(true);
+      setStep(activity ? 2 : 0);
+    }).catch(error => Alert.alert("Etkinlik bilgileri yüklenemedi", getApiErrorMessage(error)));
+  }, [activities, visibilities, copyFromEventId]);
   // Opened from an idea on an empty Discover: the activity is picked as soon as the catalog loads.
   const appliedInitial = useRef(false);
   useEffect(() => {
@@ -284,6 +316,9 @@ export default function CreateEventScreen({
 
       <Scroll scrollEnabled={!mapTouched} style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull, ui.pb28], { paddingTop: 80 }, hasStickyBar && { paddingBottom: 176 }]}>
         <Box style={[[ui.pt4, ui.px5]]}>
+          {copiedFrom && <Box style={[[ui.mb4, ui.p3, ui.roundedXl, ui.border, ui.borderC8a44a30, ui.bgC8a44a10]]}>
+              <Label style={[[ui.textXs, ui.textWhite80, ui.leadingRelaxed]]}>İptal ettiğin etkinliğin bilgileri dolduruldu. Tarihi ve dilediğin alanları güncelleyip yeni etkinlik olarak oluştur.</Label>
+            </Box>}
 
           {/* Step 0 - Activity */}
           {step === 0 && <Box style={[[]]} enter>

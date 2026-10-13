@@ -3,8 +3,8 @@ import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
 import { CategoryIcon } from "../components/Icons";
 import { socketAction } from '../services/socket';
-import { participate, getApiErrorMessage, getEvent, cancelEvent } from "../api/client";
-import { capacityTarget, eventPhase, isLivePhase, isRoomReady, mapApiEvent, participantCount } from "../native/Store";
+import { participate, getApiErrorMessage, getEvent, getEventCandidateCount, cancelEvent } from "../api/client";
+import { eventPhase, isLivePhase, isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet } from "react-native";
 import { Avatar, GlassCard } from "../components/GlassUI";
@@ -22,6 +22,8 @@ interface Props {
 }
 // "90 dk" → "1 saat 30 dk"; events created without a duration say so instead of showing nothing.
 // Event start on the device clock (date "dd/MM/yyyy", time "HH:mm").
+// Every meta box has the same height; long values (location) wrap to two lines at most.
+const META_BOX_HEIGHT = 112;
 function startsAt(event: { date: string; time: string }) {
   const [day, month, year] = event.date.split("/").map(Number);
   const [hour, minute] = event.time.split(":").map(Number);
@@ -50,6 +52,18 @@ export default function EventDetailScreen({
   const [inviteOpen, setInviteOpen] = useState(false);
   const [actionHeight, setActionHeight] = useState(72);
   const remaining = useRemaining(event?.invited ? event.invitationExpiresAt : null);
+  // The invitation stays open until the event is full: up to the maximum, or for as long as it waits
+  // for participants when no maximum was set. Only the organizer invites (the server enforces it).
+  const canInvite = !!event && event.host.id === store.user.id && event.status === "waiting_participants" && startsAt(event) > new Date()
+    && (isUnlimitedCapacity(event.maxParticipants) || event.currentParticipants < event.maxParticipants);
+  // People in the availability pool who match this event and wait for an invitation; refreshed after the invite sheet closes.
+  const [waitingCount, setWaitingCount] = useState(0);
+  useEffect(() => {
+    if (!eventId || !canInvite || inviteOpen) return;
+    let active = true;
+    getEventCandidateCount(eventId).then(result => { if (active) setWaitingCount(result.count); }).catch(() => { if (active) setWaitingCount(0); });
+    return () => { active = false; };
+  }, [eventId, canInvite, inviteOpen, event?.currentParticipants]);
   useEffect(() => { let active = true; if (eventId) getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(error => { if (active) setLoadError(getApiErrorMessage(error, 'Etkinlik yüklenemedi.')); }); return () => { active = false; }; }, [eventId]);
   if (!event) return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}><TopNavBar navigate={navigate} fallback="discover" title="Etkinlik" /><Box style={{ paddingTop: 96, paddingHorizontal: 20 }}><Label>{loadError || 'Etkinlik yükleniyor…'}</Label></Box></Box>;
   const joined = event.host.id === store.user.id || event.joined || event.participants.some(p => p.id === store.user.id);
@@ -114,12 +128,12 @@ export default function EventDetailScreen({
               icon: <CheckIcon size={17} strokeWidth={1.75} />,
               label: "Seviye",
               value: event.level
-            }] : [])].map((item, i) => <GlassCard key={i} style={[[ui.p3]]}>
+            }] : [])].map((item, i) => <GlassCard key={i} style={[[ui.p3], { height: META_BOX_HEIGHT }]}>
                   <Box style={[[ui.textWhite30, ui.mb1]]}>{item.icon}</Box>
                   <Label style={[[ui.text10px, ui.textWhite30, ui.uppercase, ui.trackingWider]]}>
                     {item.label}
                   </Label>
-                  <Label style={[[ui.textSm, ui.textWhite80, ui.mt05, ui.fontMedium]]}>
+                  <Label numberOfLines={2} style={[[ui.textSm, ui.textWhite80, ui.mt05, ui.fontMedium]]}>
                     {item.value}
                   </Label>
                 </GlassCard>)}
@@ -136,11 +150,6 @@ export default function EventDetailScreen({
                 <Label style={[[ui.textSm, ui.fontSemibold, ui.textWhite]]}>
                   {participantCount(event.currentParticipants, event.maxParticipants)}
                 </Label>
-                {/* Invite only while seats remain: up to the maximum, or up to the minimum when none was set
-                    (the organizer counts, so min 2 is reached with one more person). */}
-                {event.host.id === store.user.id && event.status === "waiting_participants" && event.currentParticipants < capacityTarget(event) && <Touch accessibilityLabel="Kişi ekle" onPress={() => setInviteOpen(true)} style={[[ui.px3, ui.roundedXl, ui.textXs, ui.fontMedium, ui.border, ui.borderC8a44a30, ui.bgC8a44a10, ui.textC8a44a], { minHeight: 36 }]}>
-                    + Kişi ekle
-                  </Touch>}
               </Box>
             </Box>
             <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.flexWrap]]}>
@@ -156,14 +165,19 @@ export default function EventDetailScreen({
                   </Box>
                   <Label style={[[ui.text9px, ui.textC8a44a]]}>{event.host.id === store.user.id ? "Sen" : "Katıldın"}</Label>
                 </Box>}
-              {/* Empty slots */}
-              {Array.from({
-              // Without a maximum, empty seats lead up to the minimum.
-              length: Math.max(0, capacityTarget(event) - event.currentParticipants)
-            }).map((_, i) => <Box key={i} style={[[ui.w8, ui.h8, ui.roundedFull, ui.border, ui.borderDashed, ui.borderWhite15, ui.flex, ui.itemsCenter, ui.justifyCenter]]}>
-                  <Label style={[[ui.textWhite20, ui.textXs]]}>+</Label>
-                </Box>)}
             </Box>
+            {/* Invitations come only from the in-app availability pool (Etkinlik Takvimim), inside the participants card. */}
+            {canInvite && <Box style={[[ui.mt4, ui.pt4, ui.borderT, ui.borderWhite8, ui.flex, ui.itemsCenter, ui.gap3]]}>
+                <Box style={[[ui.flex1]]}>
+                  <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>Davet açık</Label>
+                  <Label style={[[ui.textXs, ui.textWhite55, ui.mt05]]}>
+                    {waitingCount > 0 ? `Şu anda ${waitingCount} kişi buraya katılmayı bekliyor` : "Şu anda takvim havuzunda bu etkinliğe uyan kimse yok"}
+                  </Label>
+                </Box>
+                <Touch accessibilityLabel="Kişi ekle" onPress={() => setInviteOpen(true)} style={[[ui.px4, ui.roundedXl, ui.textXs, ui.fontMedium, ui.border, ui.borderC8a44a30, ui.bgC8a44a10, ui.textC8a44a, ui.textCenter], { minHeight: 40, justifyContent: "center" }]}>
+                  Havuzdan seç
+                </Touch>
+              </Box>}
 
             {isForming && <Box style={[[ui.mt3]]}>
                 <Box style={[[ui.h1, ui.roundedFull, ui.bgWhite8, ui.overflowHidden]]}>
@@ -261,6 +275,9 @@ export default function EventDetailScreen({
           </Touch> : <Box style={actionStyles.row}>
             {roomReady ? <Touch accessibilityLabel="Odaya Katıl" onPress={() => navigate("event-room", { eventId: event.id })} style={actionStyles.primary} gradient={palette.actionGradient}>
               Odaya Katıl →
+            </Touch> : event.host.id === store.user.id && event.status === "cancelled" ? <Touch accessibilityLabel="Güncelle ve yeniden oluştur" onPress={() => navigate("create-event", { eventId: event.id })} style={actionStyles.primary} gradient={palette.actionGradient}>
+              {/* A cancelled event stays cancelled; the organizer starts a new one from its details. */}
+              Güncelle ve yeniden oluştur
             </Touch> : <Box style={actionStyles.status}>
               <CheckIcon size={16} strokeWidth={2} style={{ color: palette.success }} />
               <Label style={actionStyles.statusText}>{event.host.id === store.user.id ? "Düzenleyensin" : "Katıldın"}</Label>
