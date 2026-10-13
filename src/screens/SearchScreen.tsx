@@ -2,12 +2,12 @@ import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
 import { CloseIcon } from "../components/Icons";
 import { useEffect, useRef, useState } from "react";
-import { TextInput } from "react-native";
+import { ActivityIndicator, TextInput } from "react-native";
 import { AtmoBackground } from "../components/GlassUI";
 import { ClockIcon, SearchIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { EVENT_PHASE_LABEL, eventPhase, isLivePhase, mapApiEvent, useStore } from "../native/Store";
-import { getApiErrorMessage, getMapInterests, searchEvents } from "../api/client";
+import { getApiErrorMessage, getMapInterests, getUserInterests, searchEvents } from "../api/client";
 import { apiDate, localDate } from "../map/filters";
 import { FilterChip, GlassInput } from "../components/GlassUI";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
@@ -57,14 +57,21 @@ export default function SearchScreen({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [dateError, setDateError] = useState("");
-  const [dateResults, setDateResults] = useState<AppEvent[] | null>(null);
-  const [loadingDates, setLoadingDates] = useState(false);
+  // Results belong to the filter they were fetched for; a newer filter never shows older (or unfiltered) rows.
+  const [results, setResults] = useState<{ key: string; events: AppEvent[] } | null>(null);
   // Interest filter: several can be picked; the user's own interests are listed first.
   const [interests, setInterests] = useState<Array<{ id: string; name: string }>>([]);
   const [interestIds, setInterestIds] = useState<string[]>([]);
-  useEffect(() => { getMapInterests().then(rows => setInterests(rows.map(({ id, name }) => ({ id, name })))).catch(() => {}); }, []);
-  const mine = new Set(store.user.interests);
-  const interestOptions = [...interests].sort((a, b) => Number(mine.has(b.name)) - Number(mine.has(a.name)));
+  // The user's own interests come first, matched by id (names can differ by language), so the events
+  // they are most likely to join are one tap away. Store names are a fallback until the ids arrive.
+  const [myInterestIds, setMyInterestIds] = useState<string[]>([]);
+  useEffect(() => {
+    getMapInterests().then(rows => setInterests(rows.map(({ id, name }) => ({ id, name })))).catch(() => {});
+    getUserInterests().then(rows => setMyInterestIds(rows.map(row => row.id))).catch(() => {});
+  }, []);
+  const myNames = new Set(store.user.interests.map(name => name.toLocaleLowerCase("tr")));
+  const isMine = (interest: { id: string; name: string }) => myInterestIds.includes(interest.id) || myNames.has(interest.name.toLocaleLowerCase("tr"));
+  const interestOptions = [...interests].sort((a, b) => Number(isMine(b)) - Number(isMine(a)));
   const toggleInterest = (id: string) => setInterestIds(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
   const chooseFrom = (value: string) => {
     if (value < today) { setDateError("Başlangıç tarihi bugünden önce olamaz."); return; }
@@ -79,22 +86,23 @@ export default function SearchScreen({
   const dateActive = Boolean(dateFrom || dateTo);
   const interestActive = interestIds.length > 0;
   const filterActive = dateActive || interestActive;
+  const filterKey = filterActive ? `${dateFrom}|${dateTo}|${interestIds.join(",")}` : "";
   // With a date range or interests the server is asked (all upcoming events, not only the loaded ones).
   useEffect(() => {
-    if (!filterActive) { setDateResults(null); return; }
+    if (!filterActive) return;
     let active = true;
-    setLoadingDates(true);
     searchEvents(apiDate(dateFrom || today), dateTo ? apiDate(dateTo) : undefined, interestIds).then(result => {
       if (!active) return;
       const found = result.items.map(mapApiEvent);
       // Keep them in the shared list so the detail screen can open them (not added to the Discover feed).
       setStore(p => ({ ...p, events: [...new Map([...p.events, ...found].map(event => [event.id, event])).values()] }));
-      setDateResults(found);
-    }).catch(error => { if (active) setDateError(getApiErrorMessage(error, "Etkinlikler aranamadı.")); })
-      .finally(() => { if (active) setLoadingDates(false); });
+      setResults({ key: filterKey, events: found });
+    }).catch(error => { if (active) { setDateError(getApiErrorMessage(error, "Etkinlikler aranamadı.")); setResults({ key: filterKey, events: [] }); } });
     return () => { active = false; };
-  }, [dateFrom, dateTo, interestIds.join(",")]);
-  const EVENTS = dateResults ?? store.events;
+  }, [filterKey]);
+  // While a filter's results are on their way nothing is listed: no flash of the unfiltered list.
+  const loadingDates = filterActive && results?.key !== filterKey;
+  const EVENTS = !filterActive ? store.events : loadingDates ? [] : results!.events;
   const searching = Boolean(query.trim()) || filterActive;
   // No autofocus: the keyboard opens only when the user taps the search box.
   const inputRef = useRef<TextInput>(null);
@@ -154,8 +162,10 @@ export default function SearchScreen({
 
         {/* Results */}
         {searching && <Box style={[[]]} enter>
-            {loadingDates && <Label style={[[ui.textXs, ui.textWhite35, ui.mb3]]}>Etkinlikler aranıyor…</Label>}
-            {filtered.length > 0 ? <Box>
+            {loadingDates ? <Box style={[[ui.py10], { alignItems: "center", gap: 10 }]}>
+                <ActivityIndicator color={palette.accent} />
+                <Label style={[[ui.textXs, ui.textWhite35]]}>Etkinlikler aranıyor…</Label>
+              </Box> : filtered.length > 0 ? <Box>
                 <Label style={[[ui.textXs, ui.textWhite25, ui.uppercase, ui.trackingWider, ui.mb3]]}>
                   {filtered.length} etkinlik bulundu
                 </Label>

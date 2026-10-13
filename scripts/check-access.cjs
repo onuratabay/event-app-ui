@@ -399,6 +399,36 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     global.__testDateEvents = undefined
   }
 
+  // Search by interest: the user's own interests come first, and picking one never flashes the unfiltered list.
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const previousFetch = global.fetch
+    let release
+    const gate = new Promise(resolve => { release = resolve })
+    global.fetch = async (url, options = {}) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === "/interests") return { ok: true, status: 200, json: async () => [{ id: "kahve", name: "Kahve", slug: "kahve" }, { id: "padel", name: "Padel", slug: "padel" }, { id: "yoga", name: "Yoga", slug: "yoga" }] }
+      if (parsed.pathname === "/users/me/interests") return { ok: true, status: 200, json: async () => [{ id: "yoga", name: "Yoga (EN)" }] }
+      if (parsed.pathname === "/events" && parsed.searchParams.get("interestId")) { await gate; return { ok: true, status: 200, json: async () => ({ items: [{ ...cardBase, id: "yoga-1", interest: { id: "yoga", slug: "yoga", name: "Yoga" }, locationName: "Yoga Bahçesi", confirmedParticipantCount: 1, minParticipants: 2 }], total: 1 }) } }
+      if (parsed.pathname === "/events") return { ok: true, status: 200, json: async () => ({ items: [{ ...cardBase, id: "feed-1", interest: { id: "film", slug: "film", name: "Film" }, locationName: "Akış Sineması", confirmedParticipantCount: 1, minParticipants: 2 }], total: 1 }) }
+      return previousFetch(url, options)
+    }
+    require("../src/api/client.ts").clearSessionCache?.()
+    const search = await mount("Search")
+    await act(() => new Promise(resolve => setTimeout(resolve, 60)))
+    const chips = [...new Set(search.root.findAll(n => typeof n.props.onPress === "function" && ["Kahve", "Padel", "Yoga"].includes(text(n).trim())).map(n => text(n).trim()))]
+    assert.equal(chips[0], "Yoga", "The user's own interest is listed first (matched by id, even when names differ)")
+    await act(async () => search.root.findAll(n => typeof n.props.onPress === "function" && text(n).trim() === "Yoga")[0].props.onPress())
+    await act(() => new Promise(resolve => setTimeout(resolve, 30)))
+    const pending = text(search.toJSON())
+    assert(!pending.includes("Akış Sineması"), "The unfiltered list never shows while the interest search runs")
+    assert(pending.includes("Etkinlikler aranıyor") && !pending.includes("yaklaşan etkinlik yok"), "A loader shows instead of an empty message")
+    await act(async () => { release(); await new Promise(resolve => setTimeout(resolve, 30)) })
+    assert(text(search.toJSON()).includes("Yoga Bahçesi") && !text(search.toJSON()).includes("Akış Sineması"), "Only the interest's events are listed")
+    await act(async () => search.unmount())
+    global.fetch = previousFetch
+  }
+
   // Favourites run in the background: no global loader, taps never blocked, the last tap wins on the server.
   {
     const api = require("../src/api/client.ts")

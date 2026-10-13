@@ -237,7 +237,8 @@ export function searchEvents(dateFrom: string, dateTo?: string, interestIds: str
   const params = new URLSearchParams({ page: "1", limit: "100", dateFrom })
   if (dateTo) params.set("dateTo", dateTo)
   for (const id of interestIds) params.append("interestId", id)
-  return request<EventListResponse>(`/events?${params.toString()}`)
+  // Background: the search screen shows its own inline progress instead of the global overlay.
+  return request<EventListResponse>(`/events?${params.toString()}`, { background: true })
 }
 
 export async function getMapEvents(signal?: AbortSignal, filters: { dateFrom?: string; dateTo?: string; interestIds?: string[]; minLat?: number; maxLat?: number; minLng?: number; maxLng?: number } = {}) {
