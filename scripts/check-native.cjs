@@ -78,7 +78,8 @@ Module._load = function (id, parent, isMain) {
       Switch: "Switch",
       Platform: { OS: process.env.TEST_PLATFORM || "ios" },
       useWindowDimensions: () => ({ width: global.__testWindowWidth || 390, height: 844, scale: 3, fontScale: 1 }),
-      Alert: { alert() {} },
+      // Tests may answer dialogs through global.__testAlert (e.g. press the destructive button).
+      Alert: { alert: (...args) => global.__testAlert?.(...args) },
       AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) },
       Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => { global.__testKeyboardDismissed = true } },
       BackHandler: { addEventListener: (_name, handler) => { global.__testBackHandler = handler; return { remove() { global.__testBackHandler = undefined } } } },

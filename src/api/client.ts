@@ -380,6 +380,17 @@ export const getUserSettings = () => cached('user:settings', HOURS / 6, () => re
 export interface FriendUser { id: string; firstName: string; lastName: string; profilePhoto: string | null }
 // Accepted friends whose accounts are approved; only they can be invited.
 export const getActiveFriends = () => request<{ items: Array<{ user: FriendUser }> }>('/friends?active=true&limit=100')
+/** A profile visit: our relationship, whether a request can be sent now (needs a shared event), and their friend count. */
+export interface FriendRelationship { status: 'self' | 'none' | 'outgoing' | 'incoming' | 'friends'; canRequest: boolean; friendCount: number }
+export const getFriendRelationship = (userId: string) => request<FriendRelationship>(`/friends/status/${encodeURIComponent(userId)}`, { background: true })
+// Friend actions run in the background; the profile button updates optimistically.
+export const sendFriendRequest = (userId: string) => request<{ message: string }>('/friends/requests', { method: 'POST', body: JSON.stringify({ userId }), background: true })
+export const cancelFriendRequest = (userId: string) => request<{ message: string }>(`/friends/requests/${encodeURIComponent(userId)}`, { method: 'DELETE', background: true })
+export const acceptFriendRequest = (userId: string) => request<{ message: string }>(`/friends/requests/${encodeURIComponent(userId)}/accept`, { method: 'POST', background: true })
+/** A member's connections: visible to themselves and their friends only (others get 403). */
+export const getFriendsOf = (userId: string) => request<{ items: Array<{ user: FriendUser; friendsSince: string }>; total: number }>(`/friends/of/${encodeURIComponent(userId)}?limit=100`, { background: true })
+export const removeFriend = (userId: string) => request<{ message: string }>(`/friends/${encodeURIComponent(userId)}`, { method: 'DELETE', background: true })
+export const declineFriendRequest = (userId: string) => request<{ message: string }>(`/friends/requests/${encodeURIComponent(userId)}/decline`, { method: 'POST', background: true })
 export const getInvitations = () => request<EventListResponse>('/events/invitations?limit=50')
 export const getEnums = (group: string) => cached(`enums:${group}`, 6 * HOURS, () => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`))
 export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value) })
@@ -395,6 +406,9 @@ export const MESSAGE_PAGE_SIZE = 20
 export const getMessages = (id: string, signal?: AbortSignal, cursor?: string) => request<{ items: ApiMessage[]; nextCursor?: string | null }>(`/events/${id}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}&limit=${MESSAGE_PAGE_SIZE}` : `?limit=${MESSAGE_PAGE_SIZE}`}`, { signal, background: true })
 export const markRoomRead = (id: string) => request<{ eventId: string; unreadCount: number }>(`/events/${id}/messages/read`, { method: 'POST', background: true })
 export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text }), background: true })
+/** Profile "Katıldığı": ended events the user joined (not their own), newest first; `total` is the count. */
+// limit=1 is enough for the count; the full list loads only when it is opened (covers are heavy).
+export const getAttendedEvents = (limit = 50) => request<EventListResponse>(`/events/attended?limit=${limit}`, { background: true })
 export async function getMyEvents(page = 1, options: { background?: boolean } = {}) {
   const lists = await Promise.all(['mine', 'participating', 'favorites'].map(kind => request<EventListResponse>(`/events/${kind}?page=${page}&limit=30`, options)))
   return { items: lists.flatMap(list => list.items), hasMore: lists.some(list => page * 30 < list.total) }

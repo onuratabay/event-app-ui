@@ -429,6 +429,90 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     global.fetch = previousFetch
   }
 
+  // Friends: send from a member's profile, never twice but withdrawable; approve/decline incoming; count under "Bağlantı".
+  {
+    storage.set("event-app:access-token", "a"); current = "approved"
+    const previousFetch = global.fetch
+    let relation = { status: "none", canRequest: true, friendCount: 4 }
+    const sent = []
+    global.fetch = async (url, options = {}) => {
+      const parsed = new URL(url)
+      if (parsed.pathname === "/users/ali/profile") return { ok: true, status: 200, json: async () => ({ id: "ali", firstName: "Ali", lastName: "Kaya", city: "Ankara", bio: "", rank: 4, interests: [] }) }
+      if (parsed.pathname === "/friends/status/ali") return { ok: true, status: 200, json: async () => relation }
+      if (parsed.pathname === "/friends/status/pending-user") return { ok: true, status: 200, json: async () => ({ status: "self", canRequest: false, friendCount: 7 }) }
+      if (parsed.pathname === "/events/attended") return { ok: true, status: 200, json: async () => ({ items: parsed.searchParams.get("limit") === "1" ? [] : [{ ...cardBase, id: "done-1", interest: { id: "film", slug: "film", name: "Film" }, locationName: "Eski Sinema", status: { enum: "closed", name: "Bitti" }, viewerParticipationStatus: "confirmed" }], total: 3 }) }
+      if (parsed.pathname === "/friends/of/ali") return { ok: true, status: 200, json: async () => ({ items: [{ user: { id: "zeynep", firstName: "Zeynep", lastName: "Aydın", profilePhoto: null }, friendsSince: new Date().toISOString() }], total: 1 }) }
+      if (parsed.pathname === "/friends/of/pending-user") return { ok: true, status: 200, json: async () => ({ items: [{ user: { id: "ali", firstName: "Ali", lastName: "Kaya", profilePhoto: null }, friendsSince: new Date().toISOString() }], total: 1 }) }
+      if (parsed.pathname === "/friends/ali" && options.method === "DELETE") { sent.push("DELETE /friends/ali"); return { ok: true, status: 200, json: async () => ({ message: "ok" }) } }
+      if (parsed.pathname.startsWith("/friends/requests")) { sent.push(`${options.method} ${parsed.pathname}${options.body ? " " + options.body : ""}`); return { ok: true, status: 200, json: async () => ({ message: "ok" }) } }
+      return previousFetch(url, options)
+    }
+    const press = async (tree, label) => { const node = tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === "function")[0]; assert(node, `Missing ${label}`); await act(async () => node.props.onPress()) }
+    const settle = () => act(() => new Promise(resolve => setTimeout(resolve, 40)))
+    const profile = await mount("Profile", { userId: "ali", isOwn: false })
+    await settle()
+    assert(text(profile.toJSON()).replace(/\s+/g, " ").includes("4 bağlantı"), "A member's profile shows their friend count")
+    await press(profile, "Arkadaşlık isteği gönder")
+    await settle()
+    assert.deepEqual(sent, ['POST /friends/requests {"userId":"ali"}'], "A friend request is sent from the profile")
+    assert(!profile.root.findAll(n => n.props.accessibilityLabel === "Arkadaşlık isteği gönder").length, "A second request cannot be sent")
+    assert(text(profile.toJSON()).includes("İstek gönderildi"), "The sent state is shown")
+    await press(profile, "Arkadaşlık isteğini geri çek")
+    await settle()
+    assert.equal(sent.at(-1), "DELETE /friends/requests/ali", "A sent request can be withdrawn")
+    // Ali sends a request: the open profile updates live and offers approve/decline.
+    relation = { status: "incoming", canRequest: false, friendCount: 4 }
+    await act(async () => require("./mock-socket.cjs").instances.at(-1).receive("friend:changed", { userId: "ali" }))
+    await settle()
+    assert(text(profile.toJSON()).replace(/\s+/g, " ").includes("Ali sana arkadaşlık isteği gönderdi"), "An incoming request shows on the sender's profile")
+    await press(profile, "Arkadaşlık isteğini kabul et")
+    await settle()
+    assert.equal(sent.at(-1), "POST /friends/requests/ali/accept", "An incoming request can be approved")
+    assert(text(profile.toJSON()).includes("Arkadaşsınız") && text(profile.toJSON()).replace(/\s+/g, " ").includes("5 bağlantı"), "Approval shows at once and the count goes up")
+    // A friend's connections open from "N bağlantı"; tapping one opens their profile.
+    let opened
+    await act(async () => profile.update(React.createElement(require("../src/native/Store.tsx").StoreProvider, null, React.createElement(require("../src/screens/ProfileScreen.tsx").default, { userId: "ali", isOwn: false, navigate: (route, opts) => { opened = { route, opts } } }))))
+    await settle()
+    await press(profile, "Ali Kaya bağlantılarını göster")
+    await settle()
+    assert(text(profile.toJSON()).includes("Zeynep Aydın"), "A friend's connections are listed")
+    assert(!profile.root.findAll(n => n.props.accessibilityLabel === "Zeynep Aydın arkadaşlıktan çıkar").length, "A friend's list is read-only")
+    await press(profile, "Zeynep Aydın profilini aç")
+    assert.deepEqual(opened, { route: "profile", opts: { userId: "zeynep" } }, "Tapping a connection opens their profile")
+    // Removing a friend asks first, then shows the non-friend state.
+    global.__testAlert = (_title, _message, buttons) => buttons?.find(button => button.style === "destructive")?.onPress?.()
+    await settle()
+    await press(profile, "Arkadaşlıktan çıkar")
+    await settle()
+    assert.equal(sent.at(-1), "DELETE /friends/ali", "A friend can be removed")
+    assert(!text(profile.toJSON()).includes("Arkadaşsınız") && !profile.root.findAll(n => n.props.accessibilityLabel === "Ali Kaya bağlantılarını göster").length, "After removing, their connections are no longer open")
+    global.__testAlert = undefined
+    await act(async () => profile.unmount())
+    // Without a shared event there is no button, only a hint.
+    relation = { status: "none", canRequest: false, friendCount: 0 }
+    const stranger = await mount("Profile", { userId: "ali", isOwn: false })
+    await settle()
+    assert(!stranger.root.findAll(n => n.props.accessibilityLabel === "Arkadaşlık isteği gönder").length && text(stranger.toJSON()).includes("Birlikte bir etkinliğe katıldığınızda"), "Without a shared event a hint replaces the button")
+    await act(async () => stranger.unmount())
+    // Own profile: "Bağlantı" is the friend count.
+    const own = await mount("Profile")
+    await settle()
+    const stat = own.root.findAll(n => typeof n.props.children === "string" && n.props.children === "Bağlantı")[0]
+    assert(stat, "Own profile has the Bağlantı stat")
+    assert(text(own.toJSON()).replace(/\s+/g, " ").includes("7 Bağlantı"), "Own profile shows the friend count under Bağlantı")
+    await press(own, "Bağlantılarımı göster")
+    await settle()
+    assert(text(own.toJSON()).includes("Ali Kaya") && own.root.findAll(n => n.props.accessibilityLabel === "Ali Kaya arkadaşlıktan çıkar").length, "Own connections are listed, each removable")
+    await press(own, "Bağlantıları kapat")
+    // "Katıldığı": the number of ended events joined; tapping lists them and opens one.
+    assert(text(own.toJSON()).replace(/\s+/g, " ").includes("3 Katıldığı"), "Katıldığı shows the ended events joined")
+    await press(own, "Katıldığım etkinlikleri göster")
+    await settle()
+    assert(text(own.toJSON()).includes("Eski Sinema"), "Tapping Katıldığı lists those events")
+    await act(async () => own.unmount())
+    global.fetch = previousFetch
+  }
+
   // Favourites run in the background: no global loader, taps never blocked, the last tap wins on the server.
   {
     const api = require("../src/api/client.ts")

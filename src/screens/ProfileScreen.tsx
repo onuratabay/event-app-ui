@@ -5,16 +5,20 @@ import TopNavBar from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
-import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage } from "../api/client";
+import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, type FriendRelationship } from "../api/client";
+import FriendActions from "../components/FriendActions";
+import ConnectionsSheet from "../components/ConnectionsSheet";
+import EventsSheet from "../components/EventsSheet";
+import { onSocket } from "../services/socket";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
 import { InstagramIcon } from "../components/Icons";
 
 import { selectPhoto } from "../native/media";
-import { EMPTY_USER, updateStoreUser, useStore } from "../native/Store";
+import { EMPTY_USER, mapApiEvent, updateStoreUser, useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch, Vector, openExternal } from "../native/UI";
 import { ui } from "../theme/styles";
-import { AppUser, NavigateFn } from "../types";
+import { AppEvent, AppUser, NavigateFn } from "../types";
 interface Props {
   navigate: NavigateFn;
   isOwn?: boolean;
@@ -161,6 +165,41 @@ export default function ProfileScreen({
     return () => { active = false; };
   }, [userId, isOwn]);
   const user = isOwn ? store.user : otherUser || EMPTY_USER;
+  // Friendship: the profile owner's friend count ("Bağlantı") and, on someone else's profile, our status.
+  // "friend:changed" arrives when either side sends, accepts, declines or withdraws, so it stays current.
+  const relationTarget = isOwn ? store.user.id : userId;
+  const [relation, setRelation] = useState<FriendRelationship | null>(null);
+  useEffect(() => {
+    if (!relationTarget) return;
+    let active = true;
+    const load = () => { void getFriendRelationship(relationTarget).then(next => { if (active) setRelation(next); }).catch(() => {}); };
+    setRelation(null); load();
+    const stop = onSocket("friend:changed", (payload: { userId: string }) => { if (isOwn || payload.userId === relationTarget) load(); });
+    return () => { active = false; stop(); };
+  }, [relationTarget, isOwn]);
+  // "Katıldığı": ended events you joined. The count loads with the profile (one row); the list on tap.
+  const [attendedCount, setAttendedCount] = useState<number | null>(null);
+  const [attended, setAttended] = useState<AppEvent[] | null>(null);
+  const [attendedOpen, setAttendedOpen] = useState(false);
+  const [attendedError, setAttendedError] = useState("");
+  useEffect(() => {
+    if (!isOwn || !store.user.id) return;
+    let active = true;
+    getAttendedEvents(1).then(result => { if (active) setAttendedCount(result.total); }).catch(() => {});
+    return () => { active = false; };
+  }, [isOwn, store.user.id]);
+  const openAttended = () => {
+    setAttendedOpen(true); setAttended(null); setAttendedError("");
+    getAttendedEvents().then(result => {
+      const found = result.items.map(mapApiEvent);
+      // The detail page opens events from the shared list, so these join it (not the Discover feed).
+      setStore(p => ({ ...p, events: [...new Map([...p.events, ...found].map(event => [event.id, event])).values()] }));
+      setAttended(found); setAttendedCount(result.total);
+    }).catch(error => { setAttended([]); setAttendedError(getApiErrorMessage(error, "Etkinlikler yüklenemedi.")); });
+  };
+  // Connections list: always on your own profile; on someone else's only when you are friends.
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const canSeeConnections = isOwn || relation?.status === "friends";
   const interests = new Set(user.interests);
   const [interestCatalog, setInterestCatalog] = useState<Array<{ id: string; name: string }> | null>(null);
   const [loadingInterests, setLoadingInterests] = useState(false);
@@ -252,6 +291,12 @@ export default function ProfileScreen({
         </Box> : undefined}
       />
 
+      {attendedOpen ? <EventsSheet title="Katıldığım etkinlikler" events={attended} error={attendedError} emptyText="Henüz katılıp tamamladığın bir etkinlik yok."
+        onClose={() => setAttendedOpen(false)} onOpen={eventId => navigate("event-detail", { eventId })} /> : null}
+      {connectionsOpen && canSeeConnections && relationTarget ? <ConnectionsSheet userId={relationTarget} title={isOwn ? "Bağlantılarım" : `${user.name.split(" ")[0]} · Bağlantılar`} canRemove={isOwn}
+        onClose={() => setConnectionsOpen(false)} onOpenProfile={id => navigate("profile", id === store.user.id ? {} : { userId: id })}
+        onRemoved={() => setRelation(current => current ? { ...current, friendCount: Math.max(0, current.friendCount - 1) } : current)} /> : null}
+
       <Scroll style={[[ui.relative, ui.hFull, ui.pb28], { paddingTop: 80 }]}>
         {/* Header */}
         <Box style={[[ui.pt4, ui.px5, ui.pb5]]}>
@@ -293,28 +338,40 @@ export default function ProfileScreen({
             <Label style={profileInstagramStyles.handle}>@{user.instagram.replace(/^@/, "")}</Label>
             <Label style={profileInstagramStyles.external}>↗</Label>
           </Touch> : null}
+
+          {!isOwn && userId && relation ? <Box style={{ marginTop: 16, gap: 10 }}>
+            {relation.status === "friends" ? <Touch accessibilityLabel={`${user.name} bağlantılarını göster`} onPress={() => setConnectionsOpen(true)} style={{ alignSelf: "flex-start", minHeight: 32, justifyContent: "center" }}>
+                <Label style={[[ui.textXs], { color: palette.accent }]}>{relation.friendCount} bağlantı ›</Label>
+              </Touch> : <Label style={[[ui.textXs, ui.textWhite40]]}>{relation.friendCount} bağlantı</Label>}
+            <FriendActions userId={userId} name={user.name} relation={relation} onChange={setRelation} />
+          </Box> : null}
         </Box>
 
         {/* Stats */}
         {isOwn && <Box style={[[ui.px5, ui.mb4]]}>
           <Box style={[[ui.grid, ui.gap3]]} columns={3}>
             {[{
-            value: user.stats.attended,
+            value: attendedCount ?? user.stats.attended,
             label: "Katıldığı"
           }, {
-            value: user.stats.connections,
+            value: relation?.friendCount ?? user.stats.connections,
             label: "Bağlantı"
           }, {
             value: user.stats.organized,
             label: "Düzenlediği"
-          }].map((s, i) => <GlassCard key={i} style={[[ui.p4, ui.textCenter]]}>
+          }].map((s, i) => {
+              const card = <GlassCard key={i} style={[[ui.p4, ui.textCenter]]}>
                 <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>
                   {s.value}
                 </Label>
                 <Label style={[[ui.textXs, ui.textWhite35, ui.mt05]]}>
                   {s.label}
                 </Label>
-              </GlassCard>)}
+              </GlassCard>;
+              // "Bağlantı" opens the list of your friends.
+              return s.label === "Bağlantı" ? <Touch key={i} accessibilityLabel="Bağlantılarımı göster" onPress={() => setConnectionsOpen(true)}>{card}</Touch>
+                : s.label === "Katıldığı" ? <Touch key={i} accessibilityLabel="Katıldığım etkinlikleri göster" onPress={openAttended}>{card}</Touch> : card;
+            })}
           </Box>
         </Box>}
 
