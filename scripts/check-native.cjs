@@ -57,7 +57,8 @@ const storage = new Map()
 Module._load = function (id, parent, isMain) {
   if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]), usePathname: () => global.__testPathname || "/discover", useLocalSearchParams: () => global.__testParams || {}, useGlobalSearchParams: () => global.__testParams || {}, useRootNavigationState: () => global.__testRootState, useRouter: () => ({ navigate: href => { global.__testMethods?.push("navigate"); global.__testNavigations?.push(href.pathname ?? href) }, replace: href => { global.__testMethods?.push("replace"); global.__testNavigations?.push(href.pathname ?? href) }, push: href => { global.__testMethods?.push("push"); global.__testNavigations?.push(href.pathname ?? href) }, back: () => global.__testNavigations?.push("back"), canGoBack: () => { let state = global.__testRootState; while (state?.routes?.[state.index ?? 0]?.state) state = state.routes[state.index ?? 0].state; return (state?.index ?? 0) > 0 }, canDismiss: () => true, dismissAll: () => global.__testNavigations?.push("dismissAll") }) }
   if (id === "socket.io-client") return require("./mock-socket.cjs")
-  if (id === "expo-notifications") { global.__expoNotificationsLoaded = true; return {} }
+  if (id === "expo-notifications") { global.__expoNotificationsLoaded = true; return global.__testNotifications || {} }
+  if (id === "expo-device") return { isDevice: true }
   if (id === "expo-location") return {
     getForegroundPermissionsAsync: async () => ({ granted: global.__testForegroundLocationPermission === true }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
     Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => global.__testCurrentPosition ? global.__testCurrentPosition() : ({ coords: { latitude: 39.92, longitude: 32.85 } }), geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => global.__testReverseGeocode || [],
@@ -81,7 +82,7 @@ Module._load = function (id, parent, isMain) {
       // Tests may answer dialogs through global.__testAlert (e.g. press the destructive button).
       Alert: { alert: (...args) => global.__testAlert?.(...args) },
       AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) },
-      Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => { global.__testKeyboardDismissed = true } },
+      Keyboard: { addListener: (name, handler) => { (global.__testKeyboardListeners ||= {})[name] = handler; return { remove() { if (global.__testKeyboardListeners?.[name] === handler) delete global.__testKeyboardListeners[name] } } }, dismiss: () => { global.__testKeyboardDismissed = true } },
       BackHandler: { addEventListener: (_name, handler) => { global.__testBackHandler = handler; return { remove() { global.__testBackHandler = undefined } } } },
       AccessibilityInfo: { isReduceMotionEnabled: async () => false, announceForAccessibility() {}, getRecommendedTimeoutMillis: async value => value },
       Easing: { linear: value => value, quad: value => value ** 2, cubic: value => value ** 3, out: easing => easing, inOut: easing => easing },
@@ -300,6 +301,16 @@ async function tap(tree, label) {
   let destination
   const registration = await mount("Onboarding", { step: 1, navigate: (route) => { destination = route } })
   const fields = registration.root.findAllByType("TextInput")
+  assert.deepEqual([fields[0].props.autoCapitalize, fields[1].props.autoCapitalize], ["words", "words"], "Name fields start each word with a capital letter")
+  {
+    // The phone field starts with "+90 5"; a number typed without the leading 5 still gets it.
+    const phoneField = () => registration.root.findAllByType("TextInput").find(n => n.props.accessibilityLabel === "Telefon")
+    await act(async () => phoneField().props.onFocus?.())
+    assert.equal(phoneField().props.value, "+90 5", "An empty phone field gets +90 5 on focus")
+    await act(async () => phoneField().props.onChangeText("321234567"))
+    assert.equal(phoneField().props.value, "+90 532 123 45 67", "A number typed without its leading 5 gets it")
+    await act(async () => phoneField().props.onChangeText(""))
+  }
   for (const [index, value] of ["Deniz", "Test", "deniz@example.com", "+90 532 123 45 67", "Password1!"].entries()) {
     await act(async () => fields[index].props.onChangeText(value))
   }
@@ -322,7 +333,19 @@ async function tap(tree, label) {
   assert(cityField, "Registration has a city select")
   await act(async () => cityField.props.onPress())
   const citySearch = registration.root.findAllByType("TextInput").find(n => n.props.placeholder === "Şehir ara")
+  // The sheet keeps one height while filtering, so the search field never drops under the keyboard.
+  const sheet = () => registration.root.findAll(n => n.type === "View" && n.props.edges?.includes?.("bottom") || (n.type === "View" && [].concat(n.props.style).some(style => style && style.borderTopLeftRadius === 24)))[0]
+  const sheetStyle = () => Object.assign({}, ...[].concat(sheet().props.style).flat(Infinity).filter(Boolean))
+  assert.equal(sheetStyle().flex, 1, "The city sheet fills a fixed area instead of shrinking to its content")
+  assert.equal(sheetStyle().maxHeight, undefined)
   await act(async () => citySearch.props.onChangeText("izmir"))
+  assert.equal(sheetStyle().flex, 1, "Filtering the list does not change the sheet height")
+  if ((process.env.TEST_PLATFORM || "ios") === "ios") {
+    await act(async () => global.__testKeyboardListeners.keyboardWillShow({ endCoordinates: { height: 320 } }))
+    const list = registration.root.findAll(n => n.type === "ScrollView" && n.props.contentContainerStyle?.paddingBottom !== undefined).at(-1)
+    assert.equal(list.props.contentContainerStyle.paddingBottom, 320, "On iOS the list makes room for the keyboard")
+    await act(async () => global.__testKeyboardListeners.keyboardWillHide())
+  }
   const options = registration.root.findAllByType("Pressable").filter(n => n.props.accessibilityState && "selected" in n.props.accessibilityState)
   assert.deepEqual(options.map(n => text(n).trim()), ["İzmir"], "Searching 'izmir' finds İzmir")
   await act(async () => options[0].props.onPress())
@@ -356,6 +379,8 @@ async function tap(tree, label) {
   await require("./check-server-state.cjs")({ mount, tap, act, text, storage })
   await require("./check-availability.cjs")({ mount, tap, act, text, storage })
   await require("./check-legal.cjs")({ mount, tap, act, text, storage })
+  await require("./check-admin.cjs")({ mount, tap, act, text, storage })
+  await require("./check-places.cjs")({ act, text, storage })
   const names = [
     "Splash",
     "Welcome",
@@ -383,9 +408,30 @@ async function tap(tree, label) {
   }
   const search = await mount("Search")
   const input = search.root.findByType("TextInput")
+  {
+    // The text sits on the same vertical centre as the search icon: no inherited line height, centred row.
+    const flatInput = Object.assign({}, ...[].concat(input.props.style).flat(Infinity).filter(Boolean))
+    assert.equal(flatInput.lineHeight, undefined, "Single-line inputs carry no line height that would push the text off centre")
+    assert.equal(flatInput.textAlignVertical, "center")
+    let row = input.parent; while (row && !row.findAll(n => n.type === "Svg" || n.type === "Vector").length) row = row.parent
+    assert(row && [].concat(row.props.style).flat(Infinity).filter(Boolean).some(style => style.alignItems === "center"), "The icon and the text share a centred row")
+  }
   await act(async () => input.props.onChangeText("zzzz-no-match"))
   assert(text(search.toJSON()).includes("sonuç bulunamadı"))
   await act(async () => search.unmount())
+  {
+    // Every top bar uses the same control sizes: 20 px icons (back included) and one text style for links.
+    const flat = node => Object.assign({}, ...[].concat(node.props.style).flat(Infinity).filter(Boolean))
+    const iconWidth = (tree, label) => { const action = tree.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === label); assert(action, `Missing top-bar control: ${label}`); return Number(action.findAll(n => n.type === "Svg")[0]?.props.width) }
+    const detailBar = await mount("EventDetail", { eventId: EVENTS[0].id })
+    assert.deepEqual([iconWidth(detailBar, "Geri git"), iconWidth(detailBar, "Paylaş")], [20, 20], "Back and share icons share one size")
+    await act(async () => detailBar.unmount())
+    const profileBar = await mount("Profile")
+    assert.equal(iconWidth(profileBar, "Geri git"), 20, "The back icon keeps its size next to a label")
+    const linkSizes = ["Geri git", "Ayarları aç", "Çıkış yap"].map(label => flat(profileBar.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === label).findAll(n => n.type === "Text")[0]).fontSize)
+    assert.equal(new Set(linkSizes).size, 1, "Text links in the top bar share one size")
+    await act(async () => profileBar.unmount())
+  }
   const profileNavigations = []
   const detail = await mount("EventDetail", { eventId: EVENTS[0].id, navigate: (screen, options) => profileNavigations.push({ screen, options }) })
   await tap(detail, "Profil")
@@ -604,6 +650,8 @@ async function tap(tree, label) {
   await tap(createEvent,"Sadece Davet")
   await act(async () => { await new Promise(r=>setTimeout(r,20)) })
   assert(text(createEvent.toJSON()).includes("Ayşe Arkadaş"), "Invite-only lists active friends")
+  assert.equal(continueButton().props.disabled, false, "Friends are optional: pool candidates need no friendship")
+  assert(text(createEvent.toJSON()).includes("takvim havuzundan"), "The step says pool candidates can be invited next")
   await tap(createEvent,"Ayşe Arkadaş")
   await tap(createEvent,"Devam Et")
   assert(text(createEvent.toJSON()).includes("Önizleme"))

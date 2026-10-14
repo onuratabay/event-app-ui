@@ -495,6 +495,9 @@ export function Field({
         { minHeight: 52, paddingVertical: 12, paddingHorizontal: 0, textAlignVertical: "center" },
         style,
         font({ ...inherited, ...split(style).text }),
+        // A line height on a single-line input pushes the text (and placeholder) below the vertical
+        // centre on iOS, out of line with icons next to it; only multi-line inputs keep it.
+        !props.multiline && { lineHeight: undefined },
         props.multiline && { minHeight: 96, textAlignVertical: "top" },
       ]}
       keyboardType={

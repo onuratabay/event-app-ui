@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
+import { useEffect, useState } from "react"
+import { Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { TURKISH_CITIES } from "../content/cities"
 import { palette } from "../theme/palette"
@@ -19,6 +19,15 @@ export default function CityPicker({ value, onChange, label = "Şehir", compact 
   const [query, setQuery] = useState("")
   const cities = TURKISH_CITIES.filter(city => normalize(city).includes(normalize(query.trim())))
   const close = () => { setOpen(false); setQuery("") }
+  // iOS lays the keyboard over the sheet; padding the list by its height keeps every city reachable.
+  // Android resizes the window itself, so it needs nothing.
+  const [keyboard, setKeyboard] = useState(0)
+  useEffect(() => {
+    if (!open || Platform.OS !== "ios") return
+    const shown = Keyboard.addListener("keyboardWillShow", event => setKeyboard(event?.endCoordinates?.height || 0))
+    const hidden = Keyboard.addListener("keyboardWillHide", () => setKeyboard(0))
+    return () => { shown.remove(); hidden.remove(); setKeyboard(0) }
+  }, [open])
   return <>
     {!compact && <Text style={s.label}>{label}</Text>}
     <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value || "seçilmedi"}`} onPress={() => { Keyboard.dismiss(); setOpen(true) }} style={compact ? s.compact : s.field}>
@@ -36,7 +45,7 @@ export default function CityPicker({ value, onChange, label = "Şehir", compact 
             <View style={s.action} />
           </View>
           <TextInput value={query} onChangeText={setQuery} placeholder="Şehir ara" placeholderTextColor={palette.muted} style={s.search} autoCorrect={false} />
-          <ScrollView style={s.list} keyboardShouldPersistTaps="handled">
+          <ScrollView style={s.list} contentContainerStyle={{ paddingBottom: keyboard }} keyboardShouldPersistTaps="handled">
             {cities.map(city => <Pressable key={city} accessibilityRole="button" accessibilityState={{ selected: city === value }} onPress={() => { onChange(city); close() }} style={[s.option, city === value && s.selected]}>
               <Text style={[s.optionText, city === value && s.selectedText]}>{city}</Text>
               {city === value && <Text style={s.selectedText}>✓</Text>}
@@ -57,14 +66,16 @@ const s = StyleSheet.create({
   chevron: { color: palette.muted, fontSize: 18, marginLeft: 8 },
   compact: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", minHeight: 32 },
   compactText: { color: "rgba(241,245,249,.45)", fontSize: 14, fontFamily: "Outfit" },
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.55)" },
-  panel: { maxHeight: "75%", backgroundColor: palette.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingBottom: 16 },
+  // The sheet keeps one height and its top edge never moves, so the search field stays above the
+  // keyboard whether the list is long or filtered down to a few cities.
+  backdrop: { flex: 1, justifyContent: "flex-end", paddingTop: "25%", backgroundColor: "rgba(0,0,0,.55)" },
+  panel: { flex: 1, backgroundColor: palette.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingBottom: 16 },
   toolbar: { height: 60, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   action: { minWidth: 60, height: 44, justifyContent: "center", alignItems: "center" },
   title: { fontFamily: "Outfit-SemiBold", fontSize: 16, color: palette.text },
   cancel: { fontFamily: "Outfit", fontSize: 15, color: palette.muted },
   search: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.background, paddingHorizontal: 14, color: palette.text, fontFamily: "Outfit", fontSize: 15, marginBottom: 8 },
-  list: { flexGrow: 0 },
+  list: { flex: 1 },
   option: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, borderRadius: 12 },
   selected: { backgroundColor: palette.selected },
   optionText: { fontFamily: "Outfit", fontSize: 16, color: palette.text },

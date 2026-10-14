@@ -42,6 +42,12 @@
         {
           "locationWhenInUsePermission": "Yakınındaki etkinlikleri ve bulunduğun şehre uygun önerileri göstermek için konumuna erişim gerekiyor."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#6978ff"
+        }
       ]
     ],
     "experiments": {

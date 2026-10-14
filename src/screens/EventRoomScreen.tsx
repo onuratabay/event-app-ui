@@ -3,7 +3,7 @@ import { useBottomNavInset } from "../components/BottomNav";
 import { ArrowLeftIcon, UsersIcon, LocationIcon, ClockIcon, StarIcon, SendIcon } from "../components/Icons";
 import { useScreenActive } from '../native/useScreenActive';
 import { onSocket, retainEvent, socketAction, socketConnected } from '../services/socket';
-import TopNavBar from "../components/TopNavBar";
+import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -325,9 +325,9 @@ export default function EventRoomScreen({
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} title={roomTitle(event)} subtitle={subtitle}
         onTitlePress={() => setInfoOpen(true)} titleHint="Oda bilgisini ve katılımcıları gösterir"
-        right={<Touch accessibilityLabel="Etkinlik detayına git" onPress={() => navigate("event-detail", { eventId: event.id })} style={s.detailButton}>
-          <ArrowLeftIcon size={19} strokeWidth={1.9} style={{ color: palette.accent, transform: [{ rotate: "180deg" }] }} />
-        </Touch>} />
+        right={<NavAction label="Etkinlik detayına git" onPress={() => navigate("event-detail", { eventId: event.id })}>
+          <ArrowLeftIcon size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} style={{ color: palette.accent, transform: [{ rotate: "180deg" }] }} />
+        </NavAction>} />
 
       {/* Tapping the room name opens one sheet: event info, participants and room settings. */}
       {infoOpen && <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={() => setInfoOpen(false)}>
@@ -508,7 +508,6 @@ const s = StyleSheet.create({
   panelButtonLabel: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 13 },
   people: { gap: 8 },
   person: { flexDirection: "row", alignItems: "center", gap: 8 },
-  detailButton: { width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(105,120,255,.14)", borderWidth: 1, borderColor: palette.border },
   peopleSheet: { backgroundColor: palette.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
   peopleSheetHeader: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   peopleSheetTitle: { fontFamily: "Outfit-SemiBold", fontSize: 16, lineHeight: 22, color: palette.text },

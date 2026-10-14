@@ -1,6 +1,7 @@
 import { useOptionalGuest } from "../guest/GuestSession"
 import { defaultEventCover } from "./images"
 import { startSocket, stopSocket, onSocket, watchEvent } from '../services/socket'
+import { registerForPush } from '../services/push'
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import React, {
   createContext,
@@ -50,7 +51,7 @@ const mergeFeed = (current: AppEvent[], items: import('../api/client').ApiEvent[
 export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
   if (!remoteUser || typeof remoteUser !== "object") return user
   const remote = remoteUser as import('../api/client').ApiUser
-  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0, status: remote.status?.enum ?? user.status }
+  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0, status: remote.status?.enum ?? user.status, role: remote.role ?? user.role }
 
 }
 // Events without a participant cap are stored with the API's highest allowed capacity.
@@ -388,6 +389,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }
   useEffect(() => { if (guestMode) return; void hasSession().then(active => { if (active && !guestModeRef.current) return refreshEvents() }).catch(() => {}) }, [guestMode])
   useLayoutEffect(() => { if (!guestMode && data.user.id) startSocket(data.user.id); else stopSocket(); return stopSocket }, [data.user.id, guestMode])
+  // A signed-in device keeps its push token current; the permission prompt itself is shown where it is explained.
+  useEffect(() => { if (!guestMode && data.user.id) void registerForPush(false) }, [data.user.id, guestMode])
   // Member events are watched first so room openings and cancellations always reach the cached room list.
   const watchKey = [...data.events].sort((a, b) => Number(isEventMember(b, data.user.id)) - Number(isEventMember(a, data.user.id)) || a.id.localeCompare(b.id)).slice(0, 100).map(e => e.id).sort().join(',')
   useEffect(() => { if (guestMode) return; const releases = watchKey.split(',').filter(Boolean).map(watchEvent); return () => releases.forEach(release => release()) }, [watchKey, data.user.id, guestMode])
@@ -409,6 +412,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // Both sides of a reference get these events, so the stored list never needs a refetch.
     const referenceCreated = onSocket('reference:created', (row: import('../api/client').ReferenceRequest) => setData(current => current.references ? { ...current, references: [row, ...current.references.filter(item => item.id !== row.id)] } : current))
     const referenceUpdated = onSocket('reference:updated', (patch: { id: string; status: import('../api/client').ReferenceRequest['status'] }) => setData(current => current.references ? { ...current, references: current.references.map(item => item.id === patch.id ? { ...item, status: patch.status } : item) } : current))
+    // An admin decision (approve / review / reject) reaches the waiting account at once.
+    const accountStatus = onSocket('account:status', (patch: { status: string }) => setData(current => ({ ...current, user: { ...current.user, status: patch.status } })))
     const roomMessage = onSocket('room:message', (delta: { eventId: string; at: string; userId?: string }) => setData(current => ({ ...current, events: current.events.map(event => event.id !== delta.eventId ? event : {
       ...event,
       lastMessageAt: delta.at,
@@ -438,7 +443,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const unknownRoom = onSocket('room:message', (delta: { eventId: string }) => ensureEvent(delta.eventId))
     // Events missed while offline: one rooms refresh after reconnecting, only if the list was ever loaded.
     const resync = onSocket('sync:required', () => { if (roomsLoaded.current) void refreshRooms(true).catch(() => {}) })
-    return () => { cleanups.forEach(cleanup => cleanup()); roomMessage(); referenceCreated(); referenceUpdated(); promoted(); joinedHere(); unknownRoom(); resync(); renamed() }
+    return () => { cleanups.forEach(cleanup => cleanup()); accountStatus(); roomMessage(); referenceCreated(); referenceUpdated(); promoted(); joinedHere(); unknownRoom(); resync(); renamed() }
   }, [guestMode])
   return <Context.Provider value={{ data: guestMode ? initial : data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, refreshFeed, refreshMyEvents, refreshRooms, whenReady, loadReferences, resetSession: () => { referencesLoaded.current = false; roomsLoaded.current = false; feedLoad.current = null; stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
     {!guestMode && storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}

@@ -8,6 +8,8 @@ import { LocationIcon, SearchIcon } from "../components/Icons"
 import { TURKISH_CITIES } from "../content/cities"
 import { CITY_PRESETS } from "../map/filters"
 import { MAP_PROVIDER } from "../map/provider"
+import { PlaceSuggestionList, usePlaceSuggestions } from "../map/PlaceSuggestions"
+import type { PlaceSuggestion } from "../api/client"
 import { DARK_MAP_PROPS } from "../map/darkStyle"
 import { Box, Field, Label, Touch } from "../native/UI"
 import { palette } from "../theme/palette"
@@ -95,6 +97,21 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
     } catch { Alert.alert("Adres aranamadı", "Bağlantını kontrol et ya da haritaya dokunarak noktayı seç.") }
     finally { setBusy(null) }
   }
+  // Suggestions appear from the first letter; when the server has no place search, "Ara" geocodes instead.
+  const suggestions = usePlaceSuggestions(query, value ? point(value) : preset ? point(preset) : null)
+  const pickSuggestion = async (suggestion: PlaceSuggestion) => {
+    try {
+      const place = await suggestions.resolve(suggestion)
+      const target = { latitude: place.latitude, longitude: place.longitude }
+      latest.current++
+      const found = matchCity(place.city) || city
+      if (found !== city) setCity(found)
+      if (!venue.trim()) onVenueChange(place.name || suggestion.title)
+      setQuery(""); setResults([])
+      focus(target, POINT_DELTA)
+      onChange({ ...target, city: found, district: place.district, address: place.address })
+    } catch { Alert.alert("Yer seçilemedi", "Bağlantını kontrol et ya da haritaya dokunarak noktayı seç.") }
+  }
   const choose = (target: Point, label = query.trim()) => {
     setResults([])
     if (!venue.trim() && label) onVenueChange(label)
@@ -122,6 +139,7 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
         onChangeText={text => { setQuery(text); setResults([]) }} onSubmitEditing={() => void search()} returnKeyType="search" style={s.searchField} />
       <Touch accessibilityLabel="Ara" disabled={!query.trim() || !!busy} onPress={() => void search()} style={s.searchButton}><Label style={s.link}>{busy === "search" ? "…" : "Ara"}</Label></Touch>
     </Box>
+    <PlaceSuggestionList items={suggestions.items} onPick={item => void pickSuggestion(item)} />
     {results.length > 1 && <Box style={s.results}>
       {results.map((result, index) => <Touch key={index} accessibilityLabel={`Sonuç ${index + 1}`} onPress={() => choose(result)} style={s.result}>
         <LocationIcon size={14} style={{ color: palette.accent }} />

@@ -22,6 +22,7 @@ import ApiLoadingOverlay from "../src/components/ApiLoadingOverlay"
 import AppBottomNav from "../src/components/AppBottomNav"
 import AccessGuard from "../src/components/AccessGuard"
 import LegalConsentGate from "../src/components/LegalConsentGate"
+import PushOpenHandler from "../src/components/PushOpenHandler"
 import HardwareBack from "../src/components/HardwareBack"
 void SplashScreen.preventAutoHideAsync()
 export default function RootLayout() {
@@ -65,6 +66,7 @@ export default function RootLayout() {
               <AppBottomNav />
               <AccessGuard />
               <LegalConsentGate />
+              <PushOpenHandler />
               <HardwareBack />
             </GuestRouteBoundary></StoreProvider></GuestProvider></BlurSurface>
           </KeyboardAvoidingView>

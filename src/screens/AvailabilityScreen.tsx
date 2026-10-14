@@ -8,7 +8,7 @@ import { DARK_MAP_PROPS } from "../map/darkStyle"
 import { createAvailability, deleteAvailability, getApiErrorMessage, getAvailabilities, getMapInterests, setAvailabilityPaused, updateAvailability, type ApiAvailability } from "../api/client"
 import { useBottomNavInset } from "../components/BottomNav"
 import { AtmoBackground, GlassCard } from "../components/GlassUI"
-import { CalendarIcon, CategoryIcon, CheckIcon, ChevronDownIcon, CloseIcon, LocationIcon, PlusIcon, SearchIcon } from "../components/Icons"
+import { CategoryIcon, CheckIcon, ChevronDownIcon, CloseIcon, LocationIcon, PlusIcon, SearchIcon } from "../components/Icons"
 import TopNavBar from "../components/TopNavBar"
 import { DURATIONS, formatDuration } from "../events/duration"
 import { CITY_PRESETS, type MapPlace } from "../map/filters"
@@ -188,15 +188,6 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
         </Touch>)}
       </Box>
       {notice && <Box style={s.success} accessibilityLiveRegion="polite"><CheckIcon size={16} style={{ color: palette.success }} /><Label style={s.successText}>{notice}</Label></Box>}
-
-      {tab === "new" && <GlassCard style={s.intro}>
-        <Box style={s.introIcon}><CalendarIcon size={20} style={{ color: palette.accent }} /></Box>
-        <Box style={{ flex: 1, gap: 4 }}>
-          <Label style={s.introTitle}>Müsait olduğun zamanları kaydet</Label>
-          <Label style={s.introText}>Bu kayıt etkinlik ya da herkese açık bir ilan oluşturmaz. Yalnızca uygun etkinliklerin organizatörleri seni davet edebilir; telefonun, e-postan ve kesin konumun paylaşılmaz.</Label>
-        </Box>
-      </GlassCard>}
-
       {!AVAILABILITY_SERVER_READY && <Box style={s.pending} accessibilityRole="alert">
         <Label style={s.pendingTitle}>Kaydetme henüz açık değil</Label>
         <Label style={s.pendingText}>Müsaitlik kaydı ve eşleşme için sunucu desteği hazırlanıyor. Seçimlerini burada planlayabilirsin ama şu an kaydedilmez ve davet alınmaz.</Label>
@@ -342,10 +333,6 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
 const s = StyleSheet.create({
   screen: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: palette.background },
   scroll: { paddingTop: 80, paddingHorizontal: 16, gap: 12 },
-  intro: { flexDirection: "row", gap: 12, padding: 16 },
-  introIcon: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: palette.selected, borderWidth: 1, borderColor: "rgba(105,120,255,.3)" },
-  introTitle: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15, lineHeight: 20 },
-  introText: { color: palette.muted, fontSize: 13, lineHeight: 19 },
   pending: { borderRadius: 16, borderWidth: 1, borderColor: "rgba(243,155,175,.32)", backgroundColor: "rgba(243,155,175,.08)", padding: 14, gap: 4 },
   pendingTitle: { color: palette.error, fontFamily: "Outfit-SemiBold", fontSize: 14, lineHeight: 19 },
   pendingText: { color: "rgba(244,245,255,.78)", fontSize: 13, lineHeight: 19 },

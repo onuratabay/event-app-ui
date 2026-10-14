@@ -7,6 +7,27 @@ import { Box, Label, Touch } from "../native/UI"
 import { ArrowLeftIcon } from "./Icons"
 
 export const TOP_NAV_HEIGHT = 68
+/** One size for every top-bar control on every page: icons, text links and the back control. */
+export const NAV_ICON_SIZE = 20
+export const NAV_ICON_STROKE = 1.8
+
+const TONES = { default: palette.text, accent: palette.accent, muted: "rgba(226,232,240,.62)", danger: palette.error }
+/**
+ * A top-bar action: pass a short text ("Ayarlar") or an icon drawn at NAV_ICON_SIZE. Every action
+ * has the same touch size and text style, so the bars look alike across pages.
+ */
+export function NavAction({ label, onPress, disabled, tone = "default", children }: {
+  label: string
+  onPress: () => void
+  disabled?: boolean
+  tone?: keyof typeof TONES
+  children: ReactNode
+}) {
+  const textual = typeof children === "string"
+  return <Touch accessibilityLabel={label} disabled={disabled} onPress={onPress} style={[s.action, textual && s.actionText]}>
+    {textual ? <Label style={[s.navText, { color: TONES[tone] }]} numberOfLines={1}>{children}</Label> : children}
+  </Touch>
+}
 
 export default function TopNavBar({
   navigate,
@@ -40,7 +61,7 @@ export default function TopNavBar({
           onPress={onBack || (() => navigate(fallback, { back: true }))}
           style={[s.back, backLabel ? s.backWithLabel : undefined]}
         >
-          <ArrowLeftIcon size={backLabel ? 17 : 21} strokeWidth={1.75} style={s.icon} />
+          <ArrowLeftIcon size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} style={s.icon} />
           {backLabel ? <Label style={s.backLabel}>{backLabel}</Label> : null}
         </Touch>
         {onTitlePress ? (
@@ -105,16 +126,15 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  backWithLabel: { width: 64, flexDirection: "row", gap: 5 },
-  backLabel: {
-    color: palette.text,
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 12,
-    lineHeight: 16,
-  },
+  backWithLabel: { width: "auto", minWidth: 44, paddingHorizontal: 4, flexDirection: "row", gap: 4 },
+  // Same text style as every NavAction.
+  navText: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 13, lineHeight: 17 },
+  backLabel: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 13, lineHeight: 17 },
+  action: { minWidth: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  actionText: { paddingHorizontal: 8 },
   icon: { color: palette.text },
   copy: { flex: 1, minWidth: 0, paddingHorizontal: 12, justifyContent: "center" },
   title: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15, lineHeight: 20 },
   subtitle: { color: "rgba(226,232,240,.62)", fontFamily: "Outfit", fontSize: 11, lineHeight: 15 },
-  right: { minWidth: 44, alignItems: "flex-end", justifyContent: "center" },
+  right: { minWidth: 44, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2 },
 })

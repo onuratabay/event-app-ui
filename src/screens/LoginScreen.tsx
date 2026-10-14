@@ -6,6 +6,7 @@ import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground } from "../components/GlassUI"
 import { ErrorNotice } from "../components/ErrorNotice"
 import { Field, Label, Touch, Box } from "../native/UI"
+import { formatPhone, phoneDigits, PHONE_PREFIX } from "../content/phone"
 import { getApiErrorMessage, login } from "../api/client"
 import { useSignedOutEntry } from "../native/session"
 import { updateStoreUser, useStore } from "../native/Store"
@@ -26,20 +27,21 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
     }).catch(() => {})
     return () => { active = false; entrance.stopAnimation() }
   }, [entrance])
-  const [email, setEmail] = useState("")
+  // Members sign in with their phone number and password.
+  const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
   const [busy, setBusy] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const submit = async () => {
-    if (!email.trim() || !password) {
-      setErrorMessage("E-posta ve şifre gerekli.")
+    if (phoneDigits(phone).length !== 10 || !password) {
+      setErrorMessage("Telefon numaranı ve şifreni gir.")
       return
     }
     setErrorMessage(null)
     setBusy(true)
     try {
-      const response = await login(email.trim(), password)
+      const response = await login(`+90${phoneDigits(phone)}`, password)
       setData(current => ({ ...current, user: updateStoreUser(current.user, response.user), onboarding: {} }))
       // Pending accounts go to their own page and never load the in-app feed.
       const target = gatedScreen((response.user as { status?: { enum: string } }).status?.enum)
@@ -77,14 +79,18 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
             onRetry={submit}
           />
         )}
-        <Label style={styles.fieldLabel}>E-posta</Label>
+        <Label style={styles.fieldLabel}>Telefon</Label>
         <Field
-          mode="email"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="ornek@eposta.com"
-          accessibilityLabel="E-posta"
-          autoComplete="email"
+          mode="tel"
+          value={phone}
+          onChangeText={value => setPhone(formatPhone(value))}
+          onFocus={() => { if (!phone) setPhone(PHONE_PREFIX) }}
+          placeholder="+90 5XX XXX XX XX"
+          accessibilityLabel="Telefon"
+          keyboardType="phone-pad"
+          textContentType="telephoneNumber"
+          autoComplete="tel"
+          maxLength={17}
           style={styles.input}
         />
         <Label style={styles.fieldLabel}>Şifre</Label>

@@ -207,17 +207,22 @@ export async function register(input: {
   return response
 }
 
-export async function login(email: string, password: string) {
+/** Sign in with phone number (e.g. "+905321234567") and password. */
+export async function login(phoneNumber: string, password: string) {
   const response = await request<AuthResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password, language: "tr" }),
+    body: JSON.stringify({ phoneNumber, password, language: "tr" }),
   })
   clearSessionCache("user")
   await saveTokens(response.tokens)
   return response
 }
 
+// Runs while the session is still valid (e.g. to delete this device's push token).
+let beforeLogout: (() => Promise<void>) | null = null
+export function setBeforeLogout(task: (() => Promise<void>) | null) { beforeLogout = task }
 export async function logout() {
+  await beforeLogout?.().catch(() => {})
   sessionVersion++
   clearSessionCache("user")
   const removal = tokenWrites.then(() => AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]))
@@ -316,6 +321,39 @@ export function resetPassword(token: string, newPassword: string) {
   return request<{ message: string }>("/auth/reset-password", { method: "POST", body: JSON.stringify({ token: token.trim(), newPassword, language: "tr" }) }, false)
 }
 
+// Admin only: membership applications. The server rejects these calls for non-admin accounts.
+export type ApplicationFilter = 'pending' | 'review' | 'incomplete' | 'approved' | 'passive' | 'rejected' | 'all'
+export type ApplicationDecision = 'approve' | 'reject' | 'review' | 'deactivate'
+export interface MembershipApplication {
+  id: string; firstName: string; lastName: string; email: string; phoneNumber: string; city: string
+  instagramUsername: string | null; birthDate: string; age: number | null
+  status: { enum: string; name: string }; interests: string[]; approvedReferences: number; createdAt: string
+}
+export interface ApplicationsPage { items: MembershipApplication[]; total: number; page: number; hasMore: boolean; counts: Record<ApplicationFilter, number> }
+export const getApplications = (params: { status: ApplicationFilter; q?: string; page?: number }, signal?: AbortSignal) =>
+  request<ApplicationsPage>(`/admin/applications?${new URLSearchParams({ status: params.status, page: String(params.page || 1), limit: '20', ...(params.q?.trim() ? { q: params.q.trim() } : {}) })}`, { signal, background: true })
+export interface MembershipApplicationDetail extends MembershipApplication {
+  bio: string | null
+  profilePhoto: string | null
+  references: Array<{ id: string; name: string; status: 'pending' | 'approved' | 'declined'; createdAt: string }>
+  history: Array<{ fromStatus: string; toStatus: string; createdAt: string; adminName: string | null }>
+  consents: { documents: Array<{ title: string; version: number; acceptedAt: string | null }>; pending: string[]; marketing: boolean }
+}
+export const getApplicationDetail = (userId: string) => request<MembershipApplicationDetail>(`/admin/applications/${encodeURIComponent(userId)}`, { background: true })
+export const decideApplication = (userId: string, decision: ApplicationDecision) =>
+  request<MembershipApplication>(`/admin/applications/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify({ decision }), background: true })
+
+// Typing-ahead place search through the server (Google Places): venues, districts, cities in Türkiye.
+export interface PlaceSuggestion { placeId: string; title: string; subtitle: string }
+export interface PlaceDetail { placeId: string; name: string; address: string; latitude: number; longitude: number; city: string; district: string }
+export const searchPlaces = (q: string, options: { latitude?: number; longitude?: number; session: string }, signal?: AbortSignal) =>
+  request<{ items: PlaceSuggestion[] }>(`/places/autocomplete?${new URLSearchParams({ q, session: options.session, ...(options.latitude !== undefined && options.longitude !== undefined ? { lat: String(options.latitude), lng: String(options.longitude) } : {}) })}`, { signal, background: true })
+export const getPlace = (placeId: string, session: string) => request<PlaceDetail>(`/places/${encodeURIComponent(placeId)}?session=${encodeURIComponent(session)}`, { background: true })
+
+// This device's Expo push token belongs to the signed-in account until sign-out.
+export const savePushToken = (token: string, platform: string) => request('/push/tokens', { method: 'PUT', body: JSON.stringify({ token, platform }), background: true })
+export const removePushToken = (token: string) => request('/push/tokens', { method: 'DELETE', body: JSON.stringify({ token }), background: true })
+
 export type LegalDocumentType = 'terms' | 'privacy' | 'kvkk' | 'community' | 'marketing'
 export interface LegalAcceptance { type: LegalDocumentType; version: number }
 export interface LegalDocumentSummary extends LegalAcceptance { title: string; required: boolean; publishedAt: string }
@@ -332,14 +370,14 @@ export const getLegalConsents = () => request<LegalConsentStatus>('/legal/consen
 export const acceptLegalDocuments = (documents: LegalAcceptance[]) => request<LegalConsentStatus>('/legal/consents', { method: 'POST', body: JSON.stringify({ documents }) })
 export const setMarketingConsent = (granted: boolean) => request<LegalConsentStatus>('/legal/consents/marketing', { method: 'PUT', body: JSON.stringify({ granted }) })
 
-export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
+export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; role?: 'member' | 'admin'; email?: string; phoneNumber?: string; birthDate?: string; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
 export const getUserProfile = (userId: string) => request<ApiUser & { interests: Array<{ id: string; name: string }> }>(`/users/${encodeURIComponent(userId)}/profile`)
 export interface NotificationPreferences { invites?: boolean; messages?: boolean; reminders?: boolean }
 export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; notifications?: NotificationPreferences; mutedRooms?: { ids: string[] } }
 // Startup asks for the account from several places at once; they share one request.
 // Background: startup never shows the global loader for account data; only the event feed matters there.
 export const getCurrentUser = () => shared('user:me', () => request<ApiUser>('/auth/me', { method: 'POST', background: true }))
-// profile_incomplete → approved once at least one interest is saved (photo optional).
+// profile_incomplete → approved once at least one interest is saved and a reference is approved; otherwise reference_pending.
 export const completeProfile = () => request<ApiUser>('/users/me/profile/complete', { method: 'POST' }).finally(() => clearSessionCache('user'))
 export const getUserInterests = () => request<Array<{ id: string; name: string }>>('/users/me/interests', { background: true })
 export const setUserInterests = (interestIds: string[]) => request<Array<{ id: string; name: string }>>('/users/me/interests', { method: 'PUT', body: JSON.stringify({ interestIds }) })

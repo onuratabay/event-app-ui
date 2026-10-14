@@ -6,7 +6,7 @@ import { palette } from "../theme/palette";
 import { ReferenceNotifications } from "../components/ReferenceNotifications";
 import { EventInvitations } from "../components/EventInvitations";
 import { AtmoBackground } from "../components/GlassUI";
-import TopNavBar from "../components/TopNavBar";
+import TopNavBar, { NavAction } from "../components/TopNavBar";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Alert } from "react-native";
 import { getNotifications, readAllNotifications, readNotification, getEvent, getApiErrorMessage, hasSession, deleteAllNotifications, getIncomingFriendRequests, getReferenceRequests, getInvitations, declineFriendRequest, respondToReference, participate, type AppNotification } from "../api/client";
@@ -140,10 +140,10 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
   };
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
     <AtmoBackground />
-    <TopNavBar navigate={navigate} fallback="discover" title="Bildirimler" subtitle={unreadCount ? `${unreadCount} yeni bildirim` : undefined} right={<Box style={{ flexDirection: "row", alignItems: "center" }}>
-      <Touch accessibilityLabel="Tüm bildirimleri okundu işaretle" disabled={busy || !unreadCount} onPress={() => void markAll()} style={[[ui.textXs, ui.textWhite50, ui.px2], { minHeight: 44, justifyContent: "center" }]}>Tümünü oku</Touch>
-      <Touch accessibilityLabel="Tüm bildirimleri sil" disabled={busy || nothingToDelete} onPress={() => void removeAll()} style={[[ui.textXs, ui.px2], { minHeight: 44, justifyContent: "center", color: palette.error }]}>Tümünü sil</Touch>
-    </Box>} />
+    <TopNavBar navigate={navigate} fallback="discover" title="Bildirimler" subtitle={unreadCount ? `${unreadCount} yeni bildirim` : undefined} right={<>
+      <NavAction label="Tüm bildirimleri okundu işaretle" tone="muted" disabled={busy || !unreadCount} onPress={() => void markAll()}>Tümünü oku</NavAction>
+      <NavAction label="Tüm bildirimleri sil" tone="danger" disabled={busy || nothingToDelete} onPress={() => void removeAll()}>Tümünü sil</NavAction>
+    </>} />
     <Scroll style={[[ui.flex1, ui.px5, ui.spaceY2], { paddingTop: 80, paddingBottom: 40 + navInset }]}>
       <EventInvitations key={`invites-${pendingVersion}`} navigate={navigate} onCount={setInviteCount} />
       <ReferenceNotifications key={`references-${pendingVersion}`} onCount={setReferenceCount} />

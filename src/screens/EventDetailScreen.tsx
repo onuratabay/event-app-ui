@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { Alert, StyleSheet } from "react-native";
 import { Avatar, GlassCard } from "../components/GlassUI";
 import { CheckIcon, ClockIcon, LocationIcon, ShareIcon, StarIcon } from "../components/Icons";
-import TopNavBar from "../components/TopNavBar";
+import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -81,7 +81,7 @@ export default function EventDetailScreen({
   const roomReady = isRoomReady(event);
   const isForming = !roomReady && !['cancelled', 'closed'].includes(event.status || '');
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
-      <TopNavBar navigate={navigate} fallback="discover" title={event.title} subtitle={`${event.date} · ${event.time}`} floating right={<Touch accessibilityLabel="Paylaş" onPress={() => setShareOpen(true)} style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite80]]}><ShareIcon size={18} /></Touch>} />
+      <TopNavBar navigate={navigate} fallback="discover" title={event.title} subtitle={`${event.date} · ${event.time}`} floating right={<NavAction label="Paylaş" onPress={() => setShareOpen(true)}><ShareIcon size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} style={{ color: palette.text }} /></NavAction>} />
       <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol], { paddingBottom: actionHeight + 20 + navInset }]}>
         {/* Cover image header */}
         <Box style={[[ui.relative, ui.h72, ui.flexShrink0, ui.bgGray900]]}>

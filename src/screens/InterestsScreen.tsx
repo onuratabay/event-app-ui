@@ -35,13 +35,14 @@ export default function InterestsScreen({
       const interests = await setUserInterests(catalog.filter(i => selected.has(i.name)).map(i => i.id));
       if ((photo || '') !== store.user.avatar) await setProfilePhoto(photo || '');
       setStore(p => ({ ...p, user: { ...p.user, interests: interests.map(i => i.name), avatar: photo || '' } }));
-      // Completing the profile (at least one interest) approves the account; only then the app opens.
+      // Completing the profile (at least one interest) approves an account whose reference is approved;
+      // one still waiting for its reference goes to the waiting page until it is.
       if (store.user.status === 'profile_incomplete') {
         const me = await completeProfile();
         setStore(p => ({ ...p, user: updateStoreUser(p.user, me) }));
-        if (me.status?.enum !== 'approved') { Alert.alert('Profilin kaydedildi', 'Hesabın onaylandığında uygulamaya girebilirsin.'); return; }
+        if (me.status?.enum !== 'approved') { navigate('onboarding-3', { reset: true }); return; }
         void refreshEvents().catch(() => {});
-      } else if (gatedScreen(store.user.status)) { Alert.alert('Profilin kaydedildi', 'Hesabın onaylandığında uygulamaya girebilirsin.'); return; }
+      } else if (gatedScreen(store.user.status)) { navigate('onboarding-3', { reset: true }); return; }
       navigate('discover', { reset: true });
     } catch (error) { Alert.alert('Profil kaydedilemedi', getApiErrorMessage(error)); }
     finally { setSaving(false); }
@@ -64,7 +65,7 @@ export default function InterestsScreen({
   };
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
-      <TopNavBar navigate={navigate} fallback="discover" onBack={gatedScreen(store.user.status) ? undefined : () => navigate("discover", { back: true })} title="Profilini Tamamla" right={gatedScreen(store.user.status) ? <SignOutButton navigate={navigate} /> : undefined} />
+      <TopNavBar navigate={navigate} fallback={gatedScreen(store.user.status) ? "onboarding-2" : "discover"} onBack={gatedScreen(store.user.status) ? () => navigate("onboarding-2", { back: true }) : () => navigate("discover", { back: true })} title="Profilini Tamamla" right={gatedScreen(store.user.status) ? <SignOutButton navigate={navigate} /> : undefined} />
 
       <Box style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull]]}>
         {/* Header */}

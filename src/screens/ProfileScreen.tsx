@@ -1,7 +1,7 @@
 import { palette } from "../theme/palette";
 import CityPicker from "../components/CityPicker";
 import { CalendarIcon, StarIcon } from "../components/Icons";
-import TopNavBar from "../components/TopNavBar";
+import TopNavBar, { NavAction } from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
@@ -72,7 +72,7 @@ function InstagramField({ handle, onSave }: { handle: string; onSave: (handle: s
   };
   if (editing) return <Box style={[[ui.mt3, ui.flex, ui.itemsCenter, ui.gap2]]}>
       <Label style={profileInstagramStyles.handle}>@</Label>
-      <Field value={draft} onChangeText={value => setDraft(value.replace(/^@/, "").replace(/\s/g, ""))} autoFocus autoCapitalize="none" autoCorrect={false} placeholder="kullanici_adi" accessibilityLabel="Instagram kullanıcı adı" style={[[ui.flex1, ui.bgWhite8, ui.border, ui.borderC8a44a40, ui.roundedXl, ui.px3, ui.py25, ui.textSm, ui.textWhite80]]} />
+      <Field value={draft} onChangeText={value => setDraft(value.replace(/^@/, "").replace(/\s/g, "").toLowerCase())} autoFocus autoCapitalize="none" autoCorrect={false} placeholder="kullanici_adi" accessibilityLabel="Instagram kullanıcı adı" style={[[ui.flex1, ui.bgWhite8, ui.border, ui.borderC8a44a40, ui.roundedXl, ui.px3, ui.py25, ui.textSm, ui.textWhite80]]} />
       <Touch onPress={save} disabled={saving} style={[[ui.textXs, ui.px3, ui.py1, ui.roundedLg, ui.text1a1200, ui.fontMedium], { backgroundColor: "#4d5bcb" }]}>Kaydet</Touch>
       <Touch onPress={() => { setDraft(handle); setEditing(false); }} style={[[ui.textXs, ui.px3, ui.py1, ui.roundedLg, ui.textWhite40, ui.border, ui.borderWhite10]]}>İptal</Touch>
     </Box>;
@@ -273,25 +273,12 @@ export default function ProfileScreen({
         onBack={() => navigate("discover", { back: true })}
         backLabel="Geri"
         title="Profil"
-        right={isOwn ? <Box style={profileNavStyles.actions}>
-          <Touch
-            accessibilityLabel="Ayarları aç"
-            onPress={() => navigate("settings")}
-            style={profileNavStyles.action}
-          >
-            <Label style={profileNavStyles.actionLabel}>Ayarlar</Label>
-          </Touch>
-          <Touch
-            onPress={() => void signOut()}
-            disabled={loggingOut}
-            accessibilityLabel="Çıkış yap"
-            style={[profileNavStyles.action, profileNavStyles.signOut]}
-          >
-            <Label style={[profileNavStyles.actionLabel, profileNavStyles.signOutLabel, loggingOut && profileNavStyles.disabled]}>
-              {loggingOut ? "Bekle" : "Çıkış"}
-            </Label>
-          </Touch>
-        </Box> : undefined}
+        right={isOwn ? <>
+          {/* Only admins see the panel link; the server checks the role again on every admin request. */}
+          {store.user.role === "admin" && <NavAction label="Admin panelini aç" tone="accent" onPress={() => navigate("admin")}>Admin</NavAction>}
+          <NavAction label="Ayarları aç" onPress={() => navigate("settings")}>Ayarlar</NavAction>
+          <NavAction label="Çıkış yap" tone="accent" disabled={loggingOut} onPress={() => void signOut()}>{loggingOut ? "Bekle" : "Çıkış"}</NavAction>
+        </> : undefined}
       />
 
       {attendedOpen ? <EventsSheet title="Katıldığım etkinlikler" events={attended} error={attendedError} emptyText="Henüz katıldığın ya da düzenleyip başlattığın bir etkinlik yok."
@@ -552,26 +539,7 @@ export default function ProfileScreen({
 
     </Box>;
 }
-
-const profileNavStyles = StyleSheet.create({
-  actions: { flexDirection: "row", alignItems: "center", gap: 6 },
-  action: {
-    width: 64,
-    height: 44,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  signOut: {},
-  actionLabel: {
-    color: palette.text,
-    fontFamily: "Outfit-SemiBold",
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  signOutLabel: { color: "#b9c3ff" },
-  disabled: { opacity: 0.45 },
-});
+;
 
 const profileInstagramStyles = StyleSheet.create({
   link: {

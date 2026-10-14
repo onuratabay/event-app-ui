@@ -95,7 +95,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   const press = async label => { const node = byLabel(label); assert(node, `Missing control: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {}, nativeEvent: {} })) }
   const pressText = async (label, index = 0) => { const node = pressables().filter(item => text(item).includes(label)).at(index); assert(node, `Missing button: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })) }
   let content = text(screen.toJSON())
-  assert(content.includes("Etkinlik Takvimim") && content.includes("ilan oluşturmaz"), "The record is described as private, not a listing")
+  assert(content.includes("Etkinlik Takvimim") && !content.includes("Müsait olduğun zamanları kaydet"), "The page opens straight on the form, without the intro card")
   assert(!content.includes("Kaydetme henüz açık değil") && !content.includes("İlan yayınla"))
   // Two tabs: the form (with the calendar right at the top) and the saved records.
   assert(byLabel("Yeni müsaitlik").props.accessibilityState.selected, "The screen opens on the form")

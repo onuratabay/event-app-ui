@@ -1,5 +1,5 @@
 import { onSocket } from '../services/socket'
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Linking, Platform } from "react-native"
 import * as Contacts from "expo-contacts/legacy"
 import { getApiErrorMessage, getReferenceRequests, matchReferenceContacts, sendReferenceRequest, type ReferenceMember, type ReferenceRequest } from "../api/client"
@@ -7,9 +7,24 @@ import { Box, Label, Touch } from "../native/UI"
 import { ui } from "../theme/styles"
 import { ErrorNotice } from "./ErrorNotice"
 
-export function ReferencePicker() {
+/**
+ * Asks members for a reference. `onApproved` fires when a request that was pending on this screen
+ * gets approved (live or after a refresh) — never for one already approved when the screen opened,
+ * so going back to this step does not bounce forward again. `refreshSignal` reloads the requests
+ * (pull to refresh) and `onRefreshed` reports when that reload ended.
+ */
+export function ReferencePicker({ onApproved, refreshSignal = 0, onRefreshed }: { onApproved?: () => void; refreshSignal?: number; onRefreshed?: () => void } = {}) {
   const [members, setMembers] = useState<ReferenceMember[]>([])
   const [requests, setRequests] = useState<ReferenceRequest[]>([])
+  // Requests seen pending on this screen; only those can trigger `onApproved`.
+  const seenPending = useRef(new Set<string>())
+  const approvedRef = useRef(onApproved); approvedRef.current = onApproved
+  const fired = useRef(false)
+  const track = (rows: ReferenceRequest[]) => {
+    for (const row of rows) if (row.status === "pending") seenPending.current.add(row.id)
+    if (!fired.current && rows.some(row => row.status === "approved" && seenPending.current.has(row.id))) { fired.current = true; approvedRef.current?.() }
+  }
+  useEffect(() => { track(requests) }, [requests])
   const [busy, setBusy] = useState(false)
   const [sending, setSending] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -25,6 +40,13 @@ export function ReferencePicker() {
     const sync = onSocket('sync:required', () => { void refresh() })
     return () => { active = false; created(); updated(); sync() }
   }, [])
+  // Pull to refresh on the parent screen.
+  useEffect(() => {
+    if (!refreshSignal) return
+    let active = true
+    getReferenceRequests().then(result => { if (active) setRequests(result.items.filter(r => r.direction === "outgoing")) }).catch(() => {}).finally(() => { if (active) onRefreshed?.() })
+    return () => { active = false }
+  }, [refreshSignal])
   const loadContacts = async (edit = false) => {
     if (busy) return
     setBusy(true); setError(null); setMembers([]); setLoaded(false)

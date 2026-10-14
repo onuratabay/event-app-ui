@@ -6,7 +6,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   const { gatedScreen } = require("../src/native/access.ts")
   assert.equal(gatedScreen("approved"), null)
   assert.equal(gatedScreen(undefined), null, "Unknown status waits for the account to load")
-  assert.equal(gatedScreen("profile_incomplete"), "interests")
+  assert.equal(gatedScreen("profile_incomplete"), "onboarding-2")
   assert.equal(gatedScreen("reference_pending"), "onboarding-3")
   assert.equal(gatedScreen("security_review"), "onboarding-3")
 
@@ -39,14 +39,17 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   }
 
   // Login sends each pending status to its own page and never loads the feed.
-  for (const [status, expected] of [["reference_pending", "onboarding-3"], ["profile_incomplete", "interests"], ["approved", "discover"]]) {
+  for (const [status, expected] of [["reference_pending", "onboarding-3"], ["profile_incomplete", "onboarding-2"], ["approved", "discover"]]) {
     storage.clear(); current = status; calls.length = 0
     let destination, options
     const login = await mount("Login", { navigate: (route, opts) => { destination = route; options = opts } })
-    const [email, password] = login.root.findAllByType("TextInput")
-    await act(async () => email.props.onChangeText("bekleyen@example.com"))
+    const [phone, password] = login.root.findAllByType("TextInput")
+    assert.equal(phone.props.accessibilityLabel, "Telefon", "Members sign in with their phone number")
+    await act(async () => phone.props.onChangeText("05321234567"))
+    assert.equal(login.root.findAllByType("TextInput")[0].props.value, "+90 532 123 45 67", "The number is formatted as typed")
     await act(async () => password.props.onChangeText("Password1!"))
     await tap(login, "Giriş Yap")
+    assert.deepEqual(bodies.filter(row => row.path === "/auth/login").at(-1).body, { phoneNumber: "+905321234567", password: "Password1!", language: "tr" }, "The phone number is sent in one format")
     assert.equal(destination, expected, `${status} logs in to ${expected}`)
     assert.equal(options?.reset, true, "Signing in clears history so back cannot return to login")
     if (status !== "approved") assert(!calls.includes("/events"), `${status} never loads the in-app feed`)
@@ -127,7 +130,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     global.__testRootState = undefined
   }
 
-  // Registration: a profile_incomplete account goes straight to photo + interests.
+  // Registration: a profile_incomplete account continues with the reference step, then the profile.
   storage.clear(); current = "profile_incomplete"
   let registered
   const registration = await mount("Onboarding", { step: 1, navigate: route => { registered = route } })
@@ -140,7 +143,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await tap(registration, "KVKK Aydınlatma Metni")
   await tap(registration, "ticari elektronik ileti")
   await tap(registration, "Devam Et")
-  assert.equal(registered, "interests", "profile_incomplete registration opens profile completion")
+  assert.equal(registered, "onboarding-2", "Registration continues with the reference step")
   const signUp = bodies.find(row => row.path === "/auth/register").body
   assert.deepEqual(signUp.acceptedDocuments, [{ type: "terms", version: 1 }, { type: "privacy", version: 1 }, { type: "marketing", version: 3 }], "Opting in records the marketing text version too")
   assert.equal(signUp.marketingConsent, true)
@@ -204,7 +207,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   let splashRoute
   const splash = await mount("Splash", { navigate: route => { splashRoute = route } })
   await act(() => new Promise(resolve => setTimeout(resolve, 2900)))
-  assert.equal(splashRoute, "interests")
+  assert.equal(splashRoute, "onboarding-2")
   await act(async () => splash.unmount())
 
   // The global guard bounces a pending account off any in-app route, but not off its own page.

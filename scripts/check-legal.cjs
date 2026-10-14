@@ -19,15 +19,20 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   assert(server.requests.some(row => row.path === '/legal/documents/privacy'))
   await act(async () => tree.unmount())
 
-  // The welcome footer opens the terms and the privacy policy above the page.
+  // The welcome page carries no legal footer or invite-code link; consents are given at sign-up.
   global.__testNavigations = []
   tree = await mount('Welcome')
   await settle()
-  assert(text(tree.toJSON()).includes('kabul etmiş olursun'))
-  const privacyLink = links(tree).find(node => text(node) === 'Gizlilik Politikası')
-  assert(privacyLink, 'Welcome links the privacy policy')
-  await act(async () => privacyLink.props.onPress())
-  assert.deepEqual(global.__testNavigations, ['/legal'], 'Legal pages are pushed, so back returns to the same page')
+  assert(!text(tree.toJSON()).includes('kabul etmiş olursun') && !text(tree.toJSON()).includes('Davet kodum var'), 'No legal footer and no invite-code link on the welcome page')
+  {
+    // Members get one quiet line: "Zaten üye misin? Giriş yap", never wrapped, opening sign-in.
+    const loginLink = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Giriş Yap')
+    assert(loginLink && text(loginLink).replace(/\s+/g, ' ').trim() === 'Zaten üye misin? Giriş yap', 'Sign-in is a single plain link')
+    assert.equal(loginLink.findAll(node => node.type === 'Text' && node.props.numberOfLines === 1).length > 0, true, 'The link stays on one line')
+    const flat = node => Object.assign({}, ...[].concat(node.props.style).flat(Infinity).filter(Boolean))
+    const footnote = tree.root.findAll(node => node.type === 'Text' && text(node) === 'Referansla başlayan özel bir topluluk.')[0]
+    assert(footnote && flat(footnote).fontSize <= 11, 'The community line reads as a footnote')
+  }
   await act(async () => tree.unmount())
 
   // Settings lists every legal text and saves the optional marketing consent on the server.

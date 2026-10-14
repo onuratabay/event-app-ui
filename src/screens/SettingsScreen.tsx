@@ -126,6 +126,11 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
     <Scroll style={s.page}>
       {error && <Label accessibilityRole="alert" style={s.error}>{error}</Label>}
 
+      {/* Only admins see this; the server also checks the role on every admin request. */}
+      {data.user.role === "admin" && <Section title="Yönetim">
+        <Row title="Üyelik başvuruları" detail="Başvuruları ara, onayla, reddet veya incelemeye al" onPress={() => navigate("admin")} />
+      </Section>}
+
       <Section title="Hesap">
         <Row title={data.user.name || "Profilim"} detail="Profil fotoğrafı, ad, şehir ve Instagram" onPress={() => navigate("profile")} />
         <Row title="İlgi alanlarım" detail="Önerilen etkinlikleri belirleyen ilgi alanlarını düzenle" onPress={() => navigate("interests")} />

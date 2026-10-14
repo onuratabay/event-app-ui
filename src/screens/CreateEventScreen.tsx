@@ -198,7 +198,8 @@ export default function CreateEventScreen({
     const missing = [!interest && 'etkinlik türü', needsLevel && !level && 'seviye', !place && 'konum', !visibility && 'görünürlük'].filter(Boolean);
     if (!interest || needsLevel && !level || !visibility || !place) { Alert.alert('Eksik bilgi', `Şunları seç: ${missing.join(', ')}.`); return; }
     const inviteOnly = visibility.enum === INVITE_ONLY;
-    if (inviteOnly && !invitedIds.length) { Alert.alert('Davet listesi boş', 'Davet etmek istediğin en az bir arkadaşını seç.'); setStep(6); return; }
+    // Invitees may be friends or people from the availability pool; pool picks need no friendship.
+    if (inviteOnly && !invitedIds.length && !poolIds.length) { Alert.alert('Davet listesi boş', 'Arkadaşlarından ya da aşağıdaki takvim havuzundan en az bir kişi seç.'); return; }
     if (isPastStart(data.date, data.time)) { Alert.alert('Geçmiş tarih', 'Etkinlik zamanı geçmiş. Tarih ve saati ileri bir zamana güncelle.'); setStep(2); return; }
     if (data.description.trim().length < 10) { Alert.alert('Açıklama gerekli', 'Etkinliği en az 10 karakterle açıkla.'); setStep(4); return; }
     setCreating(true);
@@ -583,8 +584,9 @@ export default function CreateEventScreen({
               </Box>
               {isInviteOnly && <Box style={[[ui.spaceY3], { marginTop: 24 }]}>
                   <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider]]}>
-                    Arkadaşlarını davet et{invitedIds.length ? ` · ${invitedIds.length} seçili` : ""}
+                    Arkadaşlarını davet et{invitedIds.length ? ` · ${invitedIds.length} seçili` : " · isteğe bağlı"}
                   </Label>
+                  <Label style={[[ui.textXs, ui.textWhite40]]}>Arkadaş olman gerekmeyen, bu etkinliğe uygun kişileri bir sonraki adımda takvim havuzundan da davet edebilirsin.</Label>
                   {friends === null ? <Label style={[[ui.textSm, ui.textWhite40]]}>Arkadaşların yükleniyor…</Label> : !friends.length ? <Label style={[[ui.textSm, ui.textWhite40]]}>Henüz aktif arkadaşın yok.</Label> : friends.map(friend => {
                 const name = `${friend.firstName} ${friend.lastName}`.trim();
                 const chosen = invitedIds.includes(friend.id);
@@ -601,7 +603,7 @@ export default function CreateEventScreen({
 
       {/* Sticky CTA for steps that need explicit continue */}
       {hasStickyBar && <StickyBar>
-          <PrimaryButton onPress={step === 2 && customDurationOpen ? () => { setData(p => ({ ...p, durationMinutes: customMinutes })); next(); } : next} disabled={step === 6 && !invitedIds.length || step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !place}>
+          <PrimaryButton onPress={step === 2 && customDurationOpen ? () => { setData(p => ({ ...p, durationMinutes: customMinutes })); next(); } : next} disabled={step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !place}>
             Devam Et
           </PrimaryButton>
         </StickyBar>}

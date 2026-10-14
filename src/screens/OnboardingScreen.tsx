@@ -5,13 +5,16 @@ import { updateProfile } from "../api/client";
 import TopNavBar from "../components/TopNavBar";
 import EditorialQuote from "../components/EditorialQuote";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AccordionItem, AtmoBackground, Avatar, GlassCard, GlassInput, ProgressStepper } from "../components/GlassUI";
+import { AccordionItem, AtmoBackground, Avatar, GlassCard, GlassInput, LockedField, ProgressStepper } from "../components/GlassUI";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { CheckIcon, ChevronDownIcon, InstagramIcon, ScrollIcon, UsersIcon } from "../components/Icons";
 import { ReferencePicker } from "../components/ReferencePicker";
-import { useStore } from "../native/Store";
-import { getApiErrorMessage, getLegalDocuments, register, type LegalDocumentSummary } from "../api/client";
+import { registerForPush, type PushState } from "../services/push";
+import { updateStoreUser, useStore } from "../native/Store";
+import { RefreshControl } from "react-native";
+import { clearSessionCache, getApiErrorMessage, getCurrentUser, getLegalDocuments, register, type ApiUser, type LegalDocumentSummary } from "../api/client";
 import { useOpenLegal } from "../legal/links";
+import { formatPhone, phoneDigits, PHONE_PREFIX } from "../content/phone";
 import { Box, Label, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
@@ -62,6 +65,52 @@ const isUnderAge = (value: string) => {
   const age = now.getFullYear() - year - (now.getMonth() + 1 < month || (now.getMonth() + 1 === month && now.getDate() < day) ? 1 : 0);
   return age < MIN_MEMBER_AGE;
 };
+// Accounts waiting for an admin decision see what they submitted, locked, until they sign out;
+// only fields they left empty stay open. The server profile is the source, so a reopened app shows the same.
+// A profile_incomplete account is still filling the application (references, then profile), so it is not locked.
+const WAITING_STATUSES = new Set(["reference_pending", "security_review", "passive"]);
+function useApplicant() {
+  const { data: store } = useStore();
+  const waiting = !!store.user.id && WAITING_STATUSES.has(store.user.status || "");
+  const [me, setMe] = useState<ApiUser | null>(null);
+  useEffect(() => {
+    if (!waiting) return;
+    let active = true;
+    getCurrentUser().then(user => { if (active) setMe(user); }).catch(() => {});
+    return () => { active = false; };
+  }, [waiting, store.user.id]);
+  return { waiting, me, setMe };
+}
+/** Pull to refresh on the application pages: reloads the account (status) from the server. */
+function usePullRefresh(extra?: () => Promise<void> | void) {
+  const { setData: setStore } = useStore();
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      clearSessionCache("user");
+      const me = await getCurrentUser();
+      setStore(current => ({ ...current, user: updateStoreUser(current.user, me) }));
+      await extra?.();
+    } catch { /* The page keeps its current state; pulling again retries. */ }
+    finally { setRefreshing(false); }
+  };
+  const control = <RefreshControl refreshing={refreshing} onRefresh={() => { void refresh(); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={84} />;
+  return { refreshing, control };
+}
+function WaitingActions({ label, canSend, sending, notice, error, onSend, onBack }: { label: string; canSend: boolean; sending: boolean; notice: string | null; error: string | null; onSend: () => void; onBack: () => void }) {
+  return <>
+    {notice && <Label accessibilityLiveRegion="polite" style={[[ui.textXs, ui.mb2], { color: palette.success }]}>{notice}</Label>}
+    {error && <Label accessibilityRole="alert" style={[[ui.textXs, ui.mb2], { color: palette.error }]}>{error}</Label>}
+    <Touch onPress={onSend} disabled={!canSend || sending} disabledOpacity={1} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
+      color: canSend ? palette.text : "rgba(226,232,240,.62)", borderWidth: 1, borderColor: canSend ? "rgba(183,197,255,.5)" : "rgba(148,163,184,.22)",
+    }]} gradient={canSend ? palette.actionGradient : ["#202b3d", "#182235", "#151f30"]}>
+      {sending ? "Gönderiliyor…" : label}
+    </Touch>
+    <Touch onPress={onBack} style={[[ui.wFull, ui.py3, ui.textSm, ui.textWhite55, ui.textCenter]]}>Başvuru durumuma dön</Touch>
+  </>;
+}
 function ConsentCheck({ checked, onToggle, label, children }: { checked: boolean; onToggle: () => void; label: string; children: ReactNode }) {
   return <Touch accessibilityRole="checkbox" accessibilityState={{ checked }} accessibilityLabel={label} onPress={onToggle} style={[[ui.mt3, ui.flex, ui.itemsStart, ui.gap3, ui.wFull, ui.textLeft]]}>
     <Box style={[[ui.mt05, ui.w5, ui.h5, ui.roundedMd, ui.flexShrink0, ui.border, ui.flex, ui.itemsCenter, ui.justifyCenter, checked ? [ui.bgC8a44a, ui.borderC8a44a] : [ui.borderWhite25, ui.bgWhite5]]]}>
@@ -69,17 +118,6 @@ function ConsentCheck({ checked, onToggle, label, children }: { checked: boolean
     </Box>
     <Label style={[[ui.flex1, ui.textSm, ui.textWhite55, ui.leadingRelaxed]]}>{children}</Label>
   </Touch>;
-}
-function phoneDigits(value: string) {
-  const raw = value.replace(/\D/g, "")
-  const local = raw.startsWith("90") ? raw.slice(2) : raw.startsWith("0") ? raw.slice(1) : raw
-  return local.slice(0, 10)
-}
-function formatPhone(value: string) {
-  const digits = phoneDigits(value)
-  if (!digits) return ""
-  const parts = [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6, 8), digits.slice(8, 10)].filter(Boolean)
-  return `+90 ${parts.join(" ")}`
 }
 
 /* ---------- Sticky CTA bar ---------- */
@@ -149,6 +187,25 @@ function Step1({
   });
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const { waiting, me, setMe } = useApplicant();
+  const submitted = { ad: me?.firstName || "", soyad: me?.lastName || "", email: me?.email || "", telefon: me?.phoneNumber ? formatPhone(me.phoneNumber) : "", dogum: me?.birthDate || "", sehir: me?.city || "" };
+  const locked = (key: keyof typeof submitted) => waiting && !!submitted[key];
+  // Only fields left empty can be added while the application waits; valid values only.
+  const additions: Partial<ApiUser> & { city?: string } = waiting ? Object.fromEntries(([
+    ["ad", "firstName", form.ad.trim()], ["soyad", "lastName", form.soyad.trim()], ["email", "email", form.email.trim()],
+    ["telefon", "phoneNumber", phoneDigits(form.telefon).length === 10 ? `+90${phoneDigits(form.telefon)}` : ""],
+    ["dogum", "birthDate", form.dogum && !isFutureDate(form.dogum) && !isUnderAge(form.dogum) ? form.dogum : ""], ["sehir", "city", form.sehir],
+  ] as const).filter(([key, , value]) => !locked(key) && !!value).map(([, field, value]) => [field, value])) : {};
+  const [sending, setSending] = useState(false);
+  const [sendNotice, setSendNotice] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const sendAdditions = async () => {
+    if (sending || !Object.keys(additions).length) return;
+    setSending(true); setSendError(null); setSendNotice(null);
+    try { setMe(await updateProfile(additions)); setSendNotice("Eklediğin bilgiler başvuruna eklendi."); }
+    catch (cause) { setSendError(getApiErrorMessage(cause, "Bilgiler gönderilemedi.")); }
+    finally { setSending(false); }
+  };
   const [principlesOpen, setPrinciplesOpen] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<number | null>(null);
   const openLegal = useOpenLegal();
@@ -177,13 +234,13 @@ function Step1({
     if (creating) return;
     setCreating(true); setCreateError(null);
     try {
-      // profile_incomplete accounts go straight to photo + interests; others continue with references.
-      if (store.onboarding.accountId) { navigate(store.user.status === "profile_incomplete" ? "interests" : "onboarding-2"); return; }
+      // Application order: account → references (step 2) → profile and interests → waiting for approval.
+      if (store.onboarding.accountId || store.user.id) { navigate("onboarding-2"); return; }
       const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: `+90${phoneDigits(form.telefon)}`, password: form.sifre, birthDate: form.dogum, city: form.sehir, acceptedDocuments, marketingConsent: marketing && !!marketingDocument });
       const id = String((response.user as { id: string }).id);
       const status = (response.user as { status?: { enum: string } }).status?.enum;
       setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}`, status } }));
-      if (mounted.current) navigate(status === "profile_incomplete" ? "interests" : "onboarding-2");
+      if (mounted.current) navigate("onboarding-2");
     } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
     finally { if (mounted.current) setCreating(false); }
   };
@@ -207,34 +264,35 @@ function Step1({
               Seninle tanışalım.
             </Label>
             <Label style={[[ui.textSm, ui.textWhite45]]}>
-              Devam ettiğinde hesabın oluşturulur. Sonraki adımda referans isteyebilirsin.
+              {waiting ? "Başvurun alındı. Gönderdiğin bilgiler inceleme bitene kadar kilitli; boş kalan alanları ekleyip gönderebilirsin." : "Devam ettiğinde hesabın oluşturulur. Sonraki adımda referans isteyebilirsin."}
             </Label>
           </Box>
 
           {/* Form */}
           <Box style={[[ui.spaceY3]]} enter>
+            {waiting && !me && <Label style={[[ui.textXs, ui.textWhite40]]}>Başvuru bilgilerin yükleniyor…</Label>}
             <Box style={[[ui.grid, ui.gap3]]} columns={2}>
-              <GlassInput label="Ad" placeholder="Adın" value={form.ad} onChangeText={e => setForm(p => ({
+              {locked("ad") ? <LockedField label="Ad" value={submitted.ad} /> : <GlassInput label="Ad" placeholder="Adın" autoCapitalize="words" autoCorrect={false} textContentType="givenName" autoComplete="given-name" value={form.ad} onChangeText={e => setForm(p => ({
               ...p,
               ad: e
-            }))} />
-              <GlassInput label="Soyad" placeholder="Soyadın" value={form.soyad} onChangeText={e => setForm(p => ({
+            }))} />}
+              {locked("soyad") ? <LockedField label="Soyad" value={submitted.soyad} /> : <GlassInput label="Soyad" placeholder="Soyadın" autoCapitalize="words" autoCorrect={false} textContentType="familyName" autoComplete="family-name" value={form.soyad} onChangeText={e => setForm(p => ({
               ...p,
               soyad: e
-            }))} />
+            }))} />}
             </Box>
-            <GlassInput label="E-posta" placeholder="ornek@email.com" value={form.email} onChangeText={e => setForm(p => ({
+            {locked("email") ? <LockedField label="E-posta" value={submitted.email} /> : <GlassInput label="E-posta" placeholder="ornek@email.com" value={form.email} onChangeText={e => setForm(p => ({
             ...p,
             email: e
-          }))} mode="email" />
-            <GlassInput label="Telefon" placeholder="+90 5XX XXX XX XX" value={form.telefon} onChangeText={e => setForm(p => ({
+          }))} mode="email" />}
+            {locked("telefon") ? <LockedField label="Telefon" value={submitted.telefon} /> : <GlassInput label="Telefon" placeholder="+90 5XX XXX XX XX" value={form.telefon} onChangeText={e => setForm(p => ({
             ...p,
             telefon: formatPhone(e)
-          }))} mode="tel" keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel" maxLength={17} />
-            <GlassInput label="Doğum Tarihi" mode="date" defaultValue="2000-01-01" value={toPickerDate(form.dogum)} onChangeText={e => setForm(p => ({
+          }))} onFocus={() => { if (!form.telefon) setForm(p => ({ ...p, telefon: PHONE_PREFIX })); }} mode="tel" keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel" maxLength={17} />}
+            {locked("dogum") ? <LockedField label="Doğum Tarihi" value={submitted.dogum} /> : <GlassInput label="Doğum Tarihi" mode="date" defaultValue="2000-01-01" value={toPickerDate(form.dogum)} onChangeText={e => setForm(p => ({
             ...p,
             dogum: formatBirthDate(e)
-          }))} />
+          }))} />}
             {isFutureDate(form.dogum) && <Label style={[[ui.textXs], { color: palette.error }]}>
                 Doğum tarihi gelecekte olamaz.
               </Label>}
@@ -242,12 +300,12 @@ function Step1({
                 {`Üye olmak için en az ${MIN_MEMBER_AGE} yaşında olmalısın.`}
               </Label>}
             <Box>
-              <CityPicker value={form.sehir} onChange={sehir => setForm(p => ({ ...p, sehir }))} />
+              {locked("sehir") ? <LockedField label="Şehir" value={submitted.sehir} /> : <CityPicker value={form.sehir} onChange={sehir => setForm(p => ({ ...p, sehir }))} />}
             </Box>
-            <GlassInput label="Şifre" placeholder="En az 8 karakter ve özel karakter" value={form.sifre} onChangeText={e => setForm(p => ({
+            {!waiting && <GlassInput label="Şifre" placeholder="En az 8 karakter ve özel karakter" value={form.sifre} onChangeText={e => setForm(p => ({
             ...p,
             sifre: e
-          }))} secureTextEntry />
+          }))} secureTextEntry />}
           </Box>
 
           {/* Community Principles */}
@@ -278,6 +336,7 @@ function Step1({
             </GlassCard>
 
             {/* Consents — versions come from the server and are recorded with the account */}
+            {waiting ? <Label style={[[ui.mt3, ui.textXs, ui.textWhite40]]}>Sözleşmeleri başvururken onayladın.</Label> : <>
             <ConsentCheck checked={rulesAccepted} onToggle={() => setRulesAccepted(!rulesAccepted)} label="Kullanım Koşulları ve Topluluk Kuralları onayı">
               <Label accessibilityRole="link" onPress={() => openLegal("terms")} style={[[ui.textWhite85, ui.underline]]}>Kullanım Koşulları</Label>
               {" ve "}
@@ -298,10 +357,12 @@ function Step1({
             {documentsError && !store.onboarding.accountId && <Box style={[[ui.mt3]]}>
                 <ErrorNotice title="Metinler yüklenemedi" message={documentsError} onDismiss={() => setDocumentsError(null)} onRetry={() => setDocumentsAttempt(value => value + 1)} />
               </Box>}
+            </>}
           </Box>
         </Box>
       </Scroll>
       <StickyBar>
+        {waiting ? <WaitingActions label="Eklediklerimi gönder" canSend={Object.keys(additions).length > 0} sending={sending} notice={sendNotice} error={sendError} onSend={() => void sendAdditions()} onBack={() => navigate("onboarding-3", { reset: true })} /> : <>
         {createError && <ErrorNotice title="Kayıt tamamlanamadı" message={createError} onDismiss={() => setCreateError(null)} />}
         <Touch onPress={() => void continueRegistration()} disabled={!canContinue || creating} disabledOpacity={1} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
         color: canContinue ? palette.text : "rgba(226,232,240,.62)",
@@ -310,6 +371,7 @@ function Step1({
       }]} gradient={canContinue ? palette.actionGradient : ["#202b3d", "#182235", "#151f30"]}>
           {creating ? "Hesap oluşturuluyor…" : "Devam Et"}
         </Touch>
+        </>}
       </StickyBar>
     </Box>;
 }
@@ -327,14 +389,30 @@ function Step2({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [method, setMethod] = useState<"instagram" | "reference" | null>(null);
   const [instagram, setInstagram] = useState("");
+  const { waiting, me, setMe } = useApplicant();
+  const instagramLocked = waiting && !!me?.instagramUsername;
+  const newInstagram = instagramLocked ? "" : instagram.replace(/^@/, "").trim();
+  const [sendNotice, setSendNotice] = useState<string | null>(null);
+  const sendInstagram = async () => {
+    if (submitting || !newInstagram) return;
+    setSubmitting(true); setSubmitError(null); setSendNotice(null);
+    try { setMe(await updateProfile({ instagramUsername: newInstagram })); setInstagram(""); setSendNotice("Instagram hesabın başvuruna eklendi."); }
+    catch (error) { setSubmitError(getApiErrorMessage(error, "Instagram eklenemedi.")); }
+    finally { setSubmitting(false); }
+  };
+  // Pull to refresh also reloads the reference requests; the picker reports when that ended.
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const referencesDone = useRef<(() => void) | null>(null);
+  const pull = usePullRefresh(() => new Promise<void>(resolve => { referencesDone.current = resolve; setRefreshSignal(value => value + 1); }));
   const submitApplication = async () => {
     if (submitting) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
-      if (!store.onboarding.accountId) { navigate("onboarding-1"); return; }
+      if (!store.onboarding.accountId && !store.user.id) { navigate("onboarding-1"); return; }
       if (instagram.trim()) await updateProfile({ instagramUsername: instagram.replace(/^@/, "").trim() });
-      navigate("onboarding-3");
+      // References first, then the profile (interests) files the application; already filed ones just wait.
+      navigate(store.user.status === "profile_incomplete" ? "interests" : "onboarding-3");
     } catch (error) {
       setSubmitError(getApiErrorMessage(error, "Bilgilerini kontrol edip tekrar dene."));
     } finally {
@@ -345,7 +423,7 @@ function Step2({
     flex: 1
   }}>
       <TopNavBar navigate={navigate} fallback="onboarding-1" title="Üyelik Başvurusu" floating />
-      <Scroll style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
+      <Scroll refreshControl={pull.control} style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
         <AtmoBackground />
 
         <Box style={[[ui.relative, ui.spaceY8]]}>
@@ -364,7 +442,7 @@ function Step2({
 
           <Box style={[[ui.spaceY3]]} enter>
             {/* Instagram */}
-            <GlassCard onPress={() => setMethod(method === "instagram" ? null : "instagram")} style={[[ui.p4, method === "instagram" ? [ui.borderC8a44a35] : []]]}>
+            {instagramLocked ? <GlassCard style={[[ui.p4]]}><LockedField label="Instagram" value={`@${me?.instagramUsername}`} /></GlassCard> : <GlassCard onPress={() => setMethod(method === "instagram" ? null : "instagram")} style={[[ui.p4, method === "instagram" ? [ui.borderC8a44a35] : []]]}>
               <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
                 <IconBadge color="violet">
                   <InstagramIcon size={18} />
@@ -380,9 +458,9 @@ function Step2({
                 {method === "instagram" && <Box style={[[ui.w2, ui.h2, ui.roundedFull, ui.bgC8a44a]]} />}
               </Box>
               {method === "instagram" && <Touch onPress={e => e.stopPropagation()} style={[[ui.mt3]]} enter>
-                  <GlassInput placeholder="@kullaniciadi" value={instagram} onChangeText={value => { const username = value.replace(/@/g, "").trim(); setInstagram(username ? `@${username}` : "") }} />
+                  <GlassInput placeholder="@kullaniciadi" accessibilityLabel="Instagram kullanıcı adı" autoCapitalize="none" autoCorrect={false} autoComplete="username" value={instagram} onChangeText={value => { const username = value.replace(/[@\s]/g, "").toLowerCase(); setInstagram(username ? `@${username}` : "") }} />
                 </Touch>}
-            </GlassCard>
+            </GlassCard>}
 
             {/* Reference */}
             <GlassCard style={[[ui.p4]]}>
@@ -400,12 +478,14 @@ function Step2({
                 </Box>
               </Box>
 
-              <ReferencePicker />
+              {/* A reference approved while this step is open moves the application on by itself. */}
+              <ReferencePicker refreshSignal={refreshSignal} onRefreshed={() => { referencesDone.current?.(); referencesDone.current = null; }} onApproved={() => void submitApplication()} />
             </GlassCard>
           </Box>
         </Box>
       </Scroll>
       <StickyBar>
+        {waiting ? <WaitingActions label="Eklediklerimi gönder" canSend={!!newInstagram} sending={submitting} notice={sendNotice} error={submitError} onSend={() => void sendInstagram()} onBack={() => navigate("onboarding-3", { reset: true })} /> : <>
         {submitError && (
           <Box style={[[ui.mb3]]}>
             <ErrorNotice
@@ -419,8 +499,9 @@ function Step2({
         <Touch onPress={() => void submitApplication()} disabled={submitting} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
         color: palette.text
       }]} gradient={palette.actionGradient}>
-          {submitting ? "Gönderiliyor..." : "Başvuruyu Gönder"}
+          {submitting ? "Gönderiliyor..." : store.user.status === "profile_incomplete" ? "Devam Et" : "Başvuruyu Gönder"}
         </Touch>
+        </>}
       </StickyBar>
     </Box>;
 }
@@ -433,16 +514,32 @@ function Step3({
 }: {
   navigate: NavigateFn;
 }) {
-  const { data: store } = useStore();
-  // References are done once the account moves on to security review.
-  const current = store.user.status === "security_review" ? 2 : 1;
+  const { data: store, refreshEvents } = useStore();
+  // The waiting page is where a push notification is worth asking for: we tell them when they are approved.
+  const [push, setPush] = useState<PushState | null>(null);
+  useEffect(() => { void registerForPush(true).then(setPush); }, []);
+  // Pulling down reloads the status, so an approval shows even if the live update was missed.
+  const pull = usePullRefresh();
+  // An admin approval arrives over the socket (or on the next status load) and opens the app.
+  useEffect(() => {
+    if (store.user.status !== "approved") return;
+    void refreshEvents().catch(() => {});
+    navigate("discover", { reset: true });
+  }, [store.user.status]);
+  // "Başvurunu inceliyoruz" is only for an application waiting for its reference (it is approved the
+  // moment the reference is); the reference step is the current one.
+  const current = 1;
+  // Accounts an admin put under review, or took passive (later also rating rules), see the same page
+  // with review copy instead of the application timeline.
+  const passive = store.user.status === "passive" || store.user.status === "security_review";
+  const takenPassive = store.user.status === "passive";
   const stages = ["Başvuru Alındı", "Referans Bekleniyor", "Onay"].map((label, i) => ({
     label,
     state: i < current ? "done" : i === current ? "current" : "future"
   }));
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
     <TopNavBar navigate={navigate} fallback="onboarding-2" onBack={() => navigate("onboarding-2", { back: true })} title="Üyelik Başvurusu" floating />
-    <Scroll style={[[ui.flex1, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.px6], { paddingTop: 84 }]}>
+    <Scroll refreshControl={pull.control} style={[[ui.flex1, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.px6], { paddingTop: 84 }]}>
       <AtmoBackground variant="violet" />
 
       <Box style={[[ui.relative, ui.wFull, ui.spaceY10]]}>
@@ -466,16 +563,23 @@ function Step3({
         {/* Text */}
         <Box style={[[ui.textCenter, ui.spaceY3]]} enter>
           <Label style={[[ui.fontDisplay, ui.text4xl, ui.textWhite], { fontStyle: "italic" }]}>
-            Başvurunu{"\n"}inceliyoruz.
+            {passive ? "Hesabın\nincelemede." : "Başvurunu\ninceliyoruz."}
           </Label>
-          <EditorialQuote>Topluluğun güvenli kalması bizim için çok önemli. Bu yüzden her başvuruyu dikkatle değerlendiriyoruz.</EditorialQuote>
+          <EditorialQuote>{passive ? "Topluluğun güvende kalması için hesapları zaman zaman yeniden değerlendiriyoruz." : "Topluluğun güvenli kalması bizim için çok önemli. Bu yüzden her başvuruyu dikkatle değerlendiriyoruz."}</EditorialQuote>
           <Label style={[[ui.textSm, ui.textWhite35]]}>
-            Yakında sana döneceğiz.
+            {passive ? (push === "granted" ? "İnceleme bitince sana bildirim göndereceğiz." : "İnceleme bitince sana haber vereceğiz.") : push === "granted" ? "Onaylandığında sana bildirim göndereceğiz." : "Yakında sana döneceğiz."}
           </Label>
+          {push === "denied" && <Label style={[[ui.textXs, ui.textWhite35]]}>
+              Bildirimler kapalı. Onayı uygulamayı açtığında göreceksin; bildirimleri telefonunun ayarlarından açabilirsin.
+            </Label>}
         </Box>
 
-        {/* Timeline */}
-        <GlassCard style={[[ui.p5]]} enter>
+        {/* Passive: what the review means; otherwise the application timeline */}
+        {passive ? <GlassCard style={[[ui.p5, ui.spaceY3]]} enter>
+            <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite]]}>{takenPassive ? "Hesabın şu an pasif" : "Hesabını inceliyoruz"}</Label>
+            <Label style={[[ui.textXs, ui.textWhite55, ui.leadingRelaxed]]}>İnceleme sürerken etkinliklere katılamaz, etkinlik oluşturamaz ve mesaj gönderemezsin.</Label>
+            <Label style={[[ui.textXs, ui.textWhite55, ui.leadingRelaxed]]}>Hesabın yeniden aktifleştirildiğinde uygulama kendiliğinden açılır; tekrar giriş yapman gerekmez.</Label>
+          </GlassCard> : <GlassCard style={[[ui.p5]]} enter>
           <Box style={[[ui.spaceY0]]}>
             {stages.map((s, i) => <Box key={i} style={[[ui.flex, ui.itemsStart, ui.gap3]]}>
                 <Box style={[[ui.flex, ui.flexCol, ui.itemsCenter]]}>
@@ -494,7 +598,7 @@ function Step3({
                 </Box>
               </Box>)}
           </Box>
-        </GlassCard>
+        </GlassCard>}
 
         <Box style={[[ui.flex, ui.justifyCenter]]}>
           <SignOutButton navigate={navigate} />

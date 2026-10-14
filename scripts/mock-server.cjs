@@ -15,6 +15,14 @@ module.exports = function () {
   // Versioned legal texts; every required one starts accepted so the consent gate stays closed unless a test opens it.
   const legalDocuments = [['terms', 'Kullanım Koşulları', true], ['community', 'Topluluk Kuralları', true], ['privacy', 'Gizlilik Politikası', true], ['kvkk', 'KVKK Aydınlatma Metni', true], ['marketing', 'Ticari Elektronik İleti İzni', false]]
     .map(([type, title, required]) => ({ type, title, required, version: 1, publishedAt: '2026-10-13T09:00:00+03:00', body: `${title} giriş paragrafı.\n\n## Topladığımız veriler\n- E-posta adresin diğer üyelere gösterilmez.\n- Rehberin saklanmaz.` }))
+  // Admin panel fixtures; `user.role` decides access like the server does.
+  const applications = [
+    { id: 'app-1', firstName: 'Ada', lastName: 'Yeni', email: 'ada@example.com', phoneNumber: '+905320000001', city: 'Ankara', instagramUsername: 'ada.yeni', birthDate: '15/06/1995', age: 31, status: { enum: 'reference_pending', name: 'Referans bekleniyor' }, interests: ['Padel'], approvedReferences: 1, createdAt: '2026-10-01T10:00:00Z' },
+    { id: 'app-2', firstName: 'Can', lastName: 'Deneme', email: 'can@example.com', phoneNumber: '+905320000002', city: 'İzmir', instagramUsername: null, birthDate: '01/01/1990', age: 36, status: { enum: 'security_review', name: 'Güvenlik incelemesi' }, interests: ['Kahve'], approvedReferences: 0, createdAt: '2026-10-02T10:00:00Z' },
+  ]
+  const APPLICATION_TABS = { pending: ['reference_pending', 'security_review'], review: ['security_review'], incomplete: ['profile_incomplete'], approved: ['approved'], passive: ['passive'], rejected: ['rejected'], all: null }
+  const pushTokens = new Map()
+  const applicationCounts = () => Object.fromEntries(Object.entries(APPLICATION_TABS).map(([tab, statuses]) => [tab, applications.filter(item => !statuses || statuses.includes(item.status.enum)).length]))
   const legal = { accepted: { terms: 1, community: 1, privacy: 1, kvkk: 1 }, marketing: false, posted: [] }
   const legalStatus = () => {
     const documents = legalDocuments.map(({ body: _body, ...doc }) => ({ ...doc, accepted: doc.type === 'marketing' ? legal.marketing : legal.accepted[doc.type] === doc.version, acceptedVersion: legal.accepted[doc.type] ?? null, acceptedAt: null }))
@@ -33,6 +41,23 @@ module.exports = function () {
     else if (path.startsWith('/friends/requests/') && path.endsWith('/decline')) { const id = path.split('/')[3]; state.friendRequests = state.friendRequests.filter(user => user.id !== id); result = { message: 'ok' } }
     else if (path === '/notifications/read-all') { notifications.forEach(row => row.readAt = new Date().toISOString()); result = { success: true } }
     else if (path.startsWith('/notifications/') && path.endsWith('/read')) { const row = notifications.find(row => row.id === path.split('/')[2]); if (row) row.readAt = new Date().toISOString(); result = { success: true } }
+    else if (path.startsWith('/admin/applications')) {
+      if (user.role !== 'admin') return { ok: false, status: 403, text: async () => JSON.stringify({ message: 'Bu alana yalnızca yöneticiler erişebilir.' }) }
+      if (!options.method && path !== '/admin/applications') {
+        const item = applications.find(row => row.id === path.split('/').pop())
+        result = { ...item, bio: `${item.firstName} buluşmaları seviyor.`, profilePhoto: null, references: [{ id: 'ref-1', name: 'Deniz Üye', status: 'approved', createdAt: '2026-10-03T10:00:00Z' }], history: [], consents: { documents: [{ title: 'Gizlilik Politikası', version: 1, acceptedAt: '2026-10-01T10:00:00Z' }], pending: [], marketing: true } }
+      } else if (options.method === 'PATCH') {
+        const item = applications.find(row => row.id === path.split('/').pop())
+        const status = { approve: 'approved', reject: 'rejected', review: 'security_review', deactivate: 'passive' }[body.decision]
+        item.status = { enum: status, name: status }
+        result = { ...item }
+      } else {
+        const params = new URL(url).searchParams, statuses = APPLICATION_TABS[params.get('status') || 'pending'], q = (params.get('q') || '').toLocaleLowerCase('tr')
+        const items = applications.filter(item => (!statuses || statuses.includes(item.status.enum)) && (!q || `${item.firstName} ${item.lastName} ${item.email}`.toLocaleLowerCase('tr').includes(q)))
+        result = { items: items.map(item => ({ ...item, status: { ...item.status } })), total: items.length, page: 1, hasMore: false, counts: applicationCounts() }
+      }
+    }
+    else if (path === '/push/tokens') { if (options.method === 'PUT') pushTokens.set(body.token, body.platform); else pushTokens.delete(body.token); result = undefined }
     else if (path === '/legal/documents') result = { items: legalDocuments.map(({ body: _body, ...doc }) => doc) }
     else if (path.startsWith('/legal/documents/')) result = legalDocuments.find(doc => doc.type === path.split('/').pop())
     else if (path === '/legal/consents/marketing') { legal.marketing = body.granted; result = legalStatus() }
@@ -75,5 +100,5 @@ module.exports = function () {
     return { ok: true, status: 200, json: async () => result }
   }
   const saveMessage = text => { const message = { id: String(messages.length), text, user, createdAt: new Date().toISOString() }; messages.push(message); return message }
-  return { fetch, legal, legalDocuments, events, preferences, requests, notifications, user, saveMessage, suggestions, invitations, state, availabilities, poolInvites }
+  return { fetch, pushTokens, applications, legal, legalDocuments, events, preferences, requests, notifications, user, saveMessage, suggestions, invitations, state, availabilities, poolInvites }
 }

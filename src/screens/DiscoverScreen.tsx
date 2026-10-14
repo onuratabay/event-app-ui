@@ -271,7 +271,7 @@ function SortIcon({
 }: {
   active: boolean;
 }) {
-  return <Vector width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2 : 1.6} strokeLinecap="round" strokeLinejoin="round">
+  return <Vector width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
       <Line x1="4" y1="6" x2="20" y2="6" />
       <Line x1="7" y1="12" x2="17" y2="12" />
       <Line x1="10" y1="18" x2="14" y2="18" />

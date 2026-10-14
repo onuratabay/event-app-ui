@@ -4,6 +4,8 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } fr
 import * as Location from "expo-location"
 import { FilterChip, GlassInput } from "../components/GlassUI"
 import { Box, Label, Scroll, Touch } from "../native/UI"
+import { PlaceSuggestionList, usePlaceSuggestions } from "./PlaceSuggestions"
+import type { PlaceSuggestion } from "../api/client"
 import { categoryVisual, CITY_PRESETS, DEFAULT_FILTERS, filterError, localDate, type DiscoveryFilters, type MapPlace } from "./filters"
 
 export default function DiscoveryFilterSheet({ value, categories, onApply, onClose }: {
@@ -43,6 +45,14 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
       if (version === searchVersion.current) setError(cause instanceof Error && cause.message.startsWith("Konum izni") ? cause.message : "Konum araması şu an kullanılamıyor. Şehir kısayollarını kullanabilirsin.")
     } finally { setBusy(false) }
   }
+  // Suggestions while typing (venues, districts, cities); "Konumu bul" stays as the geocoder fallback.
+  const suggestions = usePlaceSuggestions(draft.place ? "" : query, draft.place)
+  const pickSuggestion = async (suggestion: PlaceSuggestion) => {
+    try {
+      const place = await suggestions.resolve(suggestion)
+      choosePlace({ name: place.name || suggestion.title, latitude: place.latitude, longitude: place.longitude }, 5)
+    } catch { setError("Bu yer seçilemedi. Bağlantını kontrol edip tekrar dene.") }
+  }
   const choosePlace = (place: MapPlace, radiusKm = 30) => {
     searchVersion.current++
     setDraft(previous => ({ ...previous, place, radiusKm })); setQuery(place.name); setResults([]); setError(null)
@@ -61,6 +71,7 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
           <Label style={s.hint}>Süresi belli etkinliklerin tamamı bu aralığa sığar. Bitiş saati daha erkense aralık ertesi güne uzanır.</Label>
           <Label style={s.section}>Nerede olacaksın?</Label>
           <GlassInput label="Şehir, semt veya mekân" placeholder="Örn. İzmir veya Eymir Gölü, Ankara" value={query} onChangeText={text => { searchVersion.current++; setQuery(text); setResults([]); setDraft(previous => ({ ...previous, place: null })) }} />
+          <PlaceSuggestionList items={suggestions.items} onPick={item => void pickSuggestion(item)} />
           <Touch style={s.search} onPress={() => void search()} disabled={busy || !query.trim()}><Label style={s.text}>{busy ? "Konum aranıyor…" : "Konumu bul"}</Label></Touch>
           {results.map((place, index) => <Touch key={index} style={s.result} onPress={() => choosePlace(place, 1)}><Label style={s.text}>⌖ {place.name}</Label><Label style={s.hint}>Bu konumu seç</Label></Touch>)}
           <Box style={s.wrap}>{CITY_PRESETS.map(place => <FilterChip solid key={place.name} label={place.name} selected={draft.place?.name === place.name} onPress={() => choosePlace(place)} />)}<FilterChip solid label="Her yerde" selected={!draft.place && !query} onPress={() => { searchVersion.current++; setQuery(""); setResults([]); setDraft(previous => ({ ...previous, place: null })) }} /></Box>

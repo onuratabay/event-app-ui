@@ -2,7 +2,6 @@ import { palette } from "../theme/palette";
 import { LockIcon } from "../components/Icons";
 import { BrandWordmark } from "../components/Brand";
 import { useSignedOutEntry } from "../native/session";
-import { useOpenLegal } from "../legal/links";
 import { AtmoBackground } from "../components/GlassUI";
 import { Box, Label, Picture, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -61,7 +60,6 @@ export default function WelcomeScreen({
   navigate
 }: Props) {
   const checkingSession = useSignedOutEntry(navigate);
-  const openLegal = useOpenLegal();
   if (checkingSession) return null;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
@@ -198,26 +196,20 @@ export default function WelcomeScreen({
             Üyelik Başvurusu Yap
           </Touch>
 
-          <Touch onPress={() => navigate("guest-entry")} style={[[ui.wFull, ui.py3, ui.textSm, ui.textWhite70]]}>Davet kodum var</Touch>
-
-          <Touch onPress={() => navigate("login")} style={[[ui.wFull, ui.py35, ui.textSm, ui.textWhite50, ui.fontLight]]}>
-            Zaten üye misin?{" "}
-            <Label style={[[ui.textWhite70, ui.underline]]}>Giriş Yap</Label>
+          {/* One quiet line for members: the application stays the main action. */}
+          <Touch accessibilityLabel="Giriş Yap" onPress={() => navigate("login")} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.justifyCenter], { minHeight: 44 }]}>
+            <Label numberOfLines={1} style={[[ui.textSm, ui.textWhite50]]}>
+              Zaten üye misin?{" "}
+              <Label style={[[ui.textSm, ui.fontSemibold], { color: palette.accent }]}>Giriş yap</Label>
+            </Label>
           </Touch>
         </Box>
 
-        <Box style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>
-          <LockIcon size={15} style={{ color: palette.muted }} />
-          <Label style={[[ui.textXs, ui.textWhite50]]}>Referansla başlayan özel bir topluluk.</Label>
+        {/* Footnote: small, faint and centred under the actions. */}
+        <Box accessible accessibilityLabel="Referansla başlayan özel bir topluluk." style={[[ui.flex, ui.itemsCenter, ui.justifyCenter], { gap: 5, marginTop: -12 }]}>
+          <LockIcon size={10} style={{ color: "rgba(226,232,240,.32)" }} />
+          <Label style={{ fontSize: 11, lineHeight: 14, letterSpacing: 0.3, color: "rgba(226,232,240,.38)" }}>Referansla başlayan özel bir topluluk.</Label>
         </Box>
-
-        <Label style={[[ui.textXs, ui.textWhite40, ui.textCenter, ui.leadingRelaxed]]}>
-          Devam ederek{" "}
-          <Label accessibilityRole="link" onPress={() => openLegal("terms")} style={[[ui.textWhite70, ui.underline]]}>Kullanım Koşulları</Label>
-          'nı ve{" "}
-          <Label accessibilityRole="link" onPress={() => openLegal("privacy")} style={[[ui.textWhite70, ui.underline]]}>Gizlilik Politikası</Label>
-          'nı kabul etmiş olursun.
-        </Label>
       </Box>
     </Box>;
 }

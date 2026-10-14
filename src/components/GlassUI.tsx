@@ -1,6 +1,7 @@
 import { palette } from "../theme/palette"
 import React from "react"
 import { StyleSheet, View } from "react-native"
+import { LockIcon } from "./Icons"
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg"
 import {
   Box,
@@ -28,6 +29,8 @@ const s = StyleSheet.create({
     color: palette.text,
     fontSize: 16,
   },
+  locked: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, opacity: 0.6, backgroundColor: "rgba(255,255,255,.03)" },
+  lockedText: { flex: 1, color: palette.text, fontSize: 16 },
   label: {
     fontSize: 13,
     color: "rgba(241,245,249,.72)",
@@ -79,6 +82,18 @@ export function GlassCard({
 type InputProps = React.ComponentProps<typeof Field> & {
   label?: string
   icon?: string
+}
+/** A submitted value shown as a disabled field: visible, but not editable while the application is pending. */
+export function LockedField({ label, value }: { label: string; value: string }) {
+  return (
+    <Box style={{ flexShrink: 1, flexGrow: 1 }} accessible accessibilityLabel={`${label}: ${value}, kilitli`}>
+      <Label style={s.label}>{label}</Label>
+      <Box style={[s.input, s.locked]}>
+        <Label style={s.lockedText} numberOfLines={1}>{value}</Label>
+        <LockIcon size={14} style={{ color: palette.muted }} />
+      </Box>
+    </Box>
+  )
 }
 export function GlassInput({ label, icon, style, ...props }: InputProps) {
   return (

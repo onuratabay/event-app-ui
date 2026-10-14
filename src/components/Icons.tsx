@@ -483,7 +483,7 @@ export function ExpandIcon(props: IconProps) { return <LineSymbol {...props} pat
 export function CategoryIcon({ name = "", ...props }: IconProps & { name?: string }) {
   const key = name.toLocaleLowerCase("tr-TR");
   const path = /kahve|coffee|yemek/.test(key) ? "M4 8h12v6a5 5 0 0 1-10 0V8m10 1h2a3 3 0 0 1 0 6h-2M5 21h14M8 3v2m4-2v2"
-    : /bisiklet/.test(key) ? "M8 16a4 4 0 1 1-8 0 4 4 0 0 1 8 0Zm16 0a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 16l5-9 5 9H4m5-9h8l3 9M7 4h4m5 0h3l1 3"
+    : /bisiklet/.test(key) ? "M9 16a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Zm13 0a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0ZM5.5 16 10 8l3 8H5.5M10 8h6.5l2 8M10 8V5.5M8.5 5.5h3M16.5 8l-1-2.5M14.5 5.5H17"
     : /müzik|konser|dans/.test(key) ? "M9 18V5l11-2v13M9 18a3 3 0 1 1-3-3c2 0 3 1 3 3Zm11-2a3 3 0 1 1-3-3c2 0 3 1 3 3Z"
     : /sanat|resim|seramik/.test(key) ? "M12 3a9 9 0 1 0 0 18h2a2 2 0 0 0 0-4h-1a2 2 0 0 1 0-4h4a4 4 0 0 0 4-4c0-3-4-6-9-6Zm-5 7h.01M10 6h.01m5 1h.01"
     : /yürüyüş|doğa|kamp|tırman/.test(key) ? "m2 20 7-15 5 10 3-6 5 11H2Zm4-9 3 3 3-3"
