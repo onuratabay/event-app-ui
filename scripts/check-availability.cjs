@@ -86,6 +86,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   const oldFetch = global.fetch
   global.fetch = server.fetch
   server.availabilities.push({ id: "old", status: "expired", dateFrom: "01/09/2026", dateTo: "03/09/2026", weekdays: [2, 3, 4], timeWindows: [], area: { mode: "city", name: "İzmir", latitude: 38.42, longitude: 27.14 }, activities: [{ interestId: "kahve", maxDurationMinutes: null }] })
+  server.availabilities.push({ id: "lapsed", status: "active", dateFrom: "01/10/2026", dateTo: "05/10/2026", weekdays: [2, 3, 4], timeWindows: [], area: { mode: "city", name: "İzmir", latitude: 38.42, longitude: 27.14 }, activities: [{ interestId: "kahve", maxDurationMinutes: null }] })
   const wait = (ms = 20) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) })
   const screen = await mount("Availability", { now })
   await wait()
@@ -96,8 +97,23 @@ module.exports = async function ({ mount, act, text, storage }) {
   let content = text(screen.toJSON())
   assert(content.includes("Etkinlik Takvimim") && content.includes("ilan oluşturmaz"), "The record is described as private, not a listing")
   assert(!content.includes("Kaydetme henüz açık değil") && !content.includes("İlan yayınla"))
+  // Two tabs: the form (with the calendar right at the top) and the saved records.
+  assert(byLabel("Yeni müsaitlik").props.accessibilityState.selected, "The screen opens on the form")
+  assert(byLabel("14 Eki 2026"), "The calendar is visible without scrolling past the records")
+  assert(!content.includes("Süresi geçenler"), "Records live in their own tab")
+  await press("Kayıtlarım")
+  content = text(screen.toJSON())
   assert(content.includes("Süresi geçenler") && content.includes("Süresi doldu"), "Expired records are listed separately")
-  assert(content.includes("Henüz müsaitlik kaydın yok"), "Empty state for current records")
+  assert(content.includes("güncel bir müsaitlik kaydın yok"), "Empty state for current records")
+  {
+    // Past records look disabled: dimmed, no edit or pause, even when the server has not marked them expired yet.
+    const flat = node => Object.assign({}, ...[].concat(node.props.style).flat(Infinity).filter(Boolean))
+    const past = screen.root.findAll(node => node.type === "View" && String(node.props.accessibilityLabel || "").endsWith("süresi geçti") && flat(node).opacity === 0.5)
+    assert.equal(past.length, 2, "Both past records are dimmed")
+    assert(!pressables().some(node => text(node).includes("Düzenle")), "Past records cannot be edited")
+  }
+  await pressText("Yeni müsaitlik oluştur")
+  assert(byLabel("Yeni müsaitlik").props.accessibilityState.selected, "The empty state leads to the form")
   await pressText("Kaydet ve davet al")
   assert(text(screen.toJSON()).includes("Başlangıç tarihini seç."), "Saving an incomplete form shows what is missing")
   assert(!text(screen.toJSON()).includes("Kaydetmeden önce kontrol et"))
@@ -142,6 +158,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   assert.deepEqual(created.body.activities, [{ interestId: "padel", ownLevelId: "beginner", anyPartnerLevel: true, partnerLevelIds: [], maxDurationMinutes: 120 }, { interestId: "kahve", maxDurationMinutes: null }])
   content = text(screen.toJSON())
   assert(content.includes("Kaydedildi") && content.includes("Davet alıyor"), "The saved record is listed as active")
+  assert(byLabel("Kayıtlarım").props.accessibilityState.selected && byLabel("Kayıtlarım · 1"), "Saving switches to the records tab with the count")
   await pressText("Duraklat")
   await wait()
   assert(server.requests.some(request => /^\/users\/me\/availability\/availability-\d+\/pause$/.test(request.path)), "Pausing calls the server")

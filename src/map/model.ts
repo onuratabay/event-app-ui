@@ -3,6 +3,19 @@ import type { Region } from "react-native-maps"
 import type { ApiEvent } from "../api/client"
 
 export const INITIAL_REGION: Region = { latitude: 39.92, longitude: 32.85, latitudeDelta: 0.8, longitudeDelta: 0.8 }
+export const USER_LOCATION_RADIUS_KM = 10
+// Fit the diameter to the shorter screen axis so the radius remains visible in either orientation.
+export function regionForRadius(center: Pick<Region, "latitude" | "longitude">, radiusKm: number, size: { width: number; height: number }): Region {
+  const aspect = Math.max(1, size.width) / Math.max(1, size.height)
+  const diameterDegrees = radiusKm * 2 / 111.195
+  const latitudeScale = Math.cos(Math.max(-85, Math.min(85, center.latitude)) * Math.PI / 180)
+  return {
+    latitude: center.latitude,
+    longitude: center.longitude,
+    latitudeDelta: diameterDegrees * Math.max(1, 1 / aspect),
+    longitudeDelta: diameterDegrees / latitudeScale * Math.max(1, aspect),
+  }
+}
 export const COLORS = ["#436b9e", "#628dcd", "#927dff", "#d2c3ff"]
 export type MapMode = "heat" | "cluster" | "event"
 export const modeForZoom = (zoom: number): MapMode => zoom < 11 ? "heat" : zoom < 15 ? "cluster" : "event"

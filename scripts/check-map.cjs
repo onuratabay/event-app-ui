@@ -9,6 +9,16 @@ module.exports = async function checkMap({ mount, tap, act, text, storage }) {
     confirmedParticipantCount: 1, participants: [], coverPhoto: null, requirements: null, description: "Harita testi", isFavorite: false,
   })
   const points = [makeEvent("one"), makeEvent("two", 39.9205, 32.8505)]
+  const assertTenKmViewport = (region, width, height) => {
+    const northSouthKm = region.latitudeDelta * 111.195
+    const eastWestKm = region.longitudeDelta * 111.195 * Math.cos(region.latitude * Math.PI / 180)
+    assert(Math.min(northSouthKm, eastWestKm) >= 20 - 0.00001, "The whole 10 km radius must fit")
+    assert(Math.abs(Math.min(northSouthKm, eastWestKm) - 20) < 0.00001, "Start close to the user, rather than fitting distant events")
+    assert(Math.abs(eastWestKm / northSouthKm - width / height) < 0.00001, "Radius must fit both viewport orientations")
+  }
+  for (const [width, height] of [[390, 760], [760, 390]]) {
+    assertTenKmViewport(model.regionForRadius({ latitude: 41.01, longitude: 28.98 }, 10, { width, height }), width, height)
+  }
   assert.deepEqual([10, 12, 16].map(model.modeForZoom), ["heat", "cluster", "event"])
   assert.equal(model.filterEvents([...points, makeEvent("invalid", NaN), { ...makeEvent("cancelled"), status: { enum: "cancelled" } }], "Tümü").length, 2)
   assert.equal(model.filterEvents(points, "Bugün", new Date(2026, 8, 21)).length, 0)
@@ -110,11 +120,47 @@ module.exports = async function checkMap({ mount, tap, act, text, storage }) {
   assert(text(tree.toJSON()).includes("Konum izni verilmedi"))
   assert.equal(savedFilters.place.name, "İzmir", "Locating never changes the saved filters")
   await act(async () => tree.unmount())
+  // Events and saved filters can arrive before GPS. The first camera move still belongs to the user.
+  global.__testForegroundLocationPermission = true
+  global.__testMapCameraActions = []
+  let resolvePosition
+  global.__testCurrentPosition = () => new Promise(resolve => { resolvePosition = resolve })
+  global.fetch = async url => ({ ok: true, json: async () => url.endsWith('/interests') ? [] : url.includes('/preferences') ? { mapFilters: { ...discovery.DEFAULT_FILTERS, place: izmir } } : ({ items: points, total: 2 }) })
+  const nearbyMap = await mount("Map")
+  const nearbyHost = nearbyMap.root.findByType("MapView")
+  await act(async () => {
+    nearbyMap.root.findAllByType("View").find(node => node.props.onLayout).props.onLayout({ nativeEvent: { layout: { width: 390, height: 760 } } })
+    nearbyHost.props.onMapReady()
+  })
+  assert.equal(global.__testMapCameraActions.length, 0, "No event-fit while the first location is pending")
+  await act(async () => resolvePosition({ coords: { latitude: 41.01, longitude: 28.98 } }))
+  assert.equal(global.__testMapCameraActions.length, 1)
+  const firstCamera = global.__testMapCameraActions[0]
+  assert.equal(firstCamera.type, "region")
+  assert.equal(firstCamera.region.latitude, 41.01)
+  assert.equal(firstCamera.region.longitude, 28.98)
+  assertTenKmViewport(firstCamera.region, 390, 760)
+  await act(async () => nearbyMap.unmount())
+  global.__testMapCameraActions = []
+  global.fetch = async url => ({ ok: true, json: async () => url.endsWith('/interests') ? [] : url.includes('/preferences') ? {} : ({ items: points.map(event => ({ ...event, date: '01/10/2030' })), total: 2 }) })
+  const pannedMap = await mount("Map")
+  await act(async () => pannedMap.root.findByType("MapView").props.onMapReady())
+  assert.equal(global.__testMapCameraActions.length, 0, "Loaded events must not take the camera before GPS")
+  await act(async () => {
+    const host = pannedMap.root.findByType("MapView")
+    host.props.onPanDrag()
+  })
+  await act(async () => resolvePosition({ coords: { latitude: 41.01, longitude: 28.98 } }))
+  assert.equal(global.__testMapCameraActions.length, 0, "A late GPS result must not move a map the user already panned")
+  await act(async () => pannedMap.unmount())
+  delete global.__testForegroundLocationPermission
+  delete global.__testCurrentPosition
+  delete global.__testMapCameraActions
   global.fetch = async () => { throw new Error("offline") }
   const failed = await mount("Map")
   assert(text(failed.toJSON()).includes("Sunucuya bağlanılamadı"))
   await act(async () => failed.unmount())
   global.fetch = oldFetch
   storage.clear()
-  console.log("PASS: map density, zoom modes, real clustering, date/place/time/type combinations, next-week İzmir padel, today Ankara cycling, filter sheet, location denial, pagination, selection and network errors.")
+  console.log("PASS: map density, zoom modes, clustering, discovery filters, 10 km viewport in both orientations, delayed GPS startup, manual pan, location denial, pagination, selection and network errors.")
 }

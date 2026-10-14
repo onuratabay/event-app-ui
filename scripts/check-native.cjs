@@ -59,8 +59,8 @@ Module._load = function (id, parent, isMain) {
   if (id === "socket.io-client") return require("./mock-socket.cjs")
   if (id === "expo-notifications") { global.__expoNotificationsLoaded = true; return {} }
   if (id === "expo-location") return {
-    getForegroundPermissionsAsync: async () => ({ granted: false }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
-    Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => ({ coords: { latitude: 39.92, longitude: 32.85 } }), geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => global.__testReverseGeocode || [],
+    getForegroundPermissionsAsync: async () => ({ granted: global.__testForegroundLocationPermission === true }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
+    Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => global.__testCurrentPosition ? global.__testCurrentPosition() : ({ coords: { latitude: 39.92, longitude: 32.85 } }), geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => global.__testReverseGeocode || [],
   }
   if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker", Circle: "Circle" }
   if (id === "expo-constants") return { __esModule: true, default: { expoConfig: { hostUri: "192.168.1.15:8081" } } }
@@ -176,7 +176,10 @@ async function mount(name, props = {}) {
         null,
         React.createElement(Screen, { navigate: () => {}, ...props }),
       ),
-      { createNodeMock: () => ({ scrollToEnd() { global.__scrollToEndCalls = (global.__scrollToEndCalls || 0) + 1 }, scrollTo() {}, focus() {} }) },
+      { createNodeMock: node => node.type === "MapView" ? {
+        animateToRegion(region) { global.__testMapCameraActions?.push({ type: "region", region }) },
+        fitToCoordinates(coordinates) { global.__testMapCameraActions?.push({ type: "fit", coordinates }) },
+      } : ({ scrollToEnd() { global.__scrollToEndCalls = (global.__scrollToEndCalls || 0) + 1 }, scrollTo() {}, focus() {} }) },
     )
   })
   audit(tree.toJSON())

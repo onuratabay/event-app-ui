@@ -225,4 +225,7 @@ export function fromApi(record: import("../api/client").ApiAvailability): Availa
     activities: record.activities.map(item => ({ interestId: item.interestId, ownLevelId: item.ownLevelId ?? null, partnerLevelIds: item.partnerLevelIds ?? [], anyPartnerLevel: !!item.anyPartnerLevel, maxDurationMinutes: item.maxDurationMinutes })),
   }
 }
+/** A record is over once its last day has passed, even before the server marks it expired. */
+export const isRecordOver = (record: import("../api/client").ApiAvailability, now = new Date()) =>
+  record.status === "expired" || record.dateTo.split("/").reverse().join("-") < todayIso(now)
 export const STATUS_LABEL: Record<import("../api/client").ApiAvailability["status"], string> = { active: "Davet alıyor", paused: "Duraklatıldı", expired: "Süresi doldu" }

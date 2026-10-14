@@ -19,7 +19,7 @@ import { FilterChip } from "../components/GlassUI"
 import { getApiErrorMessage, getMapEvents, getMapInterests, type ApiEvent } from "../api/client"
 import { mapApiEventPreservingCover, participantCount, useStore } from "../native/Store"
 import { Box, Label, Scroll, Touch } from "../native/UI"
-import { COLORS, createIndex, densitySpots, INITIAL_REGION, isVisible, modeForZoom, zoomForRegion } from "../map/model"
+import { COLORS, createIndex, densitySpots, INITIAL_REGION, isVisible, modeForZoom, regionForRadius, USER_LOCATION_RADIUS_KM, zoomForRegion } from "../map/model"
 import type { NavigateFn } from "../types"
 
 // Date is a single choice, so it is a segmented control; place, time and custom dates live in the sheet.
@@ -55,6 +55,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   const [interests, setInterests] = useState<Array<{ id: string; name: string }>>([])
   const [now, setNow] = useState(() => new Date())
   const [nearby, setNearby] = useState<MapPlace | null>(null)
+  const [initialLocationResolved, setInitialLocationResolved] = useState(false)
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [showUser, setShowUser] = useState(false)
@@ -116,8 +117,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     void putPreference("mapFilters", value).catch(() => setLocationError("Filtre bu oturumda uygulandı; hesabına kaydedilemedi. Tekrar uygula."))
     if (value.place && ready) {
       centered.current = true
-      const latitudeDelta = value.radiusKm * 2.5 / 111
-      map.current?.animateToRegion({ latitude: value.place.latitude, longitude: value.place.longitude, latitudeDelta, longitudeDelta: latitudeDelta / Math.cos(value.place.latitude * Math.PI / 180) }, 450)
+      map.current?.animateToRegion(regionForRadius(value.place, value.radiusKm, size), 450)
     }
   }
   async function locate(requestPermission: boolean) {
@@ -135,16 +135,14 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
         new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("timeout")), 12000) }),
       ])
-      let name = "Bulunduğun konum"
-      try { const [address] = await Location.reverseGeocodeAsync(position.coords); name = address?.city || address?.region || name } catch { /* Coordinates remain usable without a city label. */ }
       if (!alive.current) return
-      const place = { name, latitude: position.coords.latitude, longitude: position.coords.longitude }
+      const place = { name: "Bulunduğun konum", latitude: position.coords.latitude, longitude: position.coords.longitude }
       setNearby(place); setShowUser(true)
       // The locate button moves the camera to the user; it never changes the filters behind their back.
-      if (requestPermission) { centered.current = true; map.current?.animateToRegion({ latitude: place.latitude, longitude: place.longitude, latitudeDelta: 0.12, longitudeDelta: 0.12 / Math.cos(place.latitude * Math.PI / 180) }, 450) }
+      if (requestPermission && activeRef.current) { centered.current = true; map.current?.animateToRegion(regionForRadius(place, USER_LOCATION_RADIUS_KM, size), 450) }
 
     } catch { if (alive.current) setLocationError("Konum alınamadı. Sana göre filtresinden şehir seçebilirsin.") }
-    finally { locationBusy.current = false; if (timeout) clearTimeout(timeout); if (alive.current) setLocating(false) }
+    finally { locationBusy.current = false; if (timeout) clearTimeout(timeout); if (alive.current) { setLocating(false); setInitialLocationResolved(true) } }
   }
   const filtered = useMemo(() => applyDiscoveryFilters(events, filters, now), [events, filters, now])
   const categories = useMemo(() => [...new Map([...interests, ...events.map(event => event.interest)].map(item => [item.id, item])).values()], [events, interests])
@@ -160,23 +158,27 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   const heatOpacity = Math.max(0, Math.min(1, (11 - zoom) / 0.65))
   const markerOpacity = Math.max(0, Math.min(1, (zoom - 10.35) / 0.65))
   useEffect(() => {
-    if (!ready || centered.current) return
-    const place = filters.place || (!interacted.current ? nearby : null)
+    if (!screenActive || !ready || centered.current) return
+    const requestedPlace = interacted.current ? filters.place : null
+    const place = requestedPlace || nearby || (initialLocationResolved ? filters.place : null)
     if (place) {
-      const delta = (filters.place ? filters.radiusKm : 15) * 2.5 / 111
-      map.current?.animateToRegion({ latitude: place.latitude, longitude: place.longitude, latitudeDelta: delta, longitudeDelta: delta / Math.cos(place.latitude * Math.PI / 180) }, 450)
+      const radiusKm = place === nearby ? USER_LOCATION_RADIUS_KM : filters.radiusKm
+      map.current?.animateToRegion(regionForRadius(place, radiusKm, size), 450)
       centered.current = true
-    } else if (filtered.length) {
+    } else if (initialLocationResolved && filtered.length) {
       centered.current = true
       map.current?.fitToCoordinates(filtered.map(event => ({ latitude: event.latitude, longitude: event.longitude })), {
         edgePadding: { top: 150, right: 50, bottom: 30, left: 50 }, animated: true,
       })
     }
-  }, [ready, filtered, filters.place, filters.radiusKm, nearby])
-  const zoomBy = (factor: number) => map.current?.animateToRegion({ ...region,
-    latitudeDelta: Math.min(120, Math.max(0.0002, region.latitudeDelta * factor)),
-    longitudeDelta: Math.min(350, Math.max(0.0002, region.longitudeDelta * factor)),
-  }, 350)
+  }, [screenActive, ready, filtered, filters.place, filters.radiusKm, nearby, initialLocationResolved, size])
+  const zoomBy = (factor: number) => {
+    centered.current = true
+    map.current?.animateToRegion({ ...region,
+      latitudeDelta: Math.min(120, Math.max(0.0002, region.latitudeDelta * factor)),
+      longitudeDelta: Math.min(350, Math.max(0.0002, region.longitudeDelta * factor)),
+    }, 350)
+  }
   const openEvent = (event: ApiEvent) => {
     setData(current => ({ ...current, events: [mapApiEventPreservingCover(event, current.events.find(item => item.id === event.id)), ...current.events.filter(item => item.id !== event.id)] }))
     navigate("event-detail", { eventId: event.id })
@@ -188,7 +190,10 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   const summary = [filters.place ? `${filters.place.name} · ${filters.radiusKm} km` : "Her yerde",
     filters.datePreset === "custom" ? `${range.from}${range.to && range.to !== range.from ? ` → ${range.to}` : ""}` : "",
     filters.timeFrom ? `${filters.timeFrom}–${filters.timeTo}` : ""].filter(Boolean).join(" · ")
-  const fitAll = () => map.current?.fitToCoordinates(filtered.map(event => ({ latitude: event.latitude, longitude: event.longitude })), { edgePadding: { top: 200, right: 60, bottom: 200, left: 60 }, animated: true })
+  const fitAll = () => {
+    centered.current = true
+    map.current?.fitToCoordinates(filtered.map(event => ({ latitude: event.latitude, longitude: event.longitude })), { edgePadding: { top: 200, right: 60, bottom: 200, left: 60 }, animated: true })
+  }
   const cardWidth = Math.min(360, size.width - 64)
   return <Box style={s.root}>
     {/* The map owns the entire canvas. Every control below is an overlay layer. */}
@@ -197,6 +202,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
         rotateEnabled={false} pitchEnabled={false} showsCompass={false}
         showsUserLocation={showUser} showsMyLocationButton={false} showsPointsOfInterests={false} showsBuildings={false} showsTraffic={false} toolbarEnabled={false}
         onMapReady={() => setReady(true)} onRegionChange={setRegion} onRegionChangeComplete={setRegion}
+        onPanDrag={() => { centered.current = true }}
         onPress={() => setSelected([])} legalLabelInsets={{ top: 0, left: 8, right: 8, bottom: navInset + 8 }}>
         {markerOpacity > 0 && clusters.map(feature => {
           const [longitude, latitude] = feature.geometry.coordinates
@@ -215,6 +221,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
                   const ids = new Set(index.getLeaves(id, Infinity).map(point => point.properties.eventId))
                   setSelected(filtered.filter(item => ids.has(item.id)))
                 } else {
+                  centered.current = true
                   const target = Math.min(19, index.getClusterExpansionZoom(id))
                   const scale = 2 ** (zoom - target)
                   map.current?.animateToRegion({ latitude, longitude, latitudeDelta: region.latitudeDelta * scale, longitudeDelta: region.longitudeDelta * scale }, 400)

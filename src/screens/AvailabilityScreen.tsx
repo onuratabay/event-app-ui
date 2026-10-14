@@ -15,7 +15,7 @@ import { CITY_PRESETS, type MapPlace } from "../map/filters"
 import { INITIAL_REGION } from "../map/model"
 import RangeCalendar from "../availability/RangeCalendar"
 import { AVAILABILITY_SERVER_READY } from "../availability/server"
-import { applyPreset, describeActivity, describeArea, describeDates, describeDays, describeTimes, emptyDraft, fromApi, isPresetActive, MAX_RADIUS_KM, MAX_TIME_WINDOWS, MIN_RADIUS_KM, QUICK_PRESETS, RADIUS_OPTIONS, skillLevels, STATUS_LABEL, toggleActivity, togglePartnerLevel, toPayload, validateDraft, WEEKDAY_LONG, WEEKDAY_SHORT, WEEKDAYS, weekdaysInRange, effectiveEnd, type ActivityPreference, type AvailabilityDraft, type CatalogInterest, type DraftField } from "../availability/model"
+import { applyPreset, describeActivity, describeArea, describeDates, describeDays, describeTimes, emptyDraft, fromApi, isPresetActive, isRecordOver, MAX_RADIUS_KM, MAX_TIME_WINDOWS, MIN_RADIUS_KM, QUICK_PRESETS, RADIUS_OPTIONS, skillLevels, STATUS_LABEL, toggleActivity, togglePartnerLevel, toPayload, validateDraft, WEEKDAY_LONG, WEEKDAY_SHORT, WEEKDAYS, weekdaysInRange, effectiveEnd, type ActivityPreference, type AvailabilityDraft, type CatalogInterest, type DraftField } from "../availability/model"
 import { Box, Field, Label, Scroll, Sheet, Touch } from "../native/UI"
 import { palette } from "../theme/palette"
 import type { NavigateFn } from "../types"
@@ -50,6 +50,8 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
   const inset = useBottomNavInset()
   const [draft, setDraft] = useState<AvailabilityDraft>(emptyDraft)
   const [open, setOpen] = useState<Section | null>("dates")
+  // Two tabs keep the calendar at the top: the form, and the saved records.
+  const [tab, setTab] = useState<"new" | "records">("new")
   const [catalog, setCatalog] = useState<CatalogInterest[] | null>(null)
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [cityQuery, setCityQuery] = useState("")
@@ -129,10 +131,11 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
       setReviewing(false)
       resetForm()
       setNotice(editingId ? "Değişikliklerin kaydedildi." : "Kaydedildi. Uygun etkinliklerin organizatörleri artık seni davet edebilir.")
+      setTab("records")
     } catch (error) { Alert.alert("Kaydedilemedi", getApiErrorMessage(error)) }
     finally { setSaving(false) }
   }
-  const edit = (record: ApiAvailability) => { setDraft(fromApi(record)); setEditingId(record.id); setShowIssues(false); setNotice(null); setOpen("dates") }
+  const edit = (record: ApiAvailability) => { setDraft(fromApi(record)); setEditingId(record.id); setShowIssues(false); setNotice(null); setOpen("dates"); setTab("new") }
   const setPaused = async (record: ApiAvailability, paused: boolean) => {
     if (busyRecord) return
     setBusyRecord(record.id)
@@ -153,59 +156,66 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
   const cityMatches = CITY_PRESETS.filter(place => place.name.toLocaleLowerCase("tr-TR").includes(cityQuery.trim().toLocaleLowerCase("tr-TR")))
   const area = draft.area
   const activitySummary = draft.activities.length ? draft.activities.map(item => describeActivity(item, interests).title).join(", ") : "Aktivite seçilmedi"
-  const current = records.items.filter(item => item.status !== "expired"), expired = records.items.filter(item => item.status === "expired")
+  // Past records (last day gone) are shown dimmed and inactive at the end of the list.
+  const current = records.items.filter(item => !isRecordOver(item, now)), expired = records.items.filter(item => isRecordOver(item, now))
 
   const recordCard = (record: ApiAvailability) => {
-    const asDraft = fromApi(record), busy = busyRecord === record.id
-    return <GlassCard key={record.id} style={s.record}>
+    const asDraft = fromApi(record), busy = busyRecord === record.id, over = isRecordOver(record, now)
+    return <GlassCard key={record.id} style={[s.record, over && s.recordOver]} accessibilityLabel={over ? `${describeDates(asDraft)}, süresi geçti` : undefined}>
       <Box style={s.recordHead}>
-        <Label style={s.recordTitle}>{describeDates(asDraft)}</Label>
-        <Label style={[s.badge, record.status === "active" ? s.badgeActive : s.badgeMuted]}>{STATUS_LABEL[record.status]}</Label>
+        <Label style={[s.recordTitle, over && s.recordTitleOver]}>{describeDates(asDraft)}</Label>
+        <Label style={[s.badge, !over && record.status === "active" ? s.badgeActive : s.badgeMuted]}>{over ? STATUS_LABEL.expired : STATUS_LABEL[record.status]}</Label>
       </Box>
       <Label style={s.recordLine}>{`${describeDays(asDraft.weekdays)} · ${describeTimes(asDraft.timeWindows)}`}</Label>
       <Label style={s.recordLine}>{describeArea(asDraft.area)}</Label>
       <Label style={s.recordLine}>{asDraft.activities.map(item => describeActivity(item, interests).title).join(", ")}</Label>
-      {record.status !== "expired" && <Box style={s.recordActions}>
+      {!over && <Box style={s.recordActions}>
         <Touch disabled={busy} onPress={() => edit(record)} style={s.recordAction}><Label style={s.recordActionText}>Düzenle</Label></Touch>
         <Touch disabled={busy} onPress={() => void setPaused(record, record.status === "active")} style={s.recordAction}><Label style={s.recordActionText}>{record.status === "active" ? "Duraklat" : "Etkinleştir"}</Label></Touch>
         <Touch disabled={busy} onPress={() => remove(record)} style={s.recordAction}><Label style={[s.recordActionText, { color: palette.error }]}>Kaldır</Label></Touch>
       </Box>}
-      {record.status === "expired" && <Touch disabled={busy} onPress={() => remove(record)} style={[s.recordAction, { alignSelf: "flex-start" }]}><Label style={s.recordActionText}>Kaldır</Label></Touch>}
+      {over && <Touch disabled={busy} onPress={() => remove(record)} style={[s.recordAction, { alignSelf: "flex-start" }]}><Label style={[s.recordActionText, { color: palette.muted }]}>Kaldır</Label></Touch>}
     </GlassCard>
   }
 
   return <Box style={s.screen}>
     <AtmoBackground />
     <TopNavBar navigate={navigate} fallback="discover" title="Etkinlik Takvimim" subtitle="Özel eşleşme havuzu" />
-    <Scroll style={[s.scroll, { paddingBottom: 148 + inset }]} enter>
-      <GlassCard style={s.intro}>
+    <Scroll style={[s.scroll, { paddingBottom: (tab === "new" ? 148 : 40) + inset }]} enter>
+      <Box style={s.segment} accessibilityRole="tablist">
+        {([["new", editingId ? "Kaydı düzenle" : "Yeni müsaitlik"], ["records", `Kayıtlarım${current.length ? ` · ${current.length}` : ""}`]] as const).map(([id, label]) => <Touch key={id} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === id }} onPress={() => setTab(id)} style={[s.segmentItem, s.tabItem, tab === id && s.segmentActive]}>
+          <Label style={[s.chipText, tab === id && s.chipTextSelected]}>{label}</Label>
+        </Touch>)}
+      </Box>
+      {notice && <Box style={s.success} accessibilityLiveRegion="polite"><CheckIcon size={16} style={{ color: palette.success }} /><Label style={s.successText}>{notice}</Label></Box>}
+
+      {tab === "new" && <GlassCard style={s.intro}>
         <Box style={s.introIcon}><CalendarIcon size={20} style={{ color: palette.accent }} /></Box>
         <Box style={{ flex: 1, gap: 4 }}>
           <Label style={s.introTitle}>Müsait olduğun zamanları kaydet</Label>
           <Label style={s.introText}>Bu kayıt etkinlik ya da herkese açık bir ilan oluşturmaz. Yalnızca uygun etkinliklerin organizatörleri seni davet edebilir; telefonun, e-postan ve kesin konumun paylaşılmaz.</Label>
         </Box>
-      </GlassCard>
+      </GlassCard>}
 
       {!AVAILABILITY_SERVER_READY && <Box style={s.pending} accessibilityRole="alert">
         <Label style={s.pendingTitle}>Kaydetme henüz açık değil</Label>
         <Label style={s.pendingText}>Müsaitlik kaydı ve eşleşme için sunucu desteği hazırlanıyor. Seçimlerini burada planlayabilirsin ama şu an kaydedilmez ve davet alınmaz.</Label>
       </Box>}
-      {notice && <Box style={s.success} accessibilityLiveRegion="polite"><CheckIcon size={16} style={{ color: palette.success }} /><Label style={s.successText}>{notice}</Label></Box>}
 
-      {AVAILABILITY_SERVER_READY && <Box style={{ gap: 10 }}>
-        <Label style={s.groupLabel}>Kayıtlarım</Label>
+      {tab === "records" && AVAILABILITY_SERVER_READY && <Box style={{ gap: 10 }}>
         {records.state === "loading" && <Box style={s.stateBox}><ActivityIndicator color={palette.accent} /><Label style={s.muted}>Kayıtların yükleniyor…</Label></Box>}
         {records.state === "error" && <Box style={s.stateBox}><Label style={s.error}>{records.error}</Label><Touch onPress={loadRecords} style={s.linkButton}><Label style={s.link}>Tekrar dene</Label></Touch></Box>}
-        {records.state === "ready" && !current.length && <Box style={s.stateBox}><Label style={s.muted}>Henüz müsaitlik kaydın yok. Aşağıdan ilk kaydını oluştur.</Label></Box>}
+        {records.state === "ready" && !current.length && <Box style={s.stateBox}><Label style={s.muted}>Davet alabileceğin güncel bir müsaitlik kaydın yok.</Label><Touch onPress={() => setTab("new")} style={s.linkButton}><Label style={s.link}>Yeni müsaitlik oluştur</Label></Touch></Box>}
         {current.map(recordCard)}
         {expired.length > 0 && <Label style={s.groupLabel}>Süresi geçenler</Label>}
         {expired.map(recordCard)}
       </Box>}
 
-      <Box style={s.formHead}>
-        <Label style={s.groupLabel}>{editingId ? "Kaydı düzenle" : "Yeni müsaitlik"}</Label>
-        {editingId && <Touch onPress={resetForm} style={s.linkButton}><Label style={s.link}>Vazgeç</Label></Touch>}
-      </Box>
+      {tab === "new" && <>
+      {editingId && <Box style={s.formHead}>
+        <Label style={s.groupLabel}>Kaydı düzenle</Label>
+        <Touch onPress={resetForm} style={s.linkButton}><Label style={s.link}>Vazgeç</Label></Touch>
+      </Box>}
 
       <Accordion title="Tarihler" summary={describeDates(draft)} open={open === "dates"} onToggle={() => toggle("dates")} invalid={showIssues && hasIssue("date")}>
         <RangeCalendar startDate={draft.startDate} endDate={draft.endDate} now={now} onChange={range => update(current => ({ ...current, ...range }))} />
@@ -308,14 +318,15 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
         {draft.activities.map(item => { const text = describeActivity(item, interests); return <Label key={item.interestId} style={s.summaryLine}>{`${text.title}: ${text.detail}`}</Label> })}
         <Label style={s.muted}>Davet otomatik katılım değildir; her daveti sen kabul ya da reddedersin.</Label>
       </GlassCard>
+      </>}
     </Scroll>
 
-    <Box style={[s.sticky, { bottom: inset }]} gradient={[palette.background, "transparent"]} gradientDirection="up">
+    {tab === "new" && <Box style={[s.sticky, { bottom: inset }]} gradient={[palette.background, "transparent"]} gradientDirection="up">
       <Touch onPress={submit} disabled={!AVAILABILITY_SERVER_READY} disabledOpacity={1} gradient={AVAILABILITY_SERVER_READY ? palette.actionGradient : ["#202b3d", "#182235", "#151f30"]} style={[s.primary, !AVAILABILITY_SERVER_READY && s.primaryDisabled]}>
         <Label style={[s.primaryText, !AVAILABILITY_SERVER_READY && { color: "rgba(226,232,240,.62)" }]}>Kaydet ve davet al</Label>
       </Touch>
       {!AVAILABILITY_SERVER_READY && <Label style={s.stickyNote}>Sunucu desteği etkinleşince kullanılabilir.</Label>}
-    </Box>
+    </Box>}
 
     {reviewing && <Sheet onClose={() => !saving && setReviewing(false)}>
       <Touch haptic={false} onPress={() => {}} style={s.sheet}>
@@ -367,6 +378,9 @@ const s = StyleSheet.create({
   segment: { flexDirection: "row", borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.background, padding: 3 },
   segmentItem: { flex: 1, borderRadius: 11, alignItems: "center" },
   segmentActive: { backgroundColor: palette.selected },
+  tabItem: { minHeight: 40, justifyContent: "center" },
+  recordOver: { opacity: 0.5 },
+  recordTitleOver: { color: palette.muted },
   search: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.background, paddingHorizontal: 12 },
   searchField: { flex: 1, color: palette.text, fontSize: 15 },
   mapFrame: { height: 240, borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: palette.border },
