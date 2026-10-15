@@ -5,17 +5,19 @@ import TopNavBar, { NavAction } from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
-import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, getProfileStats, type FriendRelationship } from "../api/client";
+import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, getProfileStats, getCurrentUser, type FriendRelationship } from "../api/client";
 import FriendActions from "../components/FriendActions";
 import ConnectionsSheet from "../components/ConnectionsSheet";
 import EventsSheet from "../components/EventsSheet";
 import EventArchive from "../components/EventArchive";
 import { onSocket } from "../services/socket";
+import { useScreenActive } from "../native/useScreenActive";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
 import { InstagramIcon } from "../components/Icons";
 
 import { selectPhoto } from "../native/media";
+import { formatScore } from "../events/score";
 import { EMPTY_USER, mapApiEvent, updateStoreUser, useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch, Vector, openExternal } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -155,16 +157,24 @@ export default function ProfileScreen({
   const isOwn = ownProfile && (!userId || userId === store.user.id);
   const [otherUser, setOtherUser] = useState<AppUser | null>(null);
   const [profileError, setProfileError] = useState("");
+  // Shown again (e.g. back from rating this member) → reload, so new scores appear without restarting the app.
+  const screenActive = useScreenActive();
+  useEffect(() => { setOtherUser(null); setProfileError(""); }, [userId]);
   useEffect(() => {
-    if (isOwn || !userId) return;
+    if (isOwn || !userId || !screenActive) return;
     let active = true;
-    setOtherUser(null);
-    setProfileError("");
     getUserProfile(userId).then(remote => {
       if (active) setOtherUser({ ...updateStoreUser(EMPTY_USER, remote), interests: remote.interests.map(item => item.name) });
     }).catch(error => { if (active) setProfileError(getApiErrorMessage(error, "Profil yüklenemedi.")); });
     return () => { active = false; };
-  }, [userId, isOwn]);
+  }, [userId, isOwn, screenActive]);
+  // Your own scores: reloaded each time your profile is shown (live updates also arrive via the store).
+  useEffect(() => {
+    if (!isOwn || !store.user.id || !screenActive) return;
+    let active = true;
+    getCurrentUser().then(remote => { if (active) setStore(p => p.user.id === remote.id ? { ...p, user: updateStoreUser(p.user, remote) } : p); }).catch(() => {});
+    return () => { active = false; };
+  }, [isOwn, store.user.id, screenActive]);
   const user = isOwn ? store.user : otherUser || EMPTY_USER;
   // Friendship: the profile owner's friend count ("Bağlantı") and, on someone else's profile, our status.
   // "friend:changed" arrives when either side sends, accepts, declines or withdraws, so it stays current.
@@ -184,13 +194,17 @@ export default function ProfileScreen({
   const [attended, setAttended] = useState<AppEvent[] | null>(null);
   const [attendedOpen, setAttendedOpen] = useState(false);
   const [attendedError, setAttendedError] = useState("");
+  // "Düzenlediği" = own events that started or ended; "Katıldığı" = joined ones that started or ended + those organized ones.
+  // They reload when one of your events starts or ends (server push), after a reconnect and whenever the page is shown again.
   useEffect(() => {
-    if (!isOwn || !store.user.id) return;
+    if (!isOwn || !store.user.id || !screenActive) return;
     let active = true;
-    // "Düzenlediği" = own events that started; "Katıldığı" = joined-and-ended + those organized ones.
-    getProfileStats().then(stats => { if (active) { setAttendedCount(stats.attended); setOrganizedCount(stats.organized); } }).catch(() => {});
-    return () => { active = false; };
-  }, [isOwn, store.user.id]);
+    const load = () => { getProfileStats().then(stats => { if (active) { setAttendedCount(stats.attended); setOrganizedCount(stats.organized); } }).catch(() => {}); };
+    load();
+    const changed = onSocket("profile:stats_changed", load);
+    const sync = onSocket("sync:required", load);
+    return () => { active = false; changed(); sync(); };
+  }, [isOwn, store.user.id, screenActive]);
   const openAttended = () => {
     setAttendedOpen(true); setAttended(null); setAttendedError("");
     getAttendedEvents().then(result => {
@@ -376,22 +390,24 @@ export default function ProfileScreen({
                 <Label style={[[ui.fontDisplay, ui.text4xl, ui.fontLight, ui.mt1], {
                 color: palette.accent
               }]}>
-                  {user.score.toFixed(1)}
+                  {formatScore(user.score)}
                 </Label>
               </Box>
               <Box style={[[ui.flex, ui.gap1]]}>
                 {[1, 2, 3, 4, 5].map(i => <StarIcon key={i} size={19} filled={i <= Math.round(user.score)} style={{ color: palette.accent, opacity: i <= Math.round(user.score) ? 1 : .25 }} />)}
               </Box>
             </Box>
-            {isOwn && <Box style={[[ui.spaceY0]]}>
+            {/* Per-question averages are shown on every profile (the server sends them for any member). */}
+            <Box style={[[ui.spaceY0]]}>
               <ScoreBadge score={user.scores.punctuality} label="Dakiklik & Güvenilirlik" />
               <ScoreBadge score={user.scores.communication} label="İletişim & Nezaket" />
               <ScoreBadge score={user.scores.community} label="Topluluk Uyumu" />
-            </Box>}
-            <Label style={[[ui.textXs, ui.textWhite25, ui.mt3, ui.leadingRelaxed]]}>
+            </Box>
+            {/* Addressed to "you": only on your own profile. */}
+            {isOwn && <Label style={[[ui.textXs, ui.textWhite25, ui.mt3, ui.leadingRelaxed]]}>
               Birlikte etkinliğe gittiğin kişilerin sana verdiği puanlardan
               oluşur.
-            </Label>
+            </Label>}
           </GlassCard>
         </Box>
 

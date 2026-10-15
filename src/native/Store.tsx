@@ -39,7 +39,8 @@ const mergeEvents = (current: AppEvent[], incoming: AppEvent[]) => {
   const byId = new Map(current.map(event => [event.id, event]))
   for (const event of incoming) {
     const existing = byId.get(event.id)
-    byId.set(event.id, existing ? { ...event, lastMessageAt: event.lastMessageAt ?? existing.lastMessageAt, unreadCount: event.unreadCount ?? existing.unreadCount } : event)
+    // List responses carry no organizer event count; keep the one the detail loaded.
+    byId.set(event.id, existing ? { ...event, host: event.host.stats.organized ? event.host : { ...event.host, stats: existing.host.stats }, lastMessageAt: event.lastMessageAt ?? existing.lastMessageAt, unreadCount: event.unreadCount ?? existing.unreadCount } : event)
   }
   return [...byId.values()]
 }
@@ -51,7 +52,7 @@ const mergeFeed = (current: AppEvent[], items: import('../api/client').ApiEvent[
 export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
   if (!remoteUser || typeof remoteUser !== "object") return user
   const remote = remoteUser as import('../api/client').ApiUser
-  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0, status: remote.status?.enum ?? user.status, role: remote.role ?? user.role }
+  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0, scores: remote.scores ? { punctuality: remote.scores.punctuality ?? 0, communication: remote.scores.communication ?? 0, community: remote.scores.community ?? 0 } : user.scores, status: remote.status?.enum ?? user.status, role: remote.role ?? user.role }
 
 }
 // Events without a participant cap are stored with the API's highest allowed capacity.
@@ -127,9 +128,9 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     bio: "",
     instagram: "",
     interests: [event.interest.name],
-    score: 0,
+    score: event.owner.rank ?? 0,
     scores: { punctuality: 0, communication: 0, community: 0 },
-    stats: { attended: 0, connections: 0, organized: 0 },
+    stats: { attended: 0, connections: 0, organized: event.owner.organizedCount ?? 0 },
   }
   return {
     id: event.id,
@@ -443,7 +444,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const unknownRoom = onSocket('room:message', (delta: { eventId: string }) => ensureEvent(delta.eventId))
     // Events missed while offline: one rooms refresh after reconnecting, only if the list was ever loaded.
     const resync = onSocket('sync:required', () => { if (roomsLoaded.current) void refreshRooms(true).catch(() => {}) })
-    return () => { cleanups.forEach(cleanup => cleanup()); accountStatus(); roomMessage(); referenceCreated(); referenceUpdated(); promoted(); joinedHere(); unknownRoom(); resync(); renamed() }
+    // Someone rated you (or your event): reload your Event Skoru and the three question averages.
+    const scoresChanged = onSocket('profile:scores_changed', () => {
+      const generation = sessionGeneration.current
+      void getCurrentUser().then(remote => { if (generation === sessionGeneration.current) setData(current => current.user.id === remote.id ? { ...current, user: updateStoreUser(current.user, remote) } : current) }).catch(() => {})
+    })
+    return () => { cleanups.forEach(cleanup => cleanup()); accountStatus(); roomMessage(); referenceCreated(); referenceUpdated(); promoted(); joinedHere(); unknownRoom(); resync(); renamed(); scoresChanged() }
   }, [guestMode])
   return <Context.Provider value={{ data: guestMode ? initial : data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, refreshFeed, refreshMyEvents, refreshRooms, whenReady, loadReferences, resetSession: () => { referencesLoaded.current = false; roomsLoaded.current = false; feedLoad.current = null; stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
     {!guestMode && storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}

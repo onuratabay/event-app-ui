@@ -5,13 +5,16 @@ import { resolveApiUrl } from "./config"
 import { apiLoading } from "./loading"
 
 export const API_URL = resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, __DEV__ ? Constants.expoConfig?.hostUri : undefined, Platform.OS)
+/** Photos come as signed server paths ("/photos/users/…?v=…&s=…"); images load them from the API host and cache them on disk. */
+export const photoUri = (uri: string) => uri.startsWith("/photos/") ? `${API_URL.replace(/\/+$/, "")}${uri}` : uri
 class ApiConnectionError extends Error {}
 const ACCESS_TOKEN_KEY = "event-app:access-token"
 const REFRESH_TOKEN_KEY = "event-app:refresh-token"
 
 export interface ApiEvent {
   id: string
-  owner: { id: string; firstName: string; lastName: string }
+  /** rank = Event Skoru; organizedCount only arrives with the event detail. */
+  owner: { id: string; firstName: string; lastName: string; rank?: number; organizedCount?: number }
   interest: { id: string; slug: string; name: string }
   level: { enum: string; name: string } | null
   date: string
@@ -24,7 +27,9 @@ export interface ApiEvent {
   longitude: number
   minParticipants: number
   maxParticipants: number
+  /** Signed server path ("/photos/…"); load through Picture. */
   coverPhoto: string | null
+  coverPhotoIsDefault?: boolean
   description: string
   requirements: string | null
   confirmedParticipantCount: number
@@ -80,9 +85,9 @@ export function registerGuestAccountIsolation(blocked: () => boolean) {
   return () => { if (guestAccountIsolation === blocked) guestAccountIsolation = null }
 }
 /** `background`: the screen does not wait for this request, so the global loading overlay stays hidden. */
-type RequestOptions = RequestInit & { background?: boolean; guest?: boolean; memberReturn?: boolean }
+type RequestOptions = RequestInit & { background?: boolean; guest?: boolean; memberReturn?: boolean; timeoutMs?: number }
 async function request<T>(path: string, requestOptions: RequestOptions = {}, retryAuth = true): Promise<T> {
-  const { background = false, guest = false, memberReturn = false, ...options } = requestOptions
+  const { background = false, guest = false, memberReturn = false, timeoutMs = 10000, ...options } = requestOptions
   if (!guest && guestAccountIsolation?.() && !(memberReturn && path === '/auth/me')) {
     throw new ApiConnectionError('Misafir oturumunda yalnızca davet edilen etkinliğe erişebilirsin.')
   }
@@ -96,7 +101,7 @@ async function request<T>(path: string, requestOptions: RequestOptions = {}, ret
   const cancel = () => controller.abort()
   if (options.signal?.aborted) cancel()
   options.signal?.addEventListener("abort", cancel)
-  const timeout = setTimeout(() => controller.abort(), 10000)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   let response: Response
   try {
   response = await fetch(`${API_URL}${path}`, {
@@ -370,7 +375,9 @@ export const getLegalConsents = () => request<LegalConsentStatus>('/legal/consen
 export const acceptLegalDocuments = (documents: LegalAcceptance[]) => request<LegalConsentStatus>('/legal/consents', { method: 'POST', body: JSON.stringify({ documents }) })
 export const setMarketingConsent = (granted: boolean) => request<LegalConsentStatus>('/legal/consents/marketing', { method: 'PUT', body: JSON.stringify({ granted }) })
 
-export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; role?: 'member' | 'admin'; email?: string; phoneNumber?: string; birthDate?: string; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number }
+export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; role?: 'member' | 'admin'; email?: string; phoneNumber?: string; birthDate?: string; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number; scores?: RatingScores | null }
+/** Per-question averages of the post-event ratings a member received (null until someone rates them). */
+export interface RatingScores { punctuality: number | null; communication: number | null; community: number | null; count: number }
 export const getUserProfile = (userId: string) => request<ApiUser & { interests: Array<{ id: string; name: string }> }>(`/users/${encodeURIComponent(userId)}/profile`)
 export interface NotificationPreferences { invites?: boolean; messages?: boolean; reminders?: boolean }
 export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; notifications?: NotificationPreferences; mutedRooms?: { ids: string[] } }
@@ -397,6 +404,17 @@ export function putPreference<K extends keyof Preferences>(key: K, value: NonNul
   preferenceWrites = write
   return write
 }
+/** Post-event rating page: the ended event, whether the viewer already rated, and the other attendees. */
+export interface RatingForm {
+  event: { id: string; title: string; date: string; startTime: string; ownerId: string }
+  isOwner: boolean
+  submitted: boolean
+  participants: Array<{ id: string; firstName: string; lastName: string; isOwner: boolean; profilePhoto: string | null }>
+}
+export interface ParticipantRatingInput { userId: string; punctuality: number; communication: number; community: number }
+export const getRatingForm = (eventId: string) => request<RatingForm>(`/events/${encodeURIComponent(eventId)}/ratings`)
+// The organizer sends no eventScore; everyone else must. Ratings are final once sent.
+export const submitRatings = (eventId: string, body: { eventScore?: number; participants: ParticipantRatingInput[] }) => request<{ submitted: true }>(`/events/${encodeURIComponent(eventId)}/ratings`, { method: 'POST', body: JSON.stringify(body) })
 export const getEvent = (id: string, options: { background?: boolean } = {}) => request<ApiEvent>(`/events/${id}`, options)
 export const favoriteEvent = (id: string, saved: boolean) => request(`/events/${id}/favorite`, { method: saved ? 'PUT' : 'DELETE', background: true })
 // Favourite taps run in the background, one after another per event, so the server ends on the last tap.
@@ -435,7 +453,8 @@ export const removeFriend = (userId: string) => request<{ message: string }>(`/f
 export const declineFriendRequest = (userId: string) => request<{ message: string }>(`/friends/requests/${encodeURIComponent(userId)}/decline`, { method: 'POST', background: true })
 export const getInvitations = () => request<EventListResponse>('/events/invitations?limit=50')
 export const getEnums = (group: string) => cached(`enums:${group}`, 6 * HOURS, () => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`))
-export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value) })
+// Creating can take long (cover moderation); a retry with the same clientRequestId returns the same event instead of a duplicate.
+export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value), timeoutMs: 30000 })
 export interface ApiMessage { kind?: 'message' | 'announcement' | 'system'; id: string; text: string; createdAt: string; editedAt?: string | null; deleted?: boolean; user: { id: string; firstName: string; lastName: string } }
 // Room requests run in the background: the chat screen never shows the global loading overlay.
 export const editMessage = (eventId: string, messageId: string, text: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ text }), background: true })

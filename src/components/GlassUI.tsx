@@ -2,6 +2,7 @@ import { palette } from "../theme/palette"
 import React from "react"
 import { StyleSheet, View } from "react-native"
 import { LockIcon } from "./Icons"
+import { formatScore } from "../events/score"
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg"
 import {
   Box,
@@ -285,7 +286,7 @@ export function ScoreBadge({ score, label }: { score: number; label: string }) {
           />
         ))}
         <Label style={{ color: palette.accent, marginLeft: 4 }}>
-          {score.toFixed(1)}
+          {formatScore(score)}
         </Label>
       </Box>
     </Box>

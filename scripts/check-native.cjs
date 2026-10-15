@@ -434,10 +434,13 @@ async function tap(tree, label) {
   }
   const profileNavigations = []
   const detail = await mount("EventDetail", { eventId: EVENTS[0].id, navigate: (screen, options) => profileNavigations.push({ screen, options }) })
-  await tap(detail, "Profil")
-  assert.deepEqual(profileNavigations.pop(), { screen: "profile", options: { userId: server.events[0].owner.id } }, "Host profile button selects the host instead of the signed-in user")
+  assert(!detail.root.findAllByType("Pressable").some(n => text(n).trim() === "Profil"), "The organizer card has no separate profile button")
+  const hostLink = detail.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel?.endsWith(" profilini aç"))
+  assert(hostLink, "The organizer name opens their profile")
+  await act(async () => hostLink.props.onPress?.({ stopPropagation() {} }))
+  assert.deepEqual(profileNavigations.pop(), { screen: "profile", options: { userId: server.events[0].owner.id } }, "The host name selects the host instead of the signed-in user")
   {
-    // My own event: no "Profil" button next to the organizer (that would just open my own profile).
+    // My own event: the organizer name is not a link (it would just open my own profile).
     const originalOwner = server.events[0].owner
     server.events[0].owner = { id: server.user.id, firstName: server.user.firstName, lastName: server.user.lastName }
     // Storage was cleared above; this check needs a signed-in user.
@@ -445,7 +448,7 @@ async function tap(tree, label) {
     const ownDetail = await mount("EventDetail", { eventId: EVENTS[0].id })
     await act(async () => { await new Promise(r => setTimeout(r, 150)) })
     assert(text(ownDetail.toJSON()).includes("Düzenleyen"), "The organizer card is still shown")
-    assert(!ownDetail.root.findAllByType("Pressable").some(n => text(n).trim() === "Profil"), "No profile button when I organize the event")
+    assert(!ownDetail.root.findAllByType("Pressable").some(n => n.props.accessibilityLabel?.endsWith(" profilini aç")), "No profile link when I organize the event")
     // The organizer cancels before the start (after confirming); the detail shows it at once.
     global.__testAlert = (_title, _message, buttons) => buttons?.find(button => button.style === "destructive")?.onPress?.()
     await act(async () => ownDetail.root.findAll(n => n.props.accessibilityLabel === "Etkinliği iptal et" && typeof n.props.onPress === "function")[0].props.onPress())

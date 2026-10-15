@@ -204,7 +204,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   await wait(50)
   assert(text(afterInvite.toJSON()).includes("takvim havuzunda bu etkinliğe uyan kimse yok"), "The invite stays open and says nobody is waiting")
   await act(async () => afterInvite.unmount())
-  // The invitation stays open until the event is full: up to the max, always when no max was set.
+  // The invitation stays open until the event is full: up to the max, or up to the minimum when no max was set.
   const ownEvent = server.events.find(event => event.id === "own-event")
   const hasInvite = async (confirmed, max) => {
     Object.assign(ownEvent, { confirmedParticipantCount: confirmed, minParticipants: 2, maxParticipants: max })
@@ -215,7 +215,7 @@ module.exports = async function ({ mount, act, text, storage }) {
     return shown
   }
   assert.equal(await hasInvite(1, 100000), true, "Min 2, no max: the organizer can still invite one person")
-  assert.equal(await hasInvite(2, 100000), true, "No max: the invitation stays open after the minimum is reached")
+  assert.equal(await hasInvite(2, 100000), false, "No max: \"Havuzdan seç\" disappears once the minimum is reached")
   assert.equal(await hasInvite(2, 4), true, "With a max, inviting continues past the minimum")
   assert.equal(await hasInvite(4, 4), false, "Kişi ekle disappears when the max is reached")
   const guestView = await mount("EventDetail", { eventId: server.events[0].id })

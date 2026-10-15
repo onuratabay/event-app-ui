@@ -2,6 +2,7 @@ import { palette } from "../theme/palette";
 import DateTimeWheel from "../components/DateTimeWheel"
 import { SharedBlur } from "./SharedBlur"
 import { usePreferences } from "./preferences"
+import { photoUri } from "../api/client"
 import * as Haptics from "expo-haptics"
 import { Image } from "expo-image"
 import { LinearGradient, type LinearGradientProps } from "expo-linear-gradient"
@@ -418,7 +419,7 @@ export function Picture({
   style?: NativeStyleProp
   accessibilityLabel?: string
 }) {
-  const sourceUri = uri?.trim() || ""
+  const sourceUri = photoUri(uri?.trim() || "")
   const [failedUri, setFailedUri] = useState<string | null>(null)
   const failed = !sourceUri || failedUri === sourceUri
   return failed ? (

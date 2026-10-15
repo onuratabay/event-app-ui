@@ -16,6 +16,8 @@ import { useBottomNavInset } from "../components/BottomNav";
 import { DURATIONS, MAX_DURATION_MINUTES, formatDuration } from "../events/duration";
 import PoolCandidatesPicker from "../availability/PoolCandidatesPicker";
 import LocationPicker, { placeLabel, type PickedPlace } from "../events/LocationPicker";
+/** Same minimum as the server's description rule. */
+const MIN_DESCRIPTION_LENGTH = 10;
 function StickyBar({
   children
 }: {
@@ -101,6 +103,9 @@ export default function CreateEventScreen({
   const [activities, setActivities] = useState<Array<{ id: string; name: string; levels?: InterestLevel[] }>>([]);
   const [visibilities, setVisibilities] = useState<Array<{ id: string; name: string; enum: string }>>([]);
   const [creating, setCreating] = useState(false);
+  // One id per creation attempt, kept across retries: if a slow request timed out but the server created the
+  // event, pressing "Oluştur" again returns that event instead of creating a second one.
+  const creationRequestId = useRef(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`);
   // People from the private availability pool to invite once the event exists.
   const [poolIds, setPoolIds] = useState<string[]>([]);
   // The meeting point is picked on the map; `data.location` is the optional venue name typed next to it.
@@ -167,7 +172,8 @@ export default function CreateEventScreen({
       const keepTime = !isPastStart(sourceDate, source.startTime);
       setData(p => ({
         ...p,
-        coverImage: source.coverPhoto || "",
+        // Only the organizer's own cover is kept; a default cover is picked again for the new event.
+        coverImage: source.coverPhotoIsDefault ? "" : source.coverPhoto || "",
         activity: activity?.name || "",
         level: level?.name || "",
         ...(keepTime ? { date: sourceDate, time: source.startTime } : {}),
@@ -201,11 +207,11 @@ export default function CreateEventScreen({
     // Invitees may be friends or people from the availability pool; pool picks need no friendship.
     if (inviteOnly && !invitedIds.length && !poolIds.length) { Alert.alert('Davet listesi boş', 'Arkadaşlarından ya da aşağıdaki takvim havuzundan en az bir kişi seç.'); return; }
     if (isPastStart(data.date, data.time)) { Alert.alert('Geçmiş tarih', 'Etkinlik zamanı geçmiş. Tarih ve saati ileri bir zamana güncelle.'); setStep(2); return; }
-    if (data.description.trim().length < 10) { Alert.alert('Açıklama gerekli', 'Etkinliği en az 10 karakterle açıkla.'); setStep(4); return; }
+    if (data.description.trim().length < MIN_DESCRIPTION_LENGTH) { Alert.alert('Açıklama gerekli', `Etkinliği en az ${MIN_DESCRIPTION_LENGTH} karakterle açıkla.`); setStep(4); return; }
     setCreating(true);
     try {
       const date = displayDate(data.date);
-      const event = await createEvent({ interestId: interest.id, ...(level ? { levelId: level.id } : {}), visibilityId: visibility.id, date, startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: place.latitude, longitude: place.longitude, locationName: placeLabel(data.location, place), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(inviteOnly ? { invitedUserIds: invitedIds } : {}), ...(data.coverImage ? { coverPhoto: data.coverImage } : {}) });
+      const event = await createEvent({ clientRequestId: creationRequestId.current, interestId: interest.id, ...(level ? { levelId: level.id } : {}), visibilityId: visibility.id, date, startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: place.latitude, longitude: place.longitude, locationName: placeLabel(data.location, place), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(inviteOnly ? { invitedUserIds: invitedIds } : {}), ...(data.coverImage ? (data.coverImage.startsWith("/photos/") && copyFromEventId ? { coverFromEventId: copyFromEventId } : { coverPhoto: data.coverImage }) : {}) });
       // The creator sees the new event at the top of Discover right away.
       setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)], feedIds: [event.id, ...p.feedIds.filter(id => id !== event.id)] }));
       // The event already exists here; a failed invite must not look like a failed creation.
@@ -233,6 +239,12 @@ export default function CreateEventScreen({
   // Date/time and duration share one step; a duration (quick or valid custom) is still required.
   const durationChosen = customDurationOpen ? customDurationValid : !!data.durationMinutes;
   const isInviteOnly = visibilities.find(v => v.name === data.privacy)?.enum === INVITE_ONLY;
+  // The message to participants is required (the server asks for at least 10 characters).
+  const descriptionLength = data.description.trim().length;
+  const descriptionValid = descriptionLength >= MIN_DESCRIPTION_LENGTH;
+  // No step continues while one of its required fields is empty.
+  const stepIncomplete = step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !place || step === 4 && !descriptionValid;
+  const missingInvitees = isInviteOnly && !invitedIds.length && !poolIds.length;
   const hasStickyBar = step === 6 && isInviteOnly || step === 2 || step === 3 || step === 4 || step === 5;
   const suggestions = personalSuggestions.length ? personalSuggestions : REQUIREMENTS_SUGGESTIONS[data.activity] || REQUIREMENTS_SUGGESTIONS.default;
   if (createBlocked) {
@@ -295,9 +307,12 @@ export default function CreateEventScreen({
             return <PoolCandidatesPicker selected={poolIds} onChange={setPoolIds} draft={{ interestId: interest.id, ...(level ? { levelId: level.id } : {}), date: displayDate(data.date), startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: place.latitude, longitude: place.longitude }} />;
           })()}
 
-          <Touch onPress={publish} disabled={creating} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.mb4], {
+          {missingInvitees && <Label style={[[ui.textXs, ui.mb3], { color: palette.error }]}>
+              Sadece davetlilere açık bir etkinlik için arkadaşlarından ya da yukarıdaki takvim havuzundan en az bir kişi seç.
+            </Label>}
+          <Touch onPress={publish} disabled={creating || missingInvitees} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.mb4], {
           color: palette.text
-        }]} gradient={["#4d5bcb", "#6651c9"]}>
+        }, missingInvitees && { opacity: .45 }]} gradient={["#4d5bcb", "#6651c9"]}>
             {poolIds.length ? `Etkinliği Oluştur · ${poolIds.length} kişiyi davet et` : "Etkinliği Oluştur"}
           </Touch>
         </Box>
@@ -483,13 +498,16 @@ export default function CreateEventScreen({
                   Katılımcılara ne söylemek istersin?
                 </Label>
                 <Label style={[[ui.textXs, ui.textWhite40]]}>
-                  Gereksinim varsa yaz, yoksa geçebilirsin.
+                  Zorunlu: etkinliği ve varsa gereksinimleri en az {MIN_DESCRIPTION_LENGTH} karakterle anlat.
                 </Label>
               </Box>
               <GlassTextarea placeholder="Katılımcılara ne söylemek istersin?" value={data.description} onChangeText={e => setData(p => ({
             ...p,
             description: e
           }))} />
+              <Label accessibilityLiveRegion="polite" style={[[ui.textXs], { color: descriptionValid ? palette.muted : palette.error, marginTop: -16 }]}>
+                {descriptionValid ? `${descriptionLength} karakter` : `En az ${MIN_DESCRIPTION_LENGTH} karakter yaz (${descriptionLength}/${MIN_DESCRIPTION_LENGTH}).`}
+              </Label>
 
               <Box>
                 <Label style={[[ui.textXs, ui.textWhite35, ui.mb2, ui.uppercase, ui.trackingWider]]}>
@@ -603,7 +621,7 @@ export default function CreateEventScreen({
 
       {/* Sticky CTA for steps that need explicit continue */}
       {hasStickyBar && <StickyBar>
-          <PrimaryButton onPress={step === 2 && customDurationOpen ? () => { setData(p => ({ ...p, durationMinutes: customMinutes })); next(); } : next} disabled={step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !place}>
+          <PrimaryButton onPress={step === 2 && customDurationOpen ? () => { setData(p => ({ ...p, durationMinutes: customMinutes })); next(); } : next} disabled={stepIncomplete}>
             Devam Et
           </PrimaryButton>
         </StickyBar>}

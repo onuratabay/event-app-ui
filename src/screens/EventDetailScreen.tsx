@@ -2,8 +2,9 @@ import EventShareSheet from "../components/EventShareSheet";
 import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
 import { CategoryIcon } from "../components/Icons";
-import { socketAction } from '../services/socket';
+import { onSocket, socketAction, watchEvent } from '../services/socket';
 import { participate, getApiErrorMessage, getEvent, getEventCandidateCount, cancelEvent } from "../api/client";
+import { formatScore } from "../events/score";
 import { eventPhase, isLivePhase, isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet } from "react-native";
@@ -55,7 +56,8 @@ export default function EventDetailScreen({
   // The invitation stays open until the event is full: up to the maximum, or for as long as it waits
   // for participants when no maximum was set. Only the organizer invites (the server enforces it).
   const canInvite = !!event && event.host.id === store.user.id && event.status === "waiting_participants" && startsAt(event) > new Date()
-    && (isUnlimitedCapacity(event.maxParticipants) || event.currentParticipants < event.maxParticipants);
+    // Without a maximum, pool invitations are only needed until the minimum is reached.
+    && event.currentParticipants < (isUnlimitedCapacity(event.maxParticipants) ? event.minParticipants : event.maxParticipants);
   // People in the availability pool who match this event and wait for an invitation; refreshed after the invite sheet closes.
   const [waitingCount, setWaitingCount] = useState(0);
   useEffect(() => {
@@ -64,7 +66,22 @@ export default function EventDetailScreen({
     getEventCandidateCount(eventId).then(result => { if (active) setWaitingCount(result.count); }).catch(() => { if (active) setWaitingCount(0); });
     return () => { active = false; };
   }, [eventId, canInvite, inviteOpen, event?.currentParticipants]);
-  useEffect(() => { let active = true; if (eventId) getEvent(eventId).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(error => { if (active) setLoadError(getApiErrorMessage(error, 'Etkinlik yüklenemedi.')); }); return () => { active = false; }; }, [eventId]);
+  useEffect(() => {
+    if (!eventId) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = (background = false) => getEvent(eventId, { background }).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(error => { if (active && !background) setLoadError(getApiErrorMessage(error, 'Etkinlik yüklenemedi.')); });
+    void load();
+    // The socket only sends the new count; reload so the participant list shows who joined or left.
+    // Bursts (several joins at once) collapse into one request.
+    const release = watchEvent(eventId);
+    const stop = onSocket("event:participant_count_changed", (payload: { eventId?: string }) => {
+      if (payload?.eventId !== eventId) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void load(true); }, 300);
+    });
+    return () => { active = false; if (timer) clearTimeout(timer); stop(); release(); };
+  }, [eventId]);
   if (!event) return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}><TopNavBar navigate={navigate} fallback="discover" title="Etkinlik" /><Box style={{ paddingTop: 96, paddingHorizontal: 20 }}><Label>{loadError || 'Etkinlik yükleniyor…'}</Label></Box></Box>;
   const joined = event.host.id === store.user.id || event.joined || event.participants.some(p => p.id === store.user.id);
   // Joining, leaving and the waitlist change only before the start: never once it started, was cancelled
@@ -228,20 +245,19 @@ export default function EventDetailScreen({
               {/* Your own event shows your own photo; another organizer's photo comes from the server's rule. */}
               <Avatar uri={event.host.id === store.user.id ? store.user.avatar : event.host.avatar} name={event.host.name} size="md" />
               <Box style={[[ui.flex1]]}>
-                <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>
+                {/* Another organizer's name opens their profile; your own event has no link to yourself. */}
+                {event.host.id !== store.user.id ? <Touch accessibilityRole="link" accessibilityLabel={`${event.host.name} profilini aç`} onPress={() => navigate("profile", { userId: event.host.id })} style={{ alignSelf: "flex-start", justifyContent: "flex-start", minHeight: 0 }}>
+                  <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>{event.host.name}</Label>
+                </Touch> : <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>
                   {event.host.name}
-                </Label>
+                </Label>}
                 <Box style={[[ui.flex, ui.itemsCenter, ui.gap1, ui.mt05]]}>
                   <StarIcon size={14} style={{ color: palette.accent }} />
-                  <Label style={[[ui.textXs, ui.textWhite40]]}>
-                    {event.host.score} · {event.host.stats.organized} etkinlik
+                  <Label style={[[ui.textXs, ui.textWhite40], { flexShrink: 1 }]} numberOfLines={1}>
+                    {`${formatScore(event.host.score)} · ${event.host.stats.organized} etkinlik`}
                   </Label>
                 </Box>
               </Box>
-              {/* Your own event: no button to your own profile. */}
-              {event.host.id !== store.user.id ? <Touch onPress={() => navigate("profile", { userId: event.host.id })} style={[[ui.textXs, ui.px3, ui.py15, ui.roundedXl, ui.textWhite50, ui.border, ui.borderWhite10]]}>
-                Profil
-              </Touch> : null}
             </Box>
           </GlassCard>
 
