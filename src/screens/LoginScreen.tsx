@@ -5,6 +5,7 @@ import { AccessibilityInfo, Animated, Easing, ScrollView, StyleSheet } from "rea
 import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground } from "../components/GlassUI"
 import { ErrorNotice } from "../components/ErrorNotice"
+import { EyeIcon, EyeOffIcon } from "../components/Icons"
 import { Field, Label, Touch, Box } from "../native/UI"
 import { formatPhone, phoneDigits, PHONE_PREFIX } from "../content/phone"
 import { getApiErrorMessage, login } from "../api/client"
@@ -30,6 +31,7 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
   // Members sign in with their phone number and password.
   const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -94,17 +96,28 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
           style={styles.input}
         />
         <Label style={styles.fieldLabel}>Şifre</Label>
-        <Field
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Şifreni gir"
-          accessibilityLabel="Şifre"
-          autoComplete="current-password"
-          onSubmitEditing={() => void submit()}
-          returnKeyType="go"
-          secureTextEntry
-          style={styles.input}
-        />
+        <Box style={styles.passwordWrap}>
+          <Field
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Şifreni gir"
+            accessibilityLabel="Şifre"
+            autoComplete="current-password"
+            autoCapitalize="none"
+            autoCorrect={false}
+            onSubmitEditing={() => void submit()}
+            returnKeyType="go"
+            secureTextEntry={!showPassword}
+            style={[styles.input, styles.passwordInput]}
+          />
+          <Touch
+            accessibilityLabel={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
+            onPress={() => setShowPassword(value => !value)}
+            style={styles.passwordToggle}
+          >
+            {showPassword ? <EyeOffIcon style={styles.passwordIcon} /> : <EyeIcon style={styles.passwordIcon} />}
+          </Touch>
+        </Box>
         <Touch accessibilityLabel="Şifremi unuttum" onPress={() => navigate("forgot-password")} style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}><Label style={{ color: "#c7ceff", fontFamily: "Outfit-Medium", fontSize: 14 }}>Şifremi unuttum</Label></Touch>
         <Touch
           onPress={submit}
@@ -129,5 +142,9 @@ const styles = StyleSheet.create({
   heroTitle: { color: palette.text, fontFamily: "Fraunces", fontSize: 36, lineHeight: 45, letterSpacing: -0.7, paddingVertical: 2 },
   eyebrow: { color: palette.accent, fontSize: 11, letterSpacing: 4, fontFamily: "Outfit-Medium", marginBottom: 8 },
   fieldLabel: { color: "#b6b0ae", fontSize: 12, fontFamily: "Outfit-Medium", marginTop: 6, marginLeft: 4 },
+  passwordWrap: { position: "relative", justifyContent: "center" },
+  passwordInput: { paddingRight: 56 },
+  passwordToggle: { position: "absolute", right: 4, top: 0, bottom: 0, width: 48, alignItems: "center", justifyContent: "center" },
+  passwordIcon: { color: "#c7ceff" },
   input: { minHeight: 56, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(105,120,255,0.18)", backgroundColor: "rgba(255,255,255,0.045)", color: "#f4f5ff", fontSize: 15 },
 })
