@@ -1,4 +1,4 @@
-export type Screen = "splash" | "welcome" | "login" | "forgot-password" | "onboarding-1" | "onboarding-2" | "onboarding-3" | "approval" | "interests" | "discover" | "event-detail" | "event-room" | "map" | "create-event" | "rooms" | "search" | "notifications" | "profile" | "settings" | "availability" | "guest-event" | "guest-entry" | "legal" | "admin" | "rate-event"
+export type Screen = "splash" | "welcome" | "login" | "forgot-password" | "onboarding-1" | "onboarding-2" | "onboarding-3" | "approval" | "interests" | "discover" | "event-detail" | "event-room" | "map" | "create-event" | "rooms" | "search" | "notifications" | "profile" | "settings" | "availability" | "guest-event" | "guest-entry" | "legal" | "admin" | "rate-event" | "direct-chat"
 
 export type NavigateFn = (screen: Screen, opts?: { eventId?: string; userId?: string; activity?: string; back?: boolean; reset?: boolean; aboveHome?: boolean }) => void
 

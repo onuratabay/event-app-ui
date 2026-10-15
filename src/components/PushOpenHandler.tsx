@@ -10,6 +10,7 @@ export default function PushOpenHandler() {
   const navigate = useNavigate()
   const ready = !!data.user.id && data.user.status === "approved"
   const pending = useRef<{ eventId: string; rating: boolean } | null>(null)
+  const pendingChat = useRef<string | null>(null)
   const open = async ({ eventId, rating }: { eventId: string; rating: boolean }) => {
     // "Etkinlik tamamlandı" opens the rating page instead of the event detail.
     if (rating) { navigate("rate-event", { eventId }); return }
@@ -20,12 +21,24 @@ export default function PushOpenHandler() {
     } catch { /* The event may be gone; the notification list still has it. */ }
   }
   useEffect(() => onPushOpened(payload => {
+    // A direct message opens the chat with its sender.
+    if (payload.type === "direct_message" && typeof payload.userId === "string") {
+      const userId = payload.userId
+      if (ready) navigate("direct-chat", { userId }); else pendingChat.current = userId
+      return
+    }
     const eventId = typeof payload.eventId === "string" ? payload.eventId : null
     if (!eventId) return
     const target = { eventId, rating: payload.type === "event_rating" }
     // A push can open the app before the session is loaded; it is opened once the member is in.
     if (ready) void open(target); else pending.current = target
   }), [ready])
+  useEffect(() => {
+    if (!ready || !pendingChat.current) return
+    const userId = pendingChat.current
+    pendingChat.current = null
+    navigate("direct-chat", { userId })
+  }, [ready])
   useEffect(() => {
     if (!ready || !pending.current) return
     const target = pending.current

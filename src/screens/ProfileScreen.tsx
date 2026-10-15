@@ -1,6 +1,6 @@
 import { palette } from "../theme/palette";
 import CityPicker from "../components/CityPicker";
-import { CalendarIcon, StarIcon } from "../components/Icons";
+import { CalendarIcon, MessageIcon, StarIcon } from "../components/Icons";
 import TopNavBar, { NavAction } from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
@@ -348,6 +348,11 @@ export default function ProfileScreen({
                 <Label style={[[ui.textXs], { color: palette.accent }]}>{relation.friendCount} bağlantı ›</Label>
               </Touch> : <Label style={[[ui.textXs, ui.textWhite40]]}>{relation.friendCount} bağlantı</Label>}
             <FriendActions userId={userId} name={user.name} relation={relation} onChange={setRelation} />
+            {/* Connections can chat without an event room. */}
+            {relation.status === "friends" ? <Touch accessibilityLabel={`${user.name} ile mesajlaş`} onPress={() => navigate("direct-chat", { userId })} style={profileMessageStyles.button} gradient={["#4d5bcb", "#6651c9"]}>
+                <MessageIcon size={16} style={{ color: palette.text }} />
+                <Label style={profileMessageStyles.label}>Mesaj gönder</Label>
+              </Touch> : null}
           </Box> : null}
         </Box>
 
@@ -590,4 +595,8 @@ const profileInstagramStyles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: .7,
   },
+});
+const profileMessageStyles = StyleSheet.create({
+  button: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, borderRadius: 14 },
+  label: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 14 },
 });

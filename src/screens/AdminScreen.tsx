@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { Alert, RefreshControl, StyleSheet } from "react-native"
-import { decideApplication, getApiErrorMessage, getApplicationDetail, getApplications, type ApplicationDecision, type ApplicationFilter, type ApplicationsPage, type MembershipApplication, type MembershipApplicationDetail } from "../api/client"
+import { decideApplication, decideInterest, getPendingInterests, type PendingInterest, getApiErrorMessage, getApplicationDetail, getApplications, type ApplicationDecision, type ApplicationFilter, type ApplicationsPage, type MembershipApplication, type MembershipApplicationDetail } from "../api/client"
 import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground } from "../components/GlassUI"
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "../components/Icons"
@@ -105,6 +105,31 @@ function ApplicationCard({ item, busy, open, detail, detailError, onToggle, onRe
   </Box>
 }
 
+/** Interests members proposed while creating events: approve into the shared list or reject. Hidden when none wait. */
+function PendingInterests({ reload }: { reload: number }) {
+  const [items, setItems] = useState<PendingInterest[]>([])
+  const [busy, setBusy] = useState<string | null>(null)
+  useEffect(() => { let active = true; getPendingInterests().then(rows => { if (active) setItems(rows) }).catch(() => {}); return () => { active = false } }, [reload])
+  const decide = async (item: PendingInterest, decision: "approved" | "rejected") => {
+    setBusy(item.id)
+    try { await decideInterest(item.id, decision); setItems(rows => rows.filter(row => row.id !== item.id)) }
+    catch (cause) { Alert.alert("İşlem yapılamadı", getApiErrorMessage(cause)) }
+    finally { setBusy(null) }
+  }
+  if (!items.length) return null
+  return <Box style={{ gap: 8 }}>
+    <Label style={s.section}>{`İlgi alanı önerileri · ${items.length}`}</Label>
+    {items.map(item => <Box key={item.id} style={s.card}>
+      <Label style={s.name}>{item.name}</Label>
+      <Label style={s.muted}>{[item.proposedBy ? `Öneren: ${item.proposedBy}` : null, appliedOn(item.createdAt), item.hasLevels ? "Seviyeli" : "Seviyesiz", `${item.eventCount} etkinlik`].filter(Boolean).join(" · ")}</Label>
+      <Box style={s.actions}>
+        <Touch accessibilityLabel={`${item.name} ilgi alanını onayla`} disabled={busy === item.id} disabledOpacity={0.35} onPress={() => void decide(item, "approved")} style={[s.action, s.approve]}><Label style={s.approveText}>Onayla</Label></Touch>
+        <Touch accessibilityLabel={`${item.name} ilgi alanını reddet`} disabled={busy === item.id} disabledOpacity={0.35} onPress={() => Alert.alert("Öneri reddedilsin mi?", `“${item.name}” ortak listeye eklenmez; bu adla açılmış etkinlikler aynen kalır.`, [{ text: "Vazgeç", style: "cancel" }, { text: "Reddet", style: "destructive", onPress: () => void decide(item, "rejected") }])} style={[s.action, s.reject]}><Label style={s.rejectText}>Reddet</Label></Touch>
+      </Box>
+    </Box>)}
+  </Box>
+}
+
 /** Admin only: search membership applications and approve, reject or review them in one tap. */
 export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
   const { data } = useStore()
@@ -188,6 +213,7 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
     <AtmoBackground />
     <TopNavBar navigate={navigate} fallback="settings" title="Üyelik başvuruları" subtitle={page && !blocked ? `${page.counts.pending} onay bekliyor` : undefined} />
     {blocked ? <Box style={s.center}><Label style={s.title}>Bu sayfaya erişim yetkin yok</Label><Label style={s.muted}>Üyelik başvurularını yalnızca yöneticiler yönetebilir.</Label></Box> : <Scroll style={s.page} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={pulling} onRefresh={() => { void pullRefresh() }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={84} />}>
+      <PendingInterests reload={attempt + (pulling ? 1 : 0)} />
       <Box style={s.search}>
         <SearchIcon size={16} style={{ color: palette.muted }} />
         <Field accessibilityLabel="Başvurularda ara" placeholder="Ad, e-posta, telefon veya Instagram" value={query} onChangeText={setQuery} autoCapitalize="none" autoCorrect={false} returnKeyType="search" style={s.searchField} />

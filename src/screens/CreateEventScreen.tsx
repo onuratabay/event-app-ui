@@ -1,11 +1,11 @@
 import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
 import { Alert } from "react-native";
-import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions } from "../api/client";
+import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions, getMyProposedInterests, proposeInterest } from "../api/client";
 import { isUnlimitedCapacity, mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useRef, useState } from "react";
 import { Avatar, AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
-import { CameraIcon, CheckIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, UserPlusIcon } from "../components/Icons";
+import { CameraIcon, CheckIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, PlusIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
@@ -100,7 +100,7 @@ export default function CreateEventScreen({
     data: store,
     setData: setStore
   } = useStore();
-  const [activities, setActivities] = useState<Array<{ id: string; name: string; levels?: InterestLevel[] }>>([]);
+  const [activities, setActivities] = useState<Array<{ id: string; name: string; levels?: InterestLevel[]; status?: string; requiresCover?: boolean }>>([]);
   const [visibilities, setVisibilities] = useState<Array<{ id: string; name: string; enum: string }>>([]);
   const [creating, setCreating] = useState(false);
   // One id per creation attempt, kept across retries: if a slow request timed out but the server created the
@@ -111,7 +111,8 @@ export default function CreateEventScreen({
   // The meeting point is picked on the map; `data.location` is the optional venue name typed next to it.
   const [place, setPlace] = useState<PickedPlace | null>(null);
   const [mapTouched, setMapTouched] = useState(false);
-  const loadCatalog = () => Promise.all([getMapInterests(), getEnums('event_visibility')]).then(([a, v]) => { setActivities(a); setVisibilities(v); }).catch(error => Alert.alert('Seçenekler yüklenemedi', getApiErrorMessage(error)));
+  // The shared list plus your own proposals still waiting for an admin (usable only in your events).
+  const loadCatalog = () => Promise.all([getMapInterests(), getEnums('event_visibility'), getMyProposedInterests().catch(() => [])]).then(([a, v, mine]) => { const own = Array.isArray(mine) ? mine : []; setActivities([...a, ...own.filter(item => !a.some(row => row.id === item.id))]); setVisibilities(v); }).catch(error => Alert.alert('Seçenekler yüklenemedi', getApiErrorMessage(error)));
   // Personal suggestions are optional; the category defaults remain if they cannot load.
   const [personalSuggestions, setPersonalSuggestions] = useState<string[]>([]);
   useEffect(() => { void loadCatalog(); getSuggestions().then(result => setPersonalSuggestions(result.items)).catch(() => {}); }, []);
@@ -152,10 +153,27 @@ export default function CreateEventScreen({
   const levels = activities.find(a => a.name === data.activity)?.levels ?? [];
   const LEVELS = levels.map(l => l.name);
   // Interests without levels skip the level step (step 1) entirely.
-  const chooseActivity = (activity: string) => {
-    const hasLevels = !!activities.find(a => a.name === activity)?.levels?.length;
+  const chooseActivity = (activity: string, levelsKnown?: boolean) => {
+    const hasLevels = levelsKnown ?? !!activities.find(a => a.name === activity)?.levels?.length;
     setData(p => ({ ...p, activity, level: p.activity === activity ? p.level : "" }));
     setTimeout(() => setStep(hasLevels ? 1 : 2), 180);
+  };
+  // "Yeni ilgi alanı": a member may propose one that is not in the list; they decide whether levels are asked.
+  const [proposalOpen, setProposalOpen] = useState(false);
+  const [proposalName, setProposalName] = useState("");
+  const [proposalLevels, setProposalLevels] = useState<boolean | null>(null);
+  const [proposing, setProposing] = useState(false);
+  const submitProposal = async () => {
+    if (proposing || proposalName.trim().length < 2 || proposalLevels === null) return;
+    setProposing(true);
+    try {
+      const interest = await proposeInterest(proposalName.trim(), proposalLevels);
+      setActivities(list => list.some(row => row.id === interest.id) ? list : [...list, interest]);
+      setProposalOpen(false); setProposalName(""); setProposalLevels(null);
+      if (interest.existing) Alert.alert("Bu ilgi alanı zaten var", `“${interest.name}” seçildi.`);
+      chooseActivity(interest.name, interest.levels.length > 0);
+    } catch (error) { Alert.alert("İlgi alanı eklenemedi", getApiErrorMessage(error)); }
+    finally { setProposing(false); }
   };
   // Opened from a cancelled event: its details fill the form once the catalogs load, and the
   // organizer lands on the date step to set a new time before creating the event again.
@@ -239,11 +257,14 @@ export default function CreateEventScreen({
   // Date/time and duration share one step; a duration (quick or valid custom) is still required.
   const durationChosen = customDurationOpen ? customDurationValid : !!data.durationMinutes;
   const isInviteOnly = visibilities.find(v => v.name === data.privacy)?.enum === INVITE_ONLY;
+  // A new (member-proposed) interest has no default covers: uploading one is required.
+  const coverRequired = !!activities.find(a => a.name === data.activity)?.requiresCover;
+  const missingCover = coverRequired && !data.coverImage;
   // The message to participants is required (the server asks for at least 10 characters).
   const descriptionLength = data.description.trim().length;
   const descriptionValid = descriptionLength >= MIN_DESCRIPTION_LENGTH;
   // No step continues while one of its required fields is empty.
-  const stepIncomplete = step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !place || step === 4 && !descriptionValid;
+  const stepIncomplete = step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !place || step === 4 && !descriptionValid || step === 5 && missingCover;
   const missingInvitees = isInviteOnly && !invitedIds.length && !poolIds.length;
   const hasStickyBar = step === 6 && isInviteOnly || step === 2 || step === 3 || step === 4 || step === 5;
   const suggestions = personalSuggestions.length ? personalSuggestions : REQUIREMENTS_SUGGESTIONS[data.activity] || REQUIREMENTS_SUGGESTIONS.default;
@@ -307,12 +328,15 @@ export default function CreateEventScreen({
             return <PoolCandidatesPicker selected={poolIds} onChange={setPoolIds} draft={{ interestId: interest.id, ...(level ? { levelId: level.id } : {}), date: displayDate(data.date), startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: place.latitude, longitude: place.longitude }} />;
           })()}
 
+          {missingCover && <Label style={[[ui.textXs, ui.mb3], { color: palette.error }]}>
+              Yeni bir ilgi alanı seçtin; kapak fotoğrafı yüklemeden etkinlik oluşturamazsın.
+            </Label>}
           {missingInvitees && <Label style={[[ui.textXs, ui.mb3], { color: palette.error }]}>
               Sadece davetlilere açık bir etkinlik için arkadaşlarından ya da yukarıdaki takvim havuzundan en az bir kişi seç.
             </Label>}
-          <Touch onPress={publish} disabled={creating || missingInvitees} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.mb4], {
+          <Touch onPress={publish} disabled={creating || missingInvitees || missingCover} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.mb4], {
           color: palette.text
-        }, missingInvitees && { opacity: .45 }]} gradient={["#4d5bcb", "#6651c9"]}>
+        }, (missingInvitees || missingCover) && { opacity: .45 }]} gradient={["#4d5bcb", "#6651c9"]}>
             {poolIds.length ? `Etkinliği Oluştur · ${poolIds.length} kişiyi davet et` : "Etkinliği Oluştur"}
           </Touch>
         </Box>
@@ -352,7 +376,21 @@ export default function CreateEventScreen({
                       {a.label}
                     </Label>
                   </Touch>)}
+                {activities.length > 0 && <Touch accessibilityLabel="Yeni ilgi alanı ekle" onPress={() => setProposalOpen(open => !open)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, proposalOpen ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]], { borderStyle: "dashed" }]}>
+                    <PlusIcon size={28} style={{ color: palette.accent, marginBottom: 12 }} />
+                    <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>Yeni ilgi alanı</Label>
+                  </Touch>}
               </Box>
+              {proposalOpen && <Box style={[[ui.mt4, ui.p4, ui.rounded2xl, ui.border, ui.borderWhite10, ui.spaceY3], { backgroundColor: palette.surface }]} enter>
+                  <GlassInput label="İlgi alanının adı" placeholder="Örn. Okçuluk" value={proposalName} maxLength={40} onChangeText={setProposalName} />
+                  <Label style={[[ui.textSm, ui.textWhite60, ui.fontMedium]]}>Katılımcılara seviye sorulsun mu?</Label>
+                  <Box style={[[ui.flex, ui.gap3]]}>
+                    {([[true, "Evet, seviye sorulsun"], [false, "Hayır, gerek yok"]] as const).map(([value, label]) => <Touch key={label} accessibilityState={{ selected: proposalLevels === value }} onPress={() => setProposalLevels(value)} style={[[ui.flex1, ui.p3, ui.rounded2xl, ui.textCenter, ui.border, ui.textSm, proposalLevels === value ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>{label}</Touch>)}
+                  </Box>
+                  {proposalLevels && <Label style={[[ui.textXs, ui.textWhite40]]}>Diğer etkinliklerdeki seviyeler (Başlangıç, Orta, İleri…) bu ilgi alanında da seçilebilir olur.</Label>}
+                  <Label style={[[ui.textXs, ui.textWhite40]]}>Yönetici onaylayana kadar yalnızca senin etkinliklerinde kullanılır. Hazır görseli olmadığından kapak fotoğrafı yüklemen gerekecek.</Label>
+                  <PrimaryButton onPress={() => void submitProposal()} disabled={proposing || proposalName.trim().length < 2 || proposalLevels === null}>{proposing ? "Ekleniyor…" : "Ekle ve seç"}</PrimaryButton>
+                </Box>}
             </Box>}
 
           {/* Step 1 - Level */}
@@ -537,8 +575,8 @@ export default function CreateEventScreen({
               <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
                 Etkinliğine{"\n"}bir yüz ver.
               </Label>
-              <Label style={[[ui.textSm, ui.textWhite40]]}>
-                İstersen atla, sana uygun bir görsel seçeriz.
+              <Label style={[[ui.textSm], { color: missingCover ? palette.error : "rgba(255,255,255,.4)" }]}>
+                {coverRequired ? "Yeni bir ilgi alanı için hazır görselimiz yok; kapak fotoğrafı yüklemen zorunlu." : "İstersen atla, sana uygun bir görsel seçeriz."}
               </Label>
 
               <Touch style={[[ui.h52, ui.rounded2xl, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.gap3], {

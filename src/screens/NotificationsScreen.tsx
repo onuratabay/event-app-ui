@@ -118,8 +118,9 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
         setNotifications(rows => rows.map(row => row.id === notification.id ? { ...row, readAt: new Date().toISOString() } : row));
         void refresh();
       }
-      // "Etkinlik tamamlandı" opens the rating page of that event.
-      if (notification.type === "event_rating" && notification.eventId) navigate("rate-event", { eventId: notification.eventId });
+      // A direct message opens the chat with its sender; "Etkinlik tamamlandı" opens the rating page.
+      if (notification.type === "direct_message" && notification.actorId) navigate("direct-chat", { userId: notification.actorId });
+      else if (notification.type === "event_rating" && notification.eventId) navigate("rate-event", { eventId: notification.eventId });
       else if (notification.eventId) {
         const event = await getEvent(notification.eventId);
         if (current !== generation.current) return;
@@ -154,7 +155,7 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
       {!loading && !error && !notifications.length && <Label style={[[ui.textSm, ui.textWhite50, ui.py4]]}>Henüz yeni uyarın yok.</Label>}
       {notifications.map(notification => <Touch key={notification.id} disabled={busy} accessibilityLabel={`${notification.readAt ? "" : "Yeni bildirim: "}${notification.title}`} onPress={() => void open(notification)} style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 16, borderRadius: 18, backgroundColor: notification.readAt ? palette.surface : palette.elevated, borderWidth: 1, borderColor: notification.readAt ? palette.border : "rgba(185,195,255,.35)" }}>
         <Box style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: palette.selected }}>
-          {notification.type === "message" ? <MessageIcon size={18} style={{ color: palette.accent }} /> : notification.type.startsWith("participant_") || notification.type.startsWith("friend_") ? <UsersIcon size={18} style={{ color: palette.accent }} /> : notification.type === "event_rating" ? <StarIcon size={18} style={{ color: palette.accent }} /> : notification.type === "room_ready" ? <CheckIcon size={18} style={{ color: palette.success }} /> : <BellIcon size={18} style={{ color: palette.accent }} />}
+          {notification.type === "message" || notification.type === "direct_message" ? <MessageIcon size={18} style={{ color: palette.accent }} /> : notification.type.startsWith("participant_") || notification.type.startsWith("friend_") ? <UsersIcon size={18} style={{ color: palette.accent }} /> : notification.type === "event_rating" ? <StarIcon size={18} style={{ color: palette.accent }} /> : notification.type === "room_ready" ? <CheckIcon size={18} style={{ color: palette.success }} /> : <BellIcon size={18} style={{ color: palette.accent }} />}
         </Box>
         <Box style={{ flex: 1, minWidth: 0, gap: 5 }}>
           <Label style={{ color: palette.text, fontSize: 14, fontFamily: "Outfit-SemiBold", textAlign: "left" }}>{notification.title}</Label>

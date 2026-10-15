@@ -7,11 +7,11 @@ import EditorialQuote from "../components/EditorialQuote";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AccordionItem, AtmoBackground, Avatar, GlassCard, GlassInput, LockedField, ProgressStepper } from "../components/GlassUI";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { CheckIcon, ChevronDownIcon, InstagramIcon, ScrollIcon, UsersIcon } from "../components/Icons";
+import { CheckIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, InstagramIcon, ScrollIcon, UsersIcon } from "../components/Icons";
 import { ReferencePicker } from "../components/ReferencePicker";
 import { registerForPush, type PushState } from "../services/push";
 import { updateStoreUser, useStore } from "../native/Store";
-import { RefreshControl } from "react-native";
+import { RefreshControl, StyleSheet } from "react-native";
 import { clearSessionCache, getApiErrorMessage, getCurrentUser, getLegalDocuments, register, type ApiUser, type LegalDocumentSummary } from "../api/client";
 import { useOpenLegal } from "../legal/links";
 import { formatPhone, phoneDigits, PHONE_PREFIX } from "../content/phone";
@@ -176,6 +176,7 @@ function Step1({
     data: store,
     setData: setStore
   } = useStore();
+  const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
     ad: store.onboarding.ad || "",
     soyad: store.onboarding.soyad || "",
@@ -250,7 +251,8 @@ function Step1({
     flex: 1
   }}>
       <TopNavBar navigate={navigate} fallback="welcome" onBack={() => { setStore(current => ({ ...current, onboarding: { ...current.onboarding, ...form, sifre: "" } })); navigate("welcome", { back: true }); }} title="Üyelik Başvurusu" floating />
-      <Scroll style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
+      {/* keyboardReveal: the field being typed in is scrolled above the keyboard. */}
+      <Scroll keyboardReveal style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
         <AtmoBackground />
 
         <Box style={[[ui.relative, ui.spaceY8]]}>
@@ -302,10 +304,19 @@ function Step1({
             <Box>
               {locked("sehir") ? <LockedField label="Şehir" value={submitted.sehir} /> : <CityPicker value={form.sehir} onChange={sehir => setForm(p => ({ ...p, sehir }))} />}
             </Box>
-            {!waiting && <GlassInput label="Şifre" placeholder="En az 8 karakter ve özel karakter" value={form.sifre} onChangeText={e => setForm(p => ({
-            ...p,
-            sifre: e
-          }))} secureTextEntry />}
+            {/* Same as sign-in: the eye button shows or hides what was typed. */}
+            {!waiting && <Box>
+              <Label style={passwordStyles.label}>Şifre</Label>
+              <Box style={passwordStyles.wrap}>
+                <GlassInput accessibilityLabel="Şifre" placeholder="En az 8 karakter ve özel karakter" value={form.sifre} onChangeText={e => setForm(p => ({
+                ...p,
+                sifre: e
+              }))} secureTextEntry={!showPassword} autoComplete="new-password" textContentType="newPassword" autoCapitalize="none" autoCorrect={false} style={passwordStyles.input} />
+                <Touch accessibilityLabel={showPassword ? "Şifreyi gizle" : "Şifreyi göster"} onPress={() => setShowPassword(value => !value)} style={passwordStyles.toggle}>
+                  {showPassword ? <EyeOffIcon style={passwordStyles.icon} /> : <EyeIcon style={passwordStyles.icon} />}
+                </Touch>
+              </Box>
+            </Box>}
           </Box>
 
           {/* Community Principles */}
@@ -387,11 +398,14 @@ function Step2({
   const { data: store, setData: setStore, refreshEvents } = useStore();
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [method, setMethod] = useState<"instagram" | "reference" | null>(null);
   const [instagram, setInstagram] = useState("");
   const { waiting, me, setMe } = useApplicant();
   const instagramLocked = waiting && !!me?.instagramUsername;
   const newInstagram = instagramLocked ? "" : instagram.replace(/^@/, "").trim();
+  // Instagram is required to continue: a handle already on the account (coming back to this step) counts.
+  useEffect(() => { if (!waiting && me?.instagramUsername) setInstagram(current => current || `@${me.instagramUsername}`); }, [waiting, me?.instagramUsername]);
+  const instagramValid = /^[a-z0-9._]{1,30}$/.test(newInstagram);
+  const canContinue = instagramLocked || instagramValid;
   const [sendNotice, setSendNotice] = useState<string | null>(null);
   const sendInstagram = async () => {
     if (submitting || !newInstagram) return;
@@ -406,6 +420,8 @@ function Step2({
   const pull = usePullRefresh(() => new Promise<void>(resolve => { referencesDone.current = resolve; setRefreshSignal(value => value + 1); }));
   const submitApplication = async () => {
     if (submitting) return;
+    // Also when an approved reference moves the step on by itself: the Instagram handle comes first.
+    if (!canContinue) { setSubmitError("Devam etmek için Instagram kullanıcı adını yaz."); return; }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -442,7 +458,8 @@ function Step2({
 
           <Box style={[[ui.spaceY3]]} enter>
             {/* Instagram */}
-            {instagramLocked ? <GlassCard style={[[ui.p4]]}><LockedField label="Instagram" value={`@${me?.instagramUsername}`} /></GlassCard> : <GlassCard onPress={() => setMethod(method === "instagram" ? null : "instagram")} style={[[ui.p4, method === "instagram" ? [ui.borderC8a44a35] : []]]}>
+            {/* Required, so it is always open with the field shown (a closed card was easy to miss). */}
+            {instagramLocked ? <GlassCard style={[[ui.p4]]}><LockedField label="Instagram" value={`@${me?.instagramUsername}`} /></GlassCard> : <GlassCard style={[[ui.p4, ui.borderC8a44a35]]}>
               <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
                 <IconBadge color="violet">
                   <InstagramIcon size={18} />
@@ -452,14 +469,14 @@ function Step2({
                     Instagram
                   </Label>
                   <Label style={[[ui.textXs, ui.textWhite40]]}>
-                    Profilini bağla
+                    Zorunlu · Profilini bağla
                   </Label>
                 </Box>
-                {method === "instagram" && <Box style={[[ui.w2, ui.h2, ui.roundedFull, ui.bgC8a44a]]} />}
               </Box>
-              {method === "instagram" && <Touch onPress={e => e.stopPropagation()} style={[[ui.mt3]]} enter>
+              <Box style={[[ui.mt3]]}>
                   <GlassInput placeholder="@kullaniciadi" accessibilityLabel="Instagram kullanıcı adı" autoCapitalize="none" autoCorrect={false} autoComplete="username" value={instagram} onChangeText={value => { const username = value.replace(/[@\s]/g, "").toLowerCase(); setInstagram(username ? `@${username}` : "") }} />
-                </Touch>}
+                  {!!newInstagram && !instagramValid && <Label style={[[ui.textXs, ui.mt15], { color: palette.error }]}>Kullanıcı adı yalnızca harf, rakam, nokta ve alt çizgi içerebilir (en fazla 30 karakter).</Label>}
+                </Box>
             </GlassCard>}
 
             {/* Reference */}
@@ -496,9 +513,10 @@ function Step2({
             />
           </Box>
         )}
-        <Touch onPress={() => void submitApplication()} disabled={submitting} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
+        {!canContinue && !submitError && <Label style={[[ui.textXs, ui.textWhite50, ui.mb3, ui.textCenter]]}>Devam etmek için Instagram kullanıcı adını yaz.</Label>}
+        <Touch onPress={() => void submitApplication()} disabled={submitting || !canContinue} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
         color: palette.text
-      }]} gradient={palette.actionGradient}>
+      }, !canContinue && { opacity: .45 }]} gradient={palette.actionGradient}>
           {submitting ? "Gönderiliyor..." : store.user.status === "profile_incomplete" ? "Devam Et" : "Başvuruyu Gönder"}
         </Touch>
         </>}
@@ -615,3 +633,11 @@ export default function OnboardingScreen({
   if (step === 2) return <Step2 navigate={navigate} />;
   return <Step3 navigate={navigate} />;
 }
+// Password field with the sign-in page's show/hide button; the label matches the other register fields.
+const passwordStyles = StyleSheet.create({
+  label: { fontSize: 13, color: "rgba(241,245,249,.72)", marginBottom: 6, letterSpacing: 1.2, textTransform: "uppercase" },
+  wrap: { position: "relative", justifyContent: "center" },
+  input: { paddingRight: 56 },
+  toggle: { position: "absolute", right: 4, top: 0, bottom: 0, width: 48, alignItems: "center", justifyContent: "center" },
+  icon: { color: "#c7ceff" },
+});

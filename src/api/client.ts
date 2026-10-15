@@ -313,6 +313,14 @@ export async function hasSession() { return Boolean((await AsyncStorage.getItem(
 
 // Each interest lists its own levels (managed in the interest_levels table); empty means no level step.
 export interface InterestLevel { id: string; enum: string; name: string }
+/** A member-proposed interest: usable in the proposer's events until an admin approves it into the shared list. */
+export interface ProposedInterest { id: string; slug: string; name: string; levels: InterestLevel[]; status?: 'pending' | 'rejected'; requiresCover?: boolean; existing?: boolean }
+export const getMyProposedInterests = () => request<ProposedInterest[]>('/interests/mine', { background: true })
+// An existing interest with the same name comes back (existing: true) instead of a duplicate.
+export const proposeInterest = (name: string, withLevels: boolean) => request<ProposedInterest>('/interests/proposals', { method: 'POST', body: JSON.stringify({ name, withLevels }) })
+export interface PendingInterest { id: string; name: string; createdAt: string; proposedBy: string | null; hasLevels: boolean; eventCount: number }
+export const getPendingInterests = () => request<PendingInterest[]>('/admin/interests/pending', { background: true })
+export const decideInterest = (id: string, decision: 'approved' | 'rejected') => request<{ id: string; status: string }>(`/admin/interests/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ decision }) })
 // The catalog is the same for everyone and changes rarely: fetched once per 6 hours per app session.
 // The signal is accepted for compatibility but not passed on, so one screen leaving cannot cancel the shared request.
 export function getMapInterests(_signal?: AbortSignal) {
@@ -415,6 +423,15 @@ export interface ParticipantRatingInput { userId: string; punctuality: number; c
 export const getRatingForm = (eventId: string) => request<RatingForm>(`/events/${encodeURIComponent(eventId)}/ratings`)
 // The organizer sends no eventScore; everyone else must. Ratings are final once sent.
 export const submitRatings = (eventId: string, body: { eventScore?: number; participants: ParticipantRatingInput[] }) => request<{ submitted: true }>(`/events/${encodeURIComponent(eventId)}/ratings`, { method: 'POST', body: JSON.stringify(body) })
+/** One-to-one chats with connections (no event room needed). canSend is false once you are no longer connected. */
+export interface DirectMessage { id: string; conversationId: string; senderId: string; text: string; createdAt: string }
+export interface DirectConversation { id: string; user: { id: string; firstName: string; lastName: string; profilePhoto: string | null }; canSend: boolean; lastMessage: DirectMessage | null; unreadCount: number }
+export const getDirectConversations = () => request<{ items: DirectConversation[] }>('/direct', { background: true })
+// Opens the chat with a connection (created on first use); an existing chat opens even after unfriending, read-only.
+export const openDirectConversation = (userId: string) => request<DirectConversation>(`/direct/with/${encodeURIComponent(userId)}`, { method: 'POST' })
+export const getDirectMessages = (conversationId: string, cursor?: string) => request<{ items: DirectMessage[]; nextCursor: string | null; otherReadAt: string | null }>(`/direct/${encodeURIComponent(conversationId)}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, { background: true })
+export const sendDirectMessage = (conversationId: string, text: string) => request<DirectMessage>(`/direct/${encodeURIComponent(conversationId)}/messages`, { method: 'POST', body: JSON.stringify({ text }), background: true })
+export const markDirectRead = (conversationId: string) => request<{ readAt: string }>(`/direct/${encodeURIComponent(conversationId)}/read`, { method: 'POST', background: true })
 export const getEvent = (id: string, options: { background?: boolean } = {}) => request<ApiEvent>(`/events/${id}`, options)
 export const favoriteEvent = (id: string, saved: boolean) => request(`/events/${id}/favorite`, { method: saved ? 'PUT' : 'DELETE', background: true })
 // Favourite taps run in the background, one after another per event, so the server ends on the last tap.

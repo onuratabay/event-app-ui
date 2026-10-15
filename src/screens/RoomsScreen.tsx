@@ -9,6 +9,10 @@ import { Box, Label, Picture, Scroll, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import { useEffect, useState } from "react";
+import { getDirectConversations, type DirectConversation } from "../api/client";
+import { Avatar } from "../components/GlassUI";
+import { onSocket } from "../services/socket";
+import { useScreenActive } from "../native/useScreenActive";
 import { RefreshControl } from "react-native";
 interface Props {
   navigate: NavigateFn;
@@ -34,6 +38,17 @@ export default function RoomsScreen({
     finally { if (pulled) setRefreshing(false); }
   };
   useEffect(() => { void reloadMine(); }, []);
+  // One-to-one chats with connections: reloaded when shown and whenever a message arrives or is read.
+  const [chats, setChats] = useState<DirectConversation[]>([]);
+  const screenActive = useScreenActive();
+  useEffect(() => {
+    if (!screenActive) return;
+    let active = true;
+    const load = () => { void getDirectConversations().then(result => { if (active) setChats(result.items); }).catch(() => {}); };
+    load();
+    const stops = ["dm:message", "friend:changed", "sync:required"].map(name => onSocket(name, load));
+    return () => { active = false; stops.forEach(stop => stop()); };
+  }, [screenActive]);
   const EVENTS = store.events;
   // Each event whose room is open appears as a chat named after the event.
   const activeEvents = EVENTS.filter(e => isRoomReady(e) && isEventMember(e, store.user.id)).sort(byLatestMessage);
@@ -43,6 +58,39 @@ export default function RoomsScreen({
       <TopNavBar navigate={navigate} fallback="discover" title="Etkinliklerim" subtitle="Katıldığın ve düzenlediğin etkinlikler" />
 
       <Scroll style={[[ui.relative, ui.hFull, ui.pb28], { paddingTop: 80 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void reloadMine(true); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={80} />}>
+
+        {/* Direct messages */}
+        {chats.length > 0 && <Box style={[[ui.px5, ui.mb6]]}>
+          <Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
+            Mesajlar
+          </Label>
+          <Box style={[[ui.spaceY3]]}>
+            {chats.map(chat => {
+              const name = `${chat.user.firstName} ${chat.user.lastName}`.trim();
+              const last = chat.lastMessage;
+              return <Touch key={chat.id} accessibilityLabel={`${name} ile sohbet`} onPress={() => navigate("direct-chat", { userId: chat.user.id })} style={[[ui.wFull, ui.textLeft]]}>
+                <GlassCard style={[[ui.p4]]}>
+                  <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
+                    <Avatar uri={chat.user.profilePhoto || ""} name={name} size="lg" />
+                    <Box style={[[ui.flex1, ui.minW0]]}>
+                      <Label style={[[ui.textSm, chat.unreadCount > 0 ? ui.fontSemibold : ui.fontMedium, ui.textWhite85]]} numberOfLines={1}>{name}</Label>
+                      <Label style={[[ui.textXs, chat.unreadCount > 0 ? ui.textWhite70 : ui.textWhite40]]} numberOfLines={1}>
+                        {last ? `${last.senderId === store.user.id ? "Sen: " : ""}${last.text}` : "Henüz mesaj yok"}
+                      </Label>
+                      {!chat.canSend && <Label style={[[ui.text10px, ui.textWhite30, ui.mt1]]}>Artık bağlantın değil · yalnızca okunur</Label>}
+                    </Box>
+                    <Box style={[[ui.flex, ui.flexCol, ui.itemsEnd, ui.gap1]]}>
+                      {last && <Label style={[[ui.text10px, ui.textWhite30]]}>{lastMessageLabel(last.createdAt)}</Label>}
+                      {chat.unreadCount > 0 && <Box accessibilityLabel={`${chat.unreadCount} okunmamış mesaj`} style={{ minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: palette.accent }}>
+                          <Label style={{ fontFamily: "Outfit-SemiBold", fontSize: 11, lineHeight: 14, color: palette.background }}>{chat.unreadCount > 99 ? "99+" : chat.unreadCount}</Label>
+                        </Box>}
+                    </Box>
+                  </Box>
+                </GlassCard>
+              </Touch>;
+            })}
+          </Box>
+        </Box>}
 
         {/* Active rooms */}
         <Box style={[[ui.px5, ui.mb6]]}>

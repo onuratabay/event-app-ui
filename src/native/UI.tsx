@@ -348,11 +348,58 @@ export function Touch({
     </Typography.Provider>
   )
 }
+/** Inside a `Scroll` with `keyboardReveal`: called by a focused `Field` so it is scrolled above the keyboard. */
+const KeyboardRevealContext = createContext<((input: TextInput | null) => void) | null>(null)
+const assignRef = <T,>(ref: React.Ref<T> | undefined, value: T | null) => {
+  if (typeof ref === "function") ref(value)
+  else if (ref) (ref as React.RefObject<T | null>).current = value
+}
+/** Space kept between the focused field and the top of the keyboard. */
+const KEYBOARD_GAP = 24
+/**
+ * Scrolls the focused field above the keyboard once it is open: measures where the field sits on screen
+ * and, if the keyboard would cover it, scrolls just enough to show it with a small gap.
+ */
+function useKeyboardReveal(enabled: boolean, scrollRef: React.RefObject<ScrollView | null>) {
+  const offset = useRef(0)
+  const keyboardTop = useRef<number | null>(null)
+  const pending = useRef<TextInput | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const scrollAbove = (input: TextInput | null) => {
+    const top = keyboardTop.current
+    if (!input || top === null) return
+    input.measureInWindow((_x, y, _width, height) => {
+      const overlap = y + height + KEYBOARD_GAP - top
+      if (overlap > 0) scrollRef.current?.scrollTo({ y: offset.current + overlap, animated: true })
+    })
+  }
+  useEffect(() => {
+    if (!enabled) return
+    // The layout settles (resize / keyboard-avoiding padding) right after the keyboard opens.
+    const shown = Keyboard.addListener("keyboardDidShow", event => {
+      keyboardTop.current = event.endCoordinates.screenY
+      const input = pending.current
+      pending.current = null
+      clearTimeout(timer.current)
+      timer.current = setTimeout(() => scrollAbove(input), 60)
+    })
+    const hidden = Keyboard.addListener("keyboardDidHide", () => { keyboardTop.current = null })
+    return () => { shown.remove(); hidden.remove(); clearTimeout(timer.current) }
+  }, [enabled])
+  const reveal = (input: TextInput | null) => {
+    // Keyboard already open (moving to the next field): scroll now; otherwise once it has opened.
+    if (keyboardTop.current !== null) { clearTimeout(timer.current); timer.current = setTimeout(() => scrollAbove(input), 60) }
+    else pending.current = input
+  }
+  return { reveal: enabled ? reveal : null, offset }
+}
 export function Scroll({
   style,
   children,
   horizontal,
   ref,
+  keyboardReveal = false,
+  onScroll,
   enter: _,
   glass: __,
   ...props
@@ -361,7 +408,11 @@ export function Scroll({
   enter?: boolean
   glass?: boolean
   ref?: React.Ref<ScrollView>
+  /** Keep the focused text field above the keyboard (forms). */
+  keyboardReveal?: boolean
 }) {
+  const scrollRef = useRef<ScrollView | null>(null)
+  const { reveal, offset } = useKeyboardReveal(keyboardReveal, scrollRef)
   const inherited = useContext(Typography),
     { text, view } = split(style)
   const {
@@ -382,7 +433,9 @@ export function Scroll({
     <Typography.Provider value={{ ...inherited, ...text }}>
       <ScrollView
         {...props}
-        ref={ref}
+        ref={node => { scrollRef.current = node; assignRef(ref, node) }}
+        onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; onScroll?.(event) }}
+        scrollEventThrottle={props.scrollEventThrottle ?? 16}
         horizontal={horizontal}
         style={[frame, horizontal ? { flexGrow: 0 } : { flex: 1 }]}
         contentContainerStyle={{
@@ -405,7 +458,7 @@ export function Scroll({
         keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
       >
-        <Content style={view}>{children}</Content>
+        <KeyboardRevealContext.Provider value={reveal}><Content style={view}>{children}</Content></KeyboardRevealContext.Provider>
       </ScrollView>
     </Typography.Provider>
   )
@@ -466,6 +519,8 @@ export function Field({
   ...props
 }: FieldProps) {
   const inherited = useContext(Typography)
+  const reveal = useContext(KeyboardRevealContext)
+  const inputRef = useRef<TextInput | null>(null)
   const [open, setOpen] = useState(false)
   const dateMode = mode === "date" || mode === "time"
   if (dateMode)
@@ -489,7 +544,8 @@ export function Field({
     <TextInput
       allowFontScaling={false}
       {...props}
-      ref={ref}
+      ref={node => { inputRef.current = node; assignRef(ref, node) }}
+      onFocus={event => { props.onFocus?.(event); reveal?.(inputRef.current) }}
       value={value}
       onChangeText={onChangeText}
       style={[
