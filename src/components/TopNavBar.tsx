@@ -40,6 +40,7 @@ export default function TopNavBar({
   backLabel,
   onTitlePress,
   titleHint,
+  hideBack = false,
 }: {
   navigate: NavigateFn
   fallback: Screen
@@ -51,26 +52,28 @@ export default function TopNavBar({
   backLabel?: string
   onTitlePress?: () => void
   titleHint?: string
+  /** For a tab's own top level (e.g. your profile), where there is nowhere to go back to. */
+  hideBack?: boolean
 }) {
   return (
     <Box pointerEvents="box-none" style={[s.frame, floating && s.floatingFrame]}>
       {floating ? <FeedHeaderBackdrop /> : null}
       <Box style={[s.bar, floating && s.floatingBar]}>
-        <Touch
+        {hideBack ? null : <Touch
           accessibilityLabel="Geri git"
           onPress={onBack || (() => navigate(fallback, { back: true }))}
           style={[s.back, backLabel ? s.backWithLabel : undefined]}
         >
           <ArrowLeftIcon size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} style={s.icon} />
           {backLabel ? <Label style={s.backLabel}>{backLabel}</Label> : null}
-        </Touch>
+        </Touch>}
         {onTitlePress ? (
-          <Touch accessibilityLabel={title} accessibilityHint={titleHint} onPress={onTitlePress} style={s.copy}>
+          <Touch accessibilityLabel={title} accessibilityHint={titleHint} onPress={onTitlePress} style={[s.copy, hideBack && s.copyFlush]}>
             <Label style={s.title} numberOfLines={1}>{title}</Label>
             {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
           </Touch>
         ) : (
-          <Box style={s.copy}>
+          <Box style={[s.copy, hideBack && s.copyFlush]}>
             <Label style={s.title} numberOfLines={1}>{title}</Label>
             {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
           </Box>
@@ -134,6 +137,8 @@ const s = StyleSheet.create({
   actionText: { paddingHorizontal: 8 },
   icon: { color: palette.text },
   copy: { flex: 1, minWidth: 0, paddingHorizontal: 12, justifyContent: "center" },
+  // Without a back button the title lines up with the page's left margin.
+  copyFlush: { paddingLeft: 0 },
   title: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15, lineHeight: 20 },
   subtitle: { color: "rgba(226,232,240,.62)", fontFamily: "Outfit", fontSize: 11, lineHeight: 15 },
   right: { minWidth: 44, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2 },

@@ -11,11 +11,11 @@ import { CheckIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, InstagramIcon, ScrollI
 import { ReferencePicker } from "../components/ReferencePicker";
 import { registerForPush, type PushState } from "../services/push";
 import { updateStoreUser, useStore } from "../native/Store";
-import { RefreshControl, StyleSheet } from "react-native";
+import { RefreshControl, StyleSheet, View } from "react-native";
 import { clearSessionCache, getApiErrorMessage, getCurrentUser, getLegalDocuments, register, type ApiUser, type LegalDocumentSummary } from "../api/client";
 import { useOpenLegal } from "../legal/links";
 import { formatPhone, phoneDigits, PHONE_PREFIX } from "../content/phone";
-import { Box, Label, Scroll, Touch } from "../native/UI";
+import { Box, Label, Scroll, Touch, useScrollAnchor } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 interface Props {
@@ -120,6 +120,38 @@ function ConsentCheck({ checked, onToggle, label, children }: { checked: boolean
   </Touch>;
 }
 
+/* ---------- Community principles + agreements ---------- */
+/**
+ * One card for everything to read and accept before applying: the five principles, then the legal
+ * consents (with links to each text). The header shows whether the required consents are given.
+ * Opening it (by hand, or automatically once the password is entered) scrolls it into view.
+ */
+function AgreementsCard({ open, onToggle, status, done, children }: { open: boolean; onToggle: () => void; status: string; done: boolean; children: ReactNode }) {
+  const anchor = useScrollAnchor();
+  const ref = useRef<View | null>(null);
+  useEffect(() => { if (open) anchor?.(ref.current); }, [open]);
+  return <View ref={ref} collapsable={false}>
+    <GlassCard style={[[ui.overflowHidden]]}>
+      <Touch onPress={onToggle} accessibilityState={{ expanded: open }} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.justifyBetween, ui.p4]]}>
+        <Box style={[[ui.flex, ui.itemsCenter, ui.gap3], { flex: 1, minWidth: 0 }]}>
+          <IconBadge color="gold">
+            <ScrollIcon size={18} />
+          </IconBadge>
+          <Box style={[[ui.textLeft], { flex: 1, minWidth: 0 }]}>
+            <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>Topluluk İlkeleri ve Sözleşmeler</Label>
+            <Label style={[[ui.textXs], { color: done ? palette.success : "rgba(241,245,249,.45)" }]}>{status}</Label>
+          </Box>
+        </Box>
+        <ChevronDownIcon size={16} style={[[ui.textWhite30, open ? [ui.rotate180] : []]]} />
+      </Touch>
+      {open && <Box style={[[ui.px4, ui.pb4, ui.borderT, ui.borderWhite8]]} enter>{children}</Box>}
+    </GlassCard>
+  </View>;
+}
+function SectionLabel({ children }: { children: ReactNode }) {
+  return <Label style={[[ui.textXs, ui.textWhite40, ui.uppercase], { letterSpacing: 1.2, marginTop: 16, marginBottom: 2 }]}>{children}</Label>;
+}
+
 /* ---------- Sticky CTA bar ---------- */
 function StickyBar({
   children
@@ -208,6 +240,13 @@ function Step1({
     finally { setSending(false); }
   };
   const [principlesOpen, setPrinciplesOpen] = useState(false);
+  // Once the password is in, the agreements card opens (and scrolls into view) by itself, once.
+  const autoOpened = useRef(false);
+  const openAgreementsAfterPassword = (password: string) => {
+    if (autoOpened.current || !password.trim()) return;
+    autoOpened.current = true;
+    setPrinciplesOpen(true);
+  };
   const [openAccordion, setOpenAccordion] = useState<number | null>(null);
   const openLegal = useOpenLegal();
   const [rulesAccepted, setRulesAccepted] = useState(false);
@@ -311,7 +350,7 @@ function Step1({
                 <GlassInput accessibilityLabel="Şifre" placeholder="En az 8 karakter ve özel karakter" value={form.sifre} onChangeText={e => setForm(p => ({
                 ...p,
                 sifre: e
-              }))} secureTextEntry={!showPassword} autoComplete="new-password" textContentType="newPassword" autoCapitalize="none" autoCorrect={false} style={passwordStyles.input} />
+              }))} onEndEditing={event => openAgreementsAfterPassword(event.nativeEvent.text ?? form.sifre)} secureTextEntry={!showPassword} autoComplete="new-password" textContentType="newPassword" autoCapitalize="none" autoCorrect={false} style={passwordStyles.input} />
                 <Touch accessibilityLabel={showPassword ? "Şifreyi gizle" : "Şifreyi göster"} onPress={() => setShowPassword(value => !value)} style={passwordStyles.toggle}>
                   {showPassword ? <EyeOffIcon style={passwordStyles.icon} /> : <EyeIcon style={passwordStyles.icon} />}
                 </Touch>
@@ -319,56 +358,39 @@ function Step1({
             </Box>}
           </Box>
 
-          {/* Community Principles */}
-          <Box style={[[]]} enter>
-            <GlassCard style={[[ui.overflowHidden]]}>
-              <Touch onPress={() => setPrinciplesOpen(!principlesOpen)} style={[[ui.wFull, ui.flex, ui.itemsCenter, ui.justifyBetween, ui.p4]]}>
-                <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-                  <IconBadge color="gold">
-                    <ScrollIcon size={18} />
-                  </IconBadge>
-                  <Box style={[[ui.textLeft]]}>
-                    <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>
-                      Topluluk İlkeleri
-                    </Label>
-                    <Label style={[[ui.textXs, ui.textWhite40]]}>
-                      5 ilke · Okumak için aç
-                    </Label>
-                  </Box>
-                </Box>
-                <ChevronDownIcon size={16} style={[[ui.textWhite30, principlesOpen ? [ui.rotate180] : []]]} />
-              </Touch>
-
-              {principlesOpen && <Box style={[[ui.px4, ui.pb4, ui.spaceY0, ui.borderT, ui.borderWhite8]]} enter>
-                  {PRINCIPLES.map((p, i) => <AccordionItem key={i} title={p.title} open={openAccordion === i} onToggle={() => setOpenAccordion(openAccordion === i ? null : i)}>
-                      {p.desc}
-                    </AccordionItem>)}
-                </Box>}
-            </GlassCard>
-
-            {/* Consents — versions come from the server and are recorded with the account */}
-            {waiting ? <Label style={[[ui.mt3, ui.textXs, ui.textWhite40]]}>Sözleşmeleri başvururken onayladın.</Label> : <>
-            <ConsentCheck checked={rulesAccepted} onToggle={() => setRulesAccepted(!rulesAccepted)} label="Kullanım Koşulları ve Topluluk Kuralları onayı">
-              <Label accessibilityRole="link" onPress={() => openLegal("terms")} style={[[ui.textWhite85, ui.underline]]}>Kullanım Koşulları</Label>
-              {" ve "}
-              <Label accessibilityRole="link" onPress={() => openLegal("community")} style={[[ui.textWhite85, ui.underline]]}>Topluluk Kuralları</Label>
-              'nı okudum ve kabul ediyorum.
-            </ConsentCheck>
-            <ConsentCheck checked={privacyAccepted} onToggle={() => setPrivacyAccepted(!privacyAccepted)} label="Gizlilik Politikası ve KVKK Aydınlatma Metni onayı">
-              <Label accessibilityRole="link" onPress={() => openLegal("privacy")} style={[[ui.textWhite85, ui.underline]]}>Gizlilik Politikası</Label>
-              {" ve "}
-              <Label accessibilityRole="link" onPress={() => openLegal("kvkk")} style={[[ui.textWhite85, ui.underline]]}>KVKK Aydınlatma Metni</Label>
-              'ni okudum.
-            </ConsentCheck>
-            {(!documents || marketingDocument) && <ConsentCheck checked={marketing} onToggle={() => setMarketing(!marketing)} label="Ticari elektronik ileti izni (isteğe bağlı)">
-              Kampanya ve duyurular için{" "}
-              <Label accessibilityRole="link" onPress={() => openLegal("marketing")} style={[[ui.textWhite85, ui.underline]]}>ticari elektronik ileti</Label>
-              {" "}almak istiyorum. (İsteğe bağlı)
-            </ConsentCheck>}
+          {/* Principles and every consent live in one card; it opens by itself once the password is in. */}
+          <Box enter>
+            <AgreementsCard open={principlesOpen} onToggle={() => setPrinciplesOpen(!principlesOpen)} done={waiting || accepted}
+              status={waiting ? "Sözleşmeleri başvururken onayladın." : accepted ? "Onaylandı ✓" : `${PRINCIPLES.length} ilke · 2 zorunlu onay`}>
+              <SectionLabel>İlkeler</SectionLabel>
+              {PRINCIPLES.map((p, i) => <AccordionItem key={i} title={p.title} open={openAccordion === i} onToggle={() => setOpenAccordion(openAccordion === i ? null : i)}>
+                  {p.desc}
+                </AccordionItem>)}
+              {/* Consents — versions come from the server and are recorded with the account */}
+              {!waiting && <>
+                <SectionLabel>Onaylar</SectionLabel>
+                <ConsentCheck checked={rulesAccepted} onToggle={() => setRulesAccepted(!rulesAccepted)} label="Kullanım Koşulları ve Topluluk Kuralları onayı">
+                  <Label accessibilityRole="link" onPress={() => openLegal("terms")} style={[[ui.textWhite85, ui.underline]]}>Kullanım Koşulları</Label>
+                  {" ve "}
+                  <Label accessibilityRole="link" onPress={() => openLegal("community")} style={[[ui.textWhite85, ui.underline]]}>Topluluk Kuralları</Label>
+                  'nı kabul ediyorum.
+                </ConsentCheck>
+                <ConsentCheck checked={privacyAccepted} onToggle={() => setPrivacyAccepted(!privacyAccepted)} label="Gizlilik Politikası ve KVKK Aydınlatma Metni onayı">
+                  <Label accessibilityRole="link" onPress={() => openLegal("privacy")} style={[[ui.textWhite85, ui.underline]]}>Gizlilik Politikası</Label>
+                  {" ve "}
+                  <Label accessibilityRole="link" onPress={() => openLegal("kvkk")} style={[[ui.textWhite85, ui.underline]]}>KVKK Aydınlatma Metni</Label>
+                  'ni okudum.
+                </ConsentCheck>
+                {(!documents || marketingDocument) && <ConsentCheck checked={marketing} onToggle={() => setMarketing(!marketing)} label="Ticari elektronik ileti izni (isteğe bağlı)">
+                  Kampanya ve duyurular için{" "}
+                  <Label accessibilityRole="link" onPress={() => openLegal("marketing")} style={[[ui.textWhite85, ui.underline]]}>ticari elektronik ileti</Label>
+                  {" "}almak istiyorum. (İsteğe bağlı)
+                </ConsentCheck>}
+              </>}
+            </AgreementsCard>
             {documentsError && !store.onboarding.accountId && <Box style={[[ui.mt3]]}>
                 <ErrorNotice title="Metinler yüklenemedi" message={documentsError} onDismiss={() => setDocumentsError(null)} onRetry={() => setDocumentsAttempt(value => value + 1)} />
               </Box>}
-            </>}
           </Box>
         </Box>
       </Scroll>

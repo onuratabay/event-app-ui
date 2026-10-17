@@ -1,17 +1,17 @@
 import { palette } from "../theme/palette"
 import React, { useEffect, useRef, useState } from "react"
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from "react-native"
-import { LinearGradient } from "expo-linear-gradient"
 import { GlassFill, INPUT_FROST } from "./GlassFill"
 import { useScreenActive } from "../native/useScreenActive"
 import { LockIcon } from "./Icons"
 import { formatScore } from "../events/score"
-import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg"
+import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, LinearGradient as SvgLinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg"
 import {
   Box,
   Field,
   Label,
   Picture,
+  Reveal,
   Touch,
   type NativeStyleProp,
   type TouchProps,
@@ -24,7 +24,6 @@ const s = StyleSheet.create({
     backgroundColor: palette.glassCard,
   },
   bleed: { position: "absolute", top: -48, left: -48, right: -48, bottom: -48 },
-  tile: { flex: 1, borderRadius: 28, borderWidth: 1, borderColor: "rgba(220,228,255,.10)", overflow: "hidden" },
   input: {
     borderRadius: 16,
     borderWidth: 1,
@@ -263,16 +262,19 @@ export function AccordionItem({
         <Label>{title}</Label>
         <Label>{open ? "▴" : "▾"}</Label>
       </Touch>
+      {/* Reveal: an opened item scrolls into view when it would end below the fold. */}
       {open && (
-        <Label
-          style={{
-            paddingBottom: 14,
-            color: "rgba(255,255,255,.55)",
-            lineHeight: 22,
-          }}
-        >
-          {children}
-        </Label>
+        <Reveal>
+          <Label
+            style={{
+              paddingBottom: 14,
+              color: "rgba(255,255,255,.55)",
+              lineHeight: 22,
+            }}
+          >
+            {children}
+          </Label>
+        </Reveal>
       )}
     </Box>
   )
@@ -303,16 +305,8 @@ export function ScoreBadge({ score, label }: { score: number; label: string }) {
     </Box>
   )
 }
-type Tile = { size: number; top: `${number}%`; left: `${number}%`; depth: number; drift: number; angle: string; tint: 0 | 1 | 2 }
-const TILES: Tile[] = [
-  { size: 172, top: "11%", left: "-20%", depth: 26, drift: 18, angle: "-16deg", tint: 0 },
-  { size: 128, top: "27%", left: "62%", depth: -20, drift: -22, angle: "14deg", tint: 1 },
-  { size: 102, top: "48%", left: "9%", depth: 16, drift: 14, angle: "22deg", tint: 2 },
-  { size: 154, top: "59%", left: "66%", depth: -28, drift: -16, angle: "-9deg", tint: 0 },
-  { size: 78, top: "76%", left: "33%", depth: 12, drift: 20, angle: "18deg", tint: 1 },
-]
 type Glyph = { body: string; detail?: string; dots?: [number, number, number][] }
-type EventShape = Omit<Tile, "tint"> & { glyph: Glyph; color: string }
+type EventShape = { glyph: Glyph; color: string; z: number; period: number; size: number; top: `${number}%`; left: `${number}%`; depth: number; drift: number; angle: string }
 // Duotone event glyphs on a 48 grid: a filled body, stroked inner detail and solid accent dots.
 const GLYPHS = {
   ticket: { body: "M10 10h28a4 4 0 0 1 4 4v5a5 5 0 0 0 0 10v5a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4v-5a5 5 0 0 0 0-10v-5a4 4 0 0 1 4-4Z",
@@ -335,30 +329,30 @@ const GLYPHS = {
   art: { body: "M24 6C13 6 6 13.5 6 23s7.5 18 17 18c3 0 4-2 3-4s0-4 3-4h5c4 0 8-3 8-9 0-10-8-17-18-17Z",
     dots: [[15, 23, 2.2], [18.5, 15, 2.2], [27, 12.5, 2.2], [34.5, 18.5, 2.2]] },
 } satisfies Record<string, Glyph>
+// Ten glyphs that each glide towards and away from the viewer on their own cycle (`period` ms for a
+// full approach and retreat, starting at depth `z`), so near and far keep trading places.
 const EVENT_SHAPES: EventShape[] = [
-  { glyph: GLYPHS.ticket, size: 120, top: "7%", left: "-10%", depth: 24, drift: 16, angle: "-14deg", color: palette.accent },
-  { glyph: GLYPHS.music, size: 86, top: "4%", left: "70%", depth: -20, drift: -18, angle: "10deg", color: palette.violet },
-  { glyph: GLYPHS.sparkle, size: 40, top: "18%", left: "46%", depth: 10, drift: 22, angle: "0deg", color: palette.text },
-  { glyph: GLYPHS.headphones, size: 80, top: "25%", left: "76%", depth: 18, drift: 14, angle: "-8deg", color: palette.cyan },
-  { glyph: GLYPHS.pin, size: 78, top: "31%", left: "3%", depth: -16, drift: -14, angle: "-6deg", color: palette.cyan },
-  { glyph: GLYPHS.chat, size: 90, top: "42%", left: "50%", depth: 14, drift: 18, angle: "6deg", color: palette.accent },
-  { glyph: GLYPHS.cocktail, size: 82, top: "51%", left: "-5%", depth: -22, drift: -16, angle: "-10deg", color: palette.violet },
-  { glyph: GLYPHS.art, size: 64, top: "38%", left: "84%", depth: 12, drift: 20, angle: "12deg", color: palette.violet },
-  { glyph: GLYPHS.calendar, size: 100, top: "57%", left: "70%", depth: -26, drift: -14, angle: "9deg", color: palette.accent },
-  { glyph: GLYPHS.mic, size: 70, top: "66%", left: "30%", depth: 16, drift: 16, angle: "-12deg", color: palette.cyan },
-  { glyph: GLYPHS.sparkle, size: 30, top: "71%", left: "8%", depth: -10, drift: -22, angle: "0deg", color: palette.text },
-  { glyph: GLYPHS.popper, size: 80, top: "75%", left: "72%", depth: 20, drift: 14, angle: "8deg", color: palette.violet },
-  { glyph: GLYPHS.coffee, size: 72, top: "82%", left: "4%", depth: -14, drift: -16, angle: "6deg", color: palette.cyan },
-  { glyph: GLYPHS.clapper, size: 84, top: "86%", left: "44%", depth: 14, drift: 18, angle: "-7deg", color: palette.accent },
-  { glyph: GLYPHS.mountain, size: 74, top: "14%", left: "22%", depth: -12, drift: -12, angle: "0deg", color: palette.cyan },
+  { glyph: GLYPHS.ticket, z: 0.9, period: 15000, size: 116, top: "5%", left: "-10%", depth: 1, drift: 14, angle: "-14deg", color: palette.accent },
+  { glyph: GLYPHS.sparkle, z: 0.2, period: 11000, size: 52, top: "15%", left: "46%", depth: -1, drift: -16, angle: "0deg", color: palette.text },
+  { glyph: GLYPHS.music, z: 0.5, period: 17000, size: 92, top: "19%", left: "68%", depth: 1, drift: 16, angle: "10deg", color: palette.violet },
+  { glyph: GLYPHS.pin, z: 0.3, period: 13000, size: 84, top: "33%", left: "4%", depth: -1, drift: -14, angle: "-6deg", color: palette.cyan },
+  { glyph: GLYPHS.coffee, z: 0.1, period: 19000, size: 76, top: "45%", left: "38%", depth: 1, drift: 12, angle: "6deg", color: palette.cyan },
+  { glyph: GLYPHS.headphones, z: 0.7, period: 14000, size: 84, top: "43%", left: "76%", depth: -1, drift: -14, angle: "-8deg", color: palette.cyan },
+  { glyph: GLYPHS.calendar, z: 0.4, period: 18000, size: 108, top: "58%", left: "62%", depth: 1, drift: 14, angle: "9deg", color: palette.accent },
+  { glyph: GLYPHS.mic, z: 0.8, period: 12000, size: 78, top: "66%", left: "28%", depth: -1, drift: -16, angle: "-12deg", color: palette.cyan },
+  { glyph: GLYPHS.cocktail, z: 0.6, period: 16000, size: 96, top: "78%", left: "-6%", depth: 1, drift: 16, angle: "-10deg", color: palette.violet },
+  { glyph: GLYPHS.popper, z: 0.25, period: 20000, size: 88, top: "84%", left: "64%", depth: -1, drift: -12, angle: "8deg", color: palette.violet },
 ]
 const dotPath = ([x, y, r]: [number, number, number]) => `M${x + r} ${y}a${r} ${r} 0 1 1-${2 * r} 0a${r} ${r} 0 1 1 ${2 * r} 0Z`
-function EventGlyph({ glyph, color, size, id }: { glyph: Glyph; color: string; size: number; id: number }) {
+function EventGlyph({ glyph, color, size, id, blur }: { glyph: Glyph; color: string; size: number; id: string; blur?: number }) {
   // Stroke scaled against the 48 grid so every glyph draws a ~1.6px line whatever its size.
   const stroke = 1.6 * 48 / size
   return (
     <Svg width="100%" height="100%" viewBox="-2 -2 52 52">
       <Defs>
+        {blur ? <Filter id={`soft${id}`} x="-30%" y="-30%" width="160%" height="160%">
+          <FeGaussianBlur stdDeviation={blur} />
+        </Filter> : null}
         <RadialGradient id={`glow${id}`} cx="50%" cy="50%" rx="50%" ry="50%">
           <Stop offset="0" stopColor={color} stopOpacity={0.16} />
           <Stop offset="1" stopColor={color} stopOpacity={0} />
@@ -372,16 +366,14 @@ function EventGlyph({ glyph, color, size, id }: { glyph: Glyph; color: string; s
           <Stop offset="1" stopColor={color} stopOpacity={0.2} />
         </SvgLinearGradient>
       </Defs>
+      <G filter={blur ? `url(#soft${id})` : undefined}>
       <Circle cx={24} cy={24} r={26} fill={`url(#glow${id})`} />
       <Path d={glyph.body} fill={`url(#fill${id})`} stroke={`url(#line${id})`} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
       {glyph.detail ? <Path d={glyph.detail} fill="none" stroke={`url(#line${id})`} strokeWidth={stroke * 0.85} strokeLinecap="round" strokeLinejoin="round" /> : null}
       {glyph.dots ? <Path d={glyph.dots.map(dotPath).join("")} fill={color} fillOpacity={0.45} /> : null}
+      </G>
     </Svg>
   )
-}
-const withAlpha = (hex: string, alpha: number) => {
-  const n = parseInt(hex.slice(1), 16)
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
 }
 // One device-motion subscription shared by every mounted background, released with the last one.
 const tilt = { x: new Animated.Value(0), y: new Animated.Value(0) }
@@ -412,6 +404,54 @@ function useTilt(active: boolean) {
     return () => { if (--tiltUsers === 0) { stopTilt?.(); stopTilt = undefined } }
   }, [active])
 }
+/**
+ * A feed glyph gliding towards and away from the viewer: nearer means larger, sharper and more
+ * responsive to the phone's tilt; farther means smaller, dimmer and blurred. A sharp and a blurred
+ * copy cross-fade with depth, so focus changes without re-rendering the SVG every frame.
+ */
+function DepthGlyph({ shape, index, moving, drift }: { shape: EventShape; index: number; moving: boolean; drift: Animated.Value }) {
+  const depth = useRef(new Animated.Value(shape.z)).current
+  useEffect(() => {
+    if (!moving) return
+    const ease = Easing.inOut(Easing.quad), half = shape.period / 2
+    const [first, second] = shape.z < 0.5 ? [1, 0] : [0, 1]
+    const cycle = Animated.loop(Animated.sequence([
+      Animated.timing(depth, { toValue: first, duration: half, easing: ease, useNativeDriver: true }),
+      Animated.timing(depth, { toValue: second, duration: half, easing: ease, useNativeDriver: true }),
+    ]))
+    cycle.start()
+    return () => cycle.stop()
+  }, [depth, moving, shape])
+  const by = (from: number, to: number) => depth.interpolate({ inputRange: [0, 1], outputRange: [from, to] })
+  // Parallax grows with nearness: a far glyph barely shifts when the phone tilts, a near one swings.
+  const reach = by(5, 34)
+  const sway = shape.drift, turn = (index % 2 ? -1 : 1) * 16
+  return (
+    <Animated.View style={{ position: "absolute", top: shape.top, left: shape.left, width: shape.size, height: shape.size, opacity: by(0.35, 1),
+      transform: [
+        { translateX: drift.interpolate({ inputRange: [0, 1], outputRange: [-sway, sway] }) },
+        { translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [sway * 0.6, -sway * 0.6] }) },
+        { translateX: Animated.multiply(tilt.x, Animated.multiply(reach, shape.depth)) },
+        { translateY: Animated.multiply(tilt.y, Animated.multiply(reach, shape.depth)) },
+        { scale: by(0.5, 1.2) },
+      ] }}
+    >
+      <Animated.View style={{ flex: 1, transform: [
+        { perspective: 700 },
+        { rotate: shape.angle },
+        { rotateX: tilt.y.interpolate({ inputRange: [-1, 1], outputRange: ["-12deg", "12deg"] }) },
+        { rotateY: drift.interpolate({ inputRange: [0, 1], outputRange: [`${-turn}deg`, `${turn}deg`] }) },
+      ] }}>
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: depth.interpolate({ inputRange: [0, 0.55, 1], outputRange: [1, 0.7, 0] }) }]}>
+          <EventGlyph glyph={shape.glyph} color={shape.color} size={shape.size} id={`${index}b`} blur={2.4} />
+        </Animated.View>
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: depth.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 0.3, 1] }) }]}>
+          <EventGlyph glyph={shape.glyph} color={shape.color} size={shape.size} id={`${index}s`} />
+        </Animated.View>
+      </Animated.View>
+    </Animated.View>
+  )
+}
 export function useReduceMotion() {
   const [reduce, setReduce] = useState(false)
   useEffect(() => {
@@ -422,14 +462,11 @@ export function useReduceMotion() {
   }, [])
   return reduce
 }
-/** Ambient screen backdrop: drifting glows and glass tiles that follow the device tilt. */
+/** Ambient screen backdrop: drifting glows and event glyphs gliding near and far, following the device tilt. */
 export function AtmoBackground({
   variant = "violet",
-  motif = "tiles",
 }: {
   variant?: "violet" | "gold" | "success"
-  /** "events" swaps the glass tiles for outline glyphs of an event night (used on the feed). */
-  motif?: "tiles" | "events"
 }) {
   const colors = {
     violet: [palette.blue, palette.violet],
@@ -452,11 +489,6 @@ export function AtmoBackground({
     return () => loop.stop()
   }, [drift, moving])
   const along = (from: number, to: number) => drift.interpolate({ inputRange: [0, 1], outputRange: [from, to] })
-  const tileTints = [
-    [withAlpha(colors[1], 0.2), withAlpha(colors[0], 0.05)],
-    [withAlpha(palette.accent, 0.16), withAlpha(colors[1], 0.04)],
-    ["rgba(248,250,252,.12)", withAlpha(palette.cyan, 0.03)],
-  ] as const
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}>
       <Animated.View style={[s.bleed, { transform: [{ translateX: along(-26, 26) }, { translateY: along(-14, 22) }, { scale: along(1, 1.08) }] }]}>
@@ -480,26 +512,7 @@ export function AtmoBackground({
           <Rect width="100%" height="100%" fill="url(#atmoTertiary)" />
         </Svg>
       </Animated.View>
-      {(motif === "events" ? EVENT_SHAPES : TILES).map((tile, index) => (
-        <Animated.View
-          key={index}
-          style={{ position: "absolute", top: tile.top, left: tile.left, width: tile.size, height: tile.size,
-            transform: [{ translateX: along(-tile.drift, tile.drift) }, { translateY: along(tile.drift * 0.6, -tile.drift * 0.6) }] }}
-        >
-          <Animated.View style={["glyph" in tile ? { flex: 1 } : s.tile, { transform: [
-            { perspective: 900 },
-            { translateX: tilt.x.interpolate({ inputRange: [-1, 1], outputRange: [-tile.depth, tile.depth] }) },
-            { translateY: tilt.y.interpolate({ inputRange: [-1, 1], outputRange: [-tile.depth, tile.depth] }) },
-            { rotate: tile.angle },
-            { rotateX: tilt.y.interpolate({ inputRange: [-1, 1], outputRange: ["-7deg", "7deg"] }) },
-            { rotateY: tilt.x.interpolate({ inputRange: [-1, 1], outputRange: ["7deg", "-7deg"] }) },
-          ] }]}>
-            {"glyph" in tile
-              ? <EventGlyph glyph={tile.glyph} color={tile.color} size={tile.size} id={index} />
-              : <LinearGradient colors={tileTints[tile.tint]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
-          </Animated.View>
-        </Animated.View>
-      ))}
+      {EVENT_SHAPES.map((shape, index) => <DepthGlyph key={index} shape={shape} index={index} moving={moving} drift={drift} />)}
     </View>
   )
 }

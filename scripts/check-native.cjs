@@ -106,6 +106,7 @@ Module._load = function (id, parent, isMain) {
         timing: anim,
         loop: anim,
         sequence: anim,
+        multiply: () => new Value(0),
         spring: anim,
       },
     }
@@ -353,10 +354,17 @@ async function tap(tree, label) {
   assert(text(registration.toJSON()).includes("en az 18 yaşında"), "Members must be at least 18")
   await act(async () => birthField().props.onChangeText("1995-06-15"))
   assert(!text(registration.toJSON()).includes("en az 18 yaşında"))
+  // Principles and consents live in one card that opens by itself once the password is entered.
+  assert(!text(registration.toJSON()).includes("KVKK Aydınlatma Metni"), "The agreements card starts closed")
+  assert(text(registration.toJSON()).includes("2 zorunlu onay"), "The closed card says what is still needed")
+  const passwordField = registration.root.findAll(n => n.type === "TextInput" && n.props.accessibilityLabel === "Şifre")[0]
+  await act(async () => passwordField.props.onEndEditing({ nativeEvent: { text: passwordField.props.value } }))
+  assert(text(registration.toJSON()).includes("KVKK Aydınlatma Metni") && text(registration.toJSON()).includes("İlkeler"), "Finishing the password opens the principles and consents")
   await tap(registration, "Topluluk Kuralları")
   await tap(registration, "Devam Et")
   assert.equal(registrationRequest, undefined, "Registration waits for every required consent")
   await tap(registration, "KVKK Aydınlatma Metni")
+  assert(text(registration.toJSON()).includes("Onaylandı"), "The card header confirms the required consents")
   await tap(registration, "Devam Et")
   assert.equal(destination, "onboarding-2")
   assert.deepEqual(registrationRequest.body.acceptedDocuments, [{ type: "terms", version: 2 }, { type: "community", version: 1 }, { type: "privacy", version: 1 }, { type: "kvkk", version: 1 }], "The accepted server versions are sent; marketing stays opt-in")
@@ -381,6 +389,7 @@ async function tap(tree, label) {
   await require("./check-legal.cjs")({ mount, tap, act, text, storage })
   await require("./check-admin.cjs")({ mount, tap, act, text, storage })
   await require("./check-places.cjs")({ act, text, storage })
+  await require("./check-forms.cjs")({ act })
   const names = [
     "Splash",
     "Welcome",
@@ -427,10 +436,31 @@ async function tap(tree, label) {
     assert.deepEqual([iconWidth(detailBar, "Geri git"), iconWidth(detailBar, "Paylaş")], [20, 20], "Back and share icons share one size")
     await act(async () => detailBar.unmount())
     const profileBar = await mount("Profile")
-    assert.equal(iconWidth(profileBar, "Geri git"), 20, "The back icon keeps its size next to a label")
-    const linkSizes = ["Geri git", "Ayarları aç", "Çıkış yap"].map(label => flat(profileBar.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === label).findAll(n => n.type === "Text")[0]).fontSize)
+    assert(!profileBar.root.findAllByType("Pressable").some(n => n.props.accessibilityLabel === "Geri git"), "Your own profile (a bottom-bar tab) has no back button")
+    const linkSizes = ["Ayarları aç", "Çıkış yap"].map(label => flat(profileBar.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === label).findAll(n => n.type === "Text")[0]).fontSize)
     assert.equal(new Set(linkSizes).size, 1, "Text links in the top bar share one size")
     await act(async () => profileBar.unmount())
+  }
+  {
+    // The location card starts directions in the phone's map or navigation app.
+    const where = await mount("EventDetail", { eventId: EVENTS[0].id })
+    const card = where.root.findAllByType("Pressable").find(n => String(n.props.accessibilityLabel).endsWith("yol tarifi al"))
+    assert(card && text(where.toJSON()).includes("Yol tarifi"), "The location card offers directions")
+    let offered = []
+    global.__testAlert = (title, _message, buttons) => { offered = buttons || []; assert.equal(title, "Yol tarifi") }
+    global.__openedUrl = undefined
+    await act(async () => { card.props.onPress?.({ stopPropagation() {} }); await new Promise(resolve => setTimeout(resolve, 0)) })
+    const event = server.events.find(item => item.id === EVENTS[0].id) || server.events[0]
+    if ((process.env.TEST_PLATFORM || "ios") === "android") {
+      // Android: a geo: link, so the system lists every installed map and navigation app.
+      assert(String(global.__openedUrl).startsWith(`geo:${event.latitude},${event.longitude}?q=`), `Android hands the place to the system app chooser (${global.__openedUrl})`)
+    } else {
+      assert.deepEqual(offered.map(button => button.text), ["Apple Haritalar", "Google Haritalar", "Yandex Navigasyon", "Waze", "Vazgeç"], "iOS offers the common map and navigation apps")
+      await act(async () => { offered[0].onPress(); await new Promise(resolve => setTimeout(resolve, 0)) })
+      assert(String(global.__openedUrl).startsWith(`maps://?daddr=${event.latitude},${event.longitude}`), `Apple Maps starts directions to the event (${global.__openedUrl})`)
+    }
+    global.__testAlert = undefined
+    await act(async () => where.unmount())
   }
   const profileNavigations = []
   const detail = await mount("EventDetail", { eventId: EVENTS[0].id, navigate: (screen, options) => profileNavigations.push({ screen, options }) })

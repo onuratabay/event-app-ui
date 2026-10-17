@@ -5,7 +5,7 @@ import TopNavBar, { NavAction } from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
-import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, getProfileStats, getCurrentUser, type FriendRelationship } from "../api/client";
+import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, getOrganizedEvents, getProfileStats, getCurrentUser, type FriendRelationship } from "../api/client";
 import FriendActions from "../components/FriendActions";
 import ConnectionsSheet from "../components/ConnectionsSheet";
 import EventsSheet from "../components/EventsSheet";
@@ -191,9 +191,8 @@ export default function ProfileScreen({
   // "Katıldığı": ended events you joined. The count loads with the profile (one row); the list on tap.
   const [attendedCount, setAttendedCount] = useState<number | null>(null);
   const [organizedCount, setOrganizedCount] = useState<number | null>(null);
-  const [attended, setAttended] = useState<AppEvent[] | null>(null);
-  const [attendedOpen, setAttendedOpen] = useState(false);
-  const [attendedError, setAttendedError] = useState("");
+  // One sheet lists either the attended or the organized events (the two tappable counters).
+  const [eventList, setEventList] = useState<{ kind: "attended" | "organized"; events: AppEvent[] | null; error: string } | null>(null);
   // "Düzenlediği" = own events that started or ended; "Katıldığı" = joined ones that started or ended + those organized ones.
   // They reload when one of your events starts or ends (server push), after a reconnect and whenever the page is shown again.
   useEffect(() => {
@@ -205,14 +204,15 @@ export default function ProfileScreen({
     const sync = onSocket("sync:required", load);
     return () => { active = false; changed(); sync(); };
   }, [isOwn, store.user.id, screenActive]);
-  const openAttended = () => {
-    setAttendedOpen(true); setAttended(null); setAttendedError("");
-    getAttendedEvents().then(result => {
+  const openEventList = (kind: "attended" | "organized") => {
+    setEventList({ kind, events: null, error: "" });
+    (kind === "attended" ? getAttendedEvents() : getOrganizedEvents()).then(result => {
       const found = result.items.map(mapApiEvent);
       // The detail page opens events from the shared list, so these join it (not the Discover feed).
       setStore(p => ({ ...p, events: [...new Map([...p.events, ...found].map(event => [event.id, event])).values()] }));
-      setAttended(found); setAttendedCount(result.total);
-    }).catch(error => { setAttended([]); setAttendedError(getApiErrorMessage(error, "Etkinlikler yüklenemedi.")); });
+      setEventList(current => current?.kind === kind ? { ...current, events: found } : current);
+      if (kind === "attended") setAttendedCount(result.total); else setOrganizedCount(result.total);
+    }).catch(error => setEventList(current => current?.kind === kind ? { ...current, events: [], error: getApiErrorMessage(error, "Etkinlikler yüklenemedi.") } : current));
   };
   // Connections list: always on your own profile; on someone else's only when you are friends.
   const [connectionsOpen, setConnectionsOpen] = useState(false);
@@ -286,6 +286,8 @@ export default function ProfileScreen({
         fallback="discover"
         onBack={() => navigate("discover", { back: true })}
         backLabel="Geri"
+        // Your own profile is a bottom-bar tab; only someone else's profile needs a way back.
+        hideBack={isOwn}
         title="Profil"
         right={isOwn ? <>
           {/* Only admins see the panel link; the server checks the role again on every admin request. */}
@@ -295,8 +297,9 @@ export default function ProfileScreen({
         </> : undefined}
       />
 
-      {attendedOpen ? <EventsSheet title="Katıldığım etkinlikler" events={attended} error={attendedError} emptyText="Henüz katıldığın ya da düzenleyip başlattığın bir etkinlik yok."
-        onClose={() => setAttendedOpen(false)} onOpen={eventId => navigate("event-detail", { eventId })} /> : null}
+      {eventList ? <EventsSheet title={eventList.kind === "attended" ? "Katıldığım etkinlikler" : "Düzenlediğim etkinlikler"} events={eventList.events} error={eventList.error}
+        emptyText={eventList.kind === "attended" ? "Henüz katıldığın ya da düzenleyip başlattığın bir etkinlik yok." : "Henüz düzenleyip başlattığın bir etkinlik yok."}
+        onClose={() => setEventList(null)} onOpen={eventId => navigate("event-detail", { eventId })} /> : null}
       {connectionsOpen && canSeeConnections && relationTarget ? <ConnectionsSheet userId={relationTarget} title={isOwn ? "Bağlantılarım" : `${user.name.split(" ")[0]} · Bağlantılar`} canRemove={isOwn}
         onClose={() => setConnectionsOpen(false)} onOpenProfile={id => navigate("profile", id === store.user.id ? {} : { userId: id })}
         onRemoved={() => setRelation(current => current ? { ...current, friendCount: Math.max(0, current.friendCount - 1) } : current)} /> : null}
@@ -377,9 +380,10 @@ export default function ProfileScreen({
                   {s.label}
                 </Label>
               </GlassCard>;
-              // "Bağlantı" opens the list of your friends.
+              // Every counter opens its list: friends, attended events, organized events.
               return s.label === "Bağlantı" ? <Touch key={i} accessibilityLabel="Bağlantılarımı göster" onPress={() => setConnectionsOpen(true)}>{card}</Touch>
-                : s.label === "Katıldığı" ? <Touch key={i} accessibilityLabel="Katıldığım etkinlikleri göster" onPress={openAttended}>{card}</Touch> : card;
+                : s.label === "Katıldığı" ? <Touch key={i} accessibilityLabel="Katıldığım etkinlikleri göster" onPress={() => openEventList("attended")}>{card}</Touch>
+                : <Touch key={i} accessibilityLabel="Düzenlediğim etkinlikleri göster" onPress={() => openEventList("organized")}>{card}</Touch>;
             })}
           </Box>
         </Box>}

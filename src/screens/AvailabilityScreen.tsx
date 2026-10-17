@@ -1,6 +1,6 @@
 import ActivityIndicator from "../components/LoadingSpinner";
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Alert, Platform, StyleSheet } from "react-native"
+import { Alert, Platform, StyleSheet, View } from "react-native"
 import * as Location from "expo-location"
 import MapView, { Circle, Marker } from "react-native-maps"
 import { MAP_PROVIDER } from "../map/provider"
@@ -10,18 +10,25 @@ import { useBottomNavInset } from "../components/BottomNav"
 import { AtmoBackground, GlassCard, GlassFill } from "../components/GlassUI"
 import { CategoryIcon, CheckIcon, ChevronDownIcon, CloseIcon, LocationIcon, PlusIcon, SearchIcon } from "../components/Icons"
 import TopNavBar from "../components/TopNavBar"
+import CountBadge from "../components/CountBadge"
+import CityPicker from "../components/CityPicker"
+import { matchCity } from "../events/LocationPicker"
+import { PlaceSuggestionList, usePlaceSuggestions } from "../map/PlaceSuggestions"
+import type { PlaceSuggestion } from "../api/client"
 import { DURATIONS, formatDuration } from "../events/duration"
 import { CITY_PRESETS, type MapPlace } from "../map/filters"
 import { INITIAL_REGION } from "../map/model"
 import RangeCalendar from "../availability/RangeCalendar"
 import { AVAILABILITY_SERVER_READY } from "../availability/server"
-import { applyPreset, describeActivity, describeArea, describeDates, describeDays, describeTimes, emptyDraft, fromApi, isPresetActive, isRecordOver, MAX_RADIUS_KM, MAX_TIME_WINDOWS, MIN_RADIUS_KM, QUICK_PRESETS, RADIUS_OPTIONS, skillLevels, STATUS_LABEL, toggleActivity, togglePartnerLevel, toPayload, validateDraft, WEEKDAY_LONG, WEEKDAY_SHORT, WEEKDAYS, weekdaysInRange, effectiveEnd, type ActivityPreference, type AvailabilityDraft, type CatalogInterest, type DraftField } from "../availability/model"
-import { Box, Field, Label, Scroll, Sheet, Touch } from "../native/UI"
+import { applyPreset, describeActivity, describeArea, describeDates, describeDays, describeTimes, emptyDraft, fromApi, isPresetActive, isRecordOver, CITY_RADIUS_KM, MAX_RADIUS_KM, MAX_TIME_WINDOWS, MIN_RADIUS_KM, QUICK_PRESETS, RADIUS_OPTIONS, skillLevels, STATUS_LABEL, toggleActivity, togglePartnerLevel, toPayload, validateDraft, WEEKDAY_LONG, WEEKDAY_SHORT, WEEKDAYS, weekdaysInRange, effectiveEnd, type ActivityPreference, type AvailabilityDraft, type CatalogInterest, type DraftField } from "../availability/model"
+import { Box, Field, Label, Scroll, Sheet, Touch, useScrollAnchor } from "../native/UI"
 import { palette } from "../theme/palette"
 import type { NavigateFn } from "../types"
 
 type Section = "dates" | "times" | "area" | "activities"
-const regionFor = (center: { latitude: number; longitude: number } | null) => center ? { ...center, latitudeDelta: 0.3, longitudeDelta: 0.3 } : INITIAL_REGION
+// Map span that fits a circle of `km` radius with a margin.
+const deltaFor = (km: number) => Math.max(0.04, km / 111 * 2.6)
+const DEFAULT_RADIUS_KM = 5
 const SECTION_FOR: Record<DraftField, Section> = { date: "dates", days: "times", time: "times", area: "area", activities: "activities" }
 type Records = { state: "loading" | "error" | "ready"; items: ApiAvailability[]; error?: string }
 
@@ -32,7 +39,11 @@ function Chip({ label, selected, onPress, disabled, accessibilityLabel }: { labe
 }
 
 function Accordion({ title, summary, open, onToggle, invalid, children }: { title: string; summary: string; open: boolean; onToggle: () => void; invalid?: boolean; children: ReactNode }) {
-  return <GlassCard style={s.section}>
+  // An opened section scrolls into view, header included.
+  const anchor = useScrollAnchor()
+  const ref = useRef<View | null>(null)
+  useEffect(() => { if (open) anchor?.(ref.current) }, [open])
+  return <View ref={ref} collapsable={false}><GlassCard style={s.section}>
     <Touch accessibilityLabel={`${title}: ${summary}`} accessibilityState={{ expanded: open }} onPress={onToggle} style={s.sectionHeader} haptic={false}>
       <Box style={{ flex: 1, minWidth: 0 }}>
         <Label style={s.sectionTitle}>{title}</Label>
@@ -41,7 +52,7 @@ function Accordion({ title, summary, open, onToggle, invalid, children }: { titl
       <ChevronDownIcon size={18} style={[{ color: palette.muted }, open && { transform: [{ rotate: "180deg" }] }]} />
     </Touch>
     {open && <Box style={s.sectionBody}>{children}</Box>}
-  </GlassCard>
+  </GlassCard></View>
 }
 
 const Issues = ({ messages }: { messages: string[] }) => messages.length ? <Box accessibilityLiveRegion="polite" style={{ gap: 4 }}>{messages.map(message => <Label key={message} style={s.error}>{message}</Label>)}</Box> : null
@@ -55,7 +66,10 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
   const [catalog, setCatalog] = useState<CatalogInterest[] | null>(null)
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [cityQuery, setCityQuery] = useState("")
-  const [geocoded, setGeocoded] = useState<MapPlace[]>([])
+  // The last city picked, so "Tüm şehir" can widen a custom circle back to the whole city.
+  const [lastCity, setLastCity] = useState<MapPlace | null>(null)
+  // While typing, the search field shows the query; otherwise it shows the picked district (if any).
+  const [typing, setTyping] = useState(false)
   const [searching, setSearching] = useState(false)
   const [locating, setLocating] = useState(false)
   const [records, setRecords] = useState<Records>({ state: "loading", items: [] })
@@ -95,11 +109,11 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
     try {
       // Same geocoder as event creation; Android needs the permission for it, the map option does not.
       if (Platform.OS === "android" && !(await Location.requestForegroundPermissionsAsync()).granted) throw new Error("permission")
-      const results = await Location.geocodeAsync(query)
-      setGeocoded(results.slice(0, 3).map(({ latitude, longitude }) => ({ name: query, latitude, longitude })))
-      if (!results.length) Alert.alert("Konum bulunamadı", "Şehir adını kontrol edip tekrar ara.")
+      const [found] = await Location.geocodeAsync(lastCity ? `${query}, ${lastCity.name}, Türkiye` : `${query}, Türkiye`)
+      if (!found) { Alert.alert("Adres bulunamadı", "Farklı yazmayı dene ya da haritaya dokunarak alanı seç."); return }
+      pickNamedArea({ latitude: found.latitude, longitude: found.longitude }, query)
     } catch {
-      Alert.alert("Şehir aranamadı", Platform.OS === "android" ? "Arama için konum izni gerekiyor. İzin vermeden listeden seçebilir ya da haritadan alan belirleyebilirsin." : "Bağlantını kontrol edip tekrar dene.")
+      Alert.alert("Adres aranamadı", Platform.OS === "android" ? "Arama için konum izni gerekiyor. İzin vermeden şehir seçebilir ya da haritadan alan belirleyebilirsin." : "Bağlantını kontrol edip tekrar dene.")
     } finally { setSearching(false) }
   }
   const useMyLocation = async () => {
@@ -109,13 +123,13 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
       if (!(await Location.requestForegroundPermissionsAsync()).granted) { Alert.alert("Konum izni verilmedi", "Sorun değil: haritaya dokunarak merkez noktasını kendin seçebilirsin."); return }
       const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
       const center = { latitude: coords.latitude, longitude: coords.longitude }
-      update(current => current.area.mode === "radius" ? { ...current, area: { ...current.area, center } } : current)
-      map.current?.animateToRegion?.({ ...center, latitudeDelta: 0.3, longitudeDelta: 0.3 })
+      update(current => ({ ...current, area: { mode: "radius", center, radiusKm: current.area.mode === "radius" ? current.area.radiusKm : DEFAULT_RADIUS_KM } }))
+      focusOn(center, area.mode === "radius" ? area.radiusKm : DEFAULT_RADIUS_KM)
     } catch { Alert.alert("Konum alınamadı", "Haritaya dokunarak merkez noktasını seçebilirsin.") }
     finally { setLocating(false) }
   }
 
-  const resetForm = () => { setDraft(emptyDraft()); setEditingId(null); setShowIssues(false); setOpen("dates"); setCityQuery(""); setGeocoded([]) }
+  const resetForm = () => { setDraft(emptyDraft()); setEditingId(null); setShowIssues(false); setOpen("dates"); setCityQuery(""); setTyping(false); setLastCity(null) }
   const submit = () => {
     setShowIssues(true)
     if (issues.length) { setOpen(SECTION_FOR[issues[0].field]); return }
@@ -153,8 +167,81 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
     } },
   ])
 
-  const cityMatches = CITY_PRESETS.filter(place => place.name.toLocaleLowerCase("tr-TR").includes(cityQuery.trim().toLocaleLowerCase("tr-TR")))
   const area = draft.area
+  // The area is one centre plus a radius: a whole city (city mode, matched with CITY_RADIUS_KM on
+  // the server) or a custom circle (radius mode). Both are drawn the same way on the map.
+  const areaCenter = area.mode === "city" ? (area.place ? { latitude: area.place.latitude, longitude: area.place.longitude } : null) : area.center
+  const areaRadiusKm = area.mode === "city" ? CITY_RADIUS_KM : area.radiusKm
+  // A record opened for editing brings its own city along.
+  const cityPlace = area.mode === "city" && area.place ? area.place : lastCity
+  const focusOn = (center: { latitude: number; longitude: number }, km: number) => map.current?.animateToRegion?.({ ...center, latitudeDelta: deltaFor(km), longitudeDelta: deltaFor(km) }, 350)
+  const chooseCity = (place: MapPlace) => {
+    setLastCity(place); setCityQuery(""); setTyping(false)
+    update(current => ({ ...current, area: { mode: "city", place } }))
+    focusOn(place, CITY_RADIUS_KM)
+  }
+  // Same city field as "Nerede buluşacaksınız": the 81 provinces, clearable. The three big cities have
+  // known centres; the rest are geocoded on the device.
+  const [locatingCity, setLocatingCity] = useState(false)
+  const changeCity = async (name: string) => {
+    if (!name) { clearArea(); return }
+    const known = CITY_PRESETS.find(place => place.name === name)
+    if (known) { chooseCity(known); return }
+    setLocatingCity(true)
+    try {
+      if (Platform.OS === "android" && !(await Location.requestForegroundPermissionsAsync()).granted) throw new Error("permission")
+      const [found] = await Location.geocodeAsync(`${name}, Türkiye`)
+      if (!found) throw new Error("not found")
+      chooseCity({ name, latitude: found.latitude, longitude: found.longitude })
+    } catch { Alert.alert("Şehir bulunamadı", Platform.OS === "android" ? "Şehri haritada göstermek için konum izni gerekiyor. İlçe aramasıyla ya da haritaya dokunarak da alan seçebilirsin." : "Bağlantını kontrol edip tekrar dene.") }
+    finally { setLocatingCity(false) }
+  }
+  const wholeCity = () => {
+    if (!cityPlace) return
+    update(current => ({ ...current, area: { mode: "city", place: cityPlace } }))
+    focusOn(cityPlace, CITY_RADIUS_KM)
+  }
+  // Typing suggests venues, addresses, districts and cities near the area, as on the event location step.
+  const regions = usePlaceSuggestions(typing ? cityQuery : "", areaCenter)
+  const pickNamedArea = (center: { latitude: number; longitude: number }, label: string) => {
+    setCityQuery(""); setTyping(false)
+    update(current => ({ ...current, area: { mode: "radius", center, radiusKm: DEFAULT_RADIUS_KM, label } }))
+    focusOn(center, DEFAULT_RADIUS_KM)
+  }
+  const pickRegion = async (suggestion: PlaceSuggestion) => {
+    try {
+      const place = await regions.resolve(suggestion)
+      const center = { latitude: place.latitude, longitude: place.longitude }
+      // A province is the whole city (and fills the city field); a venue, address or district becomes
+      // a named circle around it.
+      const city = matchCity(place.name) || matchCity(suggestion.title)
+      if (city) { chooseCity(CITY_PRESETS.find(item => item.name === city) ?? { name: city, ...center }); return }
+      pickNamedArea(center, place.name || suggestion.title)
+    } catch { Alert.alert("Yer seçilemedi", "Bağlantını kontrol et ya da haritaya dokunarak alan belirle.") }
+  }
+  // Removes the chosen area entirely (no city, no circle) and zooms the map back out.
+  const clearArea = () => {
+    setLastCity(null); setCityQuery(""); setTyping(false)
+    update(current => ({ ...current, area: { mode: "city", place: null } }))
+    map.current?.animateToRegion?.(INITIAL_REGION, 350)
+  }
+  // The search field's clear button: stops a search, or drops the picked district back to the whole
+  // city (or to no area when no city is chosen).
+  const searchShown = typing ? cityQuery : area.mode === "radius" && area.center ? (area.label || "Haritadan seçilen alan") : ""
+  const clearSearch = () => {
+    if (typing) { setCityQuery(""); setTyping(false); return }
+    if (cityPlace) wholeCity(); else clearArea()
+  }
+  const pickCenter = ({ latitude, longitude }: { latitude: number; longitude: number }) =>
+    update(current => ({ ...current, area: { mode: "radius", center: { latitude, longitude }, radiusKm: current.area.mode === "radius" ? current.area.radiusKm : DEFAULT_RADIUS_KM } }))
+  const chooseRadius = (km: number) => {
+    if (!areaCenter) return
+    const radiusKm = Math.min(MAX_RADIUS_KM, Math.max(MIN_RADIUS_KM, km))
+    // Keeps the area's name (a searched district, or the city being narrowed) for the summary.
+    update(current => ({ ...current, area: { mode: "radius", center: areaCenter, radiusKm, label: current.area.mode === "radius" ? current.area.label : current.area.place?.name } }))
+    focusOn(areaCenter, radiusKm)
+  }
+
   const activitySummary = draft.activities.length ? draft.activities.map(item => describeActivity(item, interests).title).join(", ") : "Aktivite seçilmedi"
   // Past records (last day gone) are shown dimmed and inactive at the end of the list.
   const current = records.items.filter(item => !isRecordOver(item, now)), expired = records.items.filter(item => isRecordOver(item, now))
@@ -183,9 +270,16 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
     <TopNavBar navigate={navigate} fallback="discover" title="Etkinlik Takvimim" subtitle="Özel eşleşme havuzu" />
     <Scroll style={[s.scroll, { paddingBottom: (tab === "new" ? 148 : 40) + inset }]} enter>
       <Box style={s.segment} accessibilityRole="tablist">
-        {([["new", editingId ? "Kaydı düzenle" : "Yeni müsaitlik"], ["records", `Kayıtlarım${current.length ? ` · ${current.length}` : ""}`]] as const).map(([id, label]) => <Touch key={id} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === id }} onPress={() => setTab(id)} style={[s.segmentItem, s.tabItem, tab === id && s.segmentActive]}>
-          <Label style={[s.chipText, tab === id && s.chipTextSelected]}>{label}</Label>
-        </Touch>)}
+        {([["new", editingId ? "Kaydı düzenle" : "Yeni müsaitlik"], ["records", "Kayıtlarım"]] as const).map(([id, label]) => {
+          // The records tab carries the count of current records in a badge beside its label.
+          const count = id === "records" ? current.length : 0
+          return <Touch key={id} accessibilityRole="tab" accessibilityLabel={label} accessibilityValue={count ? { text: `${count} kayıt` } : undefined} accessibilityState={{ selected: tab === id }} onPress={() => setTab(id)} style={[s.segmentItem, s.tabItem, tab === id && s.segmentActive]}>
+            <Box style={s.tabLabel}>
+              <Label style={[s.chipText, tab === id && s.chipTextSelected]}>{label}</Label>
+              <CountBadge count={count} />
+            </Box>
+          </Touch>
+        })}
       </Box>
       {notice && <Box style={s.success} accessibilityLiveRegion="polite"><CheckIcon size={16} style={{ color: palette.success }} /><Label style={s.successText}>{notice}</Label></Box>}
       {!AVAILABILITY_SERVER_READY && <Box style={s.pending} accessibilityRole="alert">
@@ -235,41 +329,38 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
       </Accordion>
 
       <Accordion title="Konum" summary={describeArea(area)} open={open === "area"} onToggle={() => toggle("area")} invalid={showIssues && hasIssue("area")}>
-        <Box style={s.segment} accessibilityRole="tablist">
-          {([["city", "Şehir / bölge"], ["radius", "Haritadan alan"]] as const).map(([mode, label]) => <Touch key={mode} accessibilityLabel={label} accessibilityRole="tab" accessibilityState={{ selected: area.mode === mode }} onPress={() => update(current => current.area.mode === mode ? current : { ...current, area: mode === "city" ? { mode, place: null } : { mode, center: current.area.mode === "city" && current.area.place ? { latitude: current.area.place.latitude, longitude: current.area.place.longitude } : null, radiusKm: 5 } })} style={[s.segmentItem, area.mode === mode && s.segmentActive]}>
-            <Label style={[s.chipText, area.mode === mode && s.chipTextSelected]}>{label}</Label>
-          </Touch>)}
+        {/* Same flow as "Nerede buluşacaksınız": choose a city, then narrow it to a district by search or
+            on the map; the size row below covers both. */}
+        <CityPicker clearable value={cityPlace?.name ?? ""} onChange={next => void changeCity(next)} />
+        {locatingCity && <Label style={s.muted}>Şehir bulunuyor…</Label>}
+        <Box style={s.search}>
+          <SearchIcon size={15} style={{ color: palette.muted }} />
+          <Field accessibilityLabel="Adres veya mekan ara" placeholder={cityPlace ? `${cityPlace.name} içinde adres veya mekan ara…` : "Adres veya mekan ara…"} value={searchShown}
+            onChangeText={text => { setCityQuery(text); setTyping(true) }} onSubmitEditing={() => void searchCity()} returnKeyType="search" style={s.searchField} />
+          {/* While typing: "Ara" (device geocoder), as on the event location step; once picked: clear. */}
+          {typing ? <Touch accessibilityLabel="Ara" disabled={!cityQuery.trim() || searching} onPress={() => void searchCity()} style={s.searchButton}><Label style={s.link}>{searching ? "…" : "Ara"}</Label></Touch>
+            : searchShown ? <Touch accessibilityLabel="Seçimi kaldır" onPress={clearSearch} style={s.iconButton}><CloseIcon size={16} style={{ color: palette.muted }} /></Touch> : null}
         </Box>
-        {area.mode === "city" && <Box style={{ gap: 10 }}>
-          <Box style={s.search}>
-            <SearchIcon size={15} style={{ color: palette.muted }} />
-            <Field accessibilityLabel="Şehir ara" placeholder="Şehir ara…" value={cityQuery} onChangeText={text => { setCityQuery(text); setGeocoded([]) }} onSubmitEditing={() => void searchCity()} returnKeyType="search" style={s.searchField} />
-          </Box>
-          <Box style={s.wrap}>{[...cityMatches, ...geocoded].map((place, index) => <Chip key={`${place.name}-${index}`} label={geocoded.includes(place) ? `${place.name} · ${place.latitude.toFixed(2)}, ${place.longitude.toFixed(2)}` : place.name} selected={area.place?.name === place.name && area.place.latitude === place.latitude} onPress={() => update(current => ({ ...current, area: { mode: "city", place } }))} />)}</Box>
-          {cityQuery.trim().length > 1 && !cityMatches.some(place => place.name.toLocaleLowerCase("tr-TR") === cityQuery.trim().toLocaleLowerCase("tr-TR")) && <Touch disabled={searching} onPress={() => void searchCity()} style={s.addButton}>
-            <Box style={s.row}><SearchIcon size={15} style={{ color: palette.accent }} /><Label style={s.link}>{searching ? "Aranıyor…" : `“${cityQuery.trim()}” konumunu ara`}</Label></Box>
-          </Touch>}
-          <Label style={s.muted}>İlçe/bölge seçimi şu an desteklenmiyor. Daha dar bir alan için “Haritadan alan” seçeneğini kullan.</Label>
-        </Box>}
-        {area.mode === "radius" && <Box style={{ gap: 10 }}>
-          <Box style={s.mapFrame}>
-            <MapView ref={map} provider={MAP_PROVIDER} testID="availability-map" {...DARK_MAP_PROPS} style={StyleSheet.absoluteFill} initialRegion={regionFor(area.center)} onPress={event => { const center = event.nativeEvent.coordinate; update(current => current.area.mode === "radius" ? { ...current, area: { ...current.area, center: { latitude: center.latitude, longitude: center.longitude } } } : current) }}>
-              {area.center && <Circle center={area.center} radius={area.radiusKm * 1000} strokeColor="rgba(185,195,255,.9)" fillColor="rgba(105,120,255,.18)" strokeWidth={2} />}
-              {area.center && <Marker coordinate={area.center} pinColor={palette.blue} />}
-            </MapView>
-          </Box>
-          <Label style={s.muted}>{area.center ? "Merkezi değiştirmek için haritada başka bir noktaya dokun." : "Merkez noktasını seçmek için haritaya dokun."}</Label>
-          <Touch disabled={locating} onPress={() => void useMyLocation()} style={s.addButton}>
-            <Box style={s.row}><LocationIcon size={15} style={{ color: palette.accent }} /><Label style={s.link}>{locating ? "Konum alınıyor…" : "Konumumu kullan (isteğe bağlı)"}</Label></Box>
-          </Touch>
-          <Label style={s.fieldLabel}>{`Yarıçap: ${area.radiusKm} km`}</Label>
-          <Box style={s.wrap}>
-            <Touch accessibilityLabel="Yarıçapı azalt" disabled={area.radiusKm <= MIN_RADIUS_KM} onPress={() => update(current => current.area.mode === "radius" ? { ...current, area: { ...current.area, radiusKm: Math.max(MIN_RADIUS_KM, current.area.radiusKm - 1) } } : current)} style={s.stepper}><Label style={s.stepperText}>−</Label></Touch>
-            {RADIUS_OPTIONS.map(km => <Chip key={km} label={`${km} km`} accessibilityLabel={`${km} kilometre yarıçap`} selected={area.radiusKm === km} onPress={() => update(current => current.area.mode === "radius" ? { ...current, area: { ...current.area, radiusKm: km } } : current)} />)}
-            <Touch accessibilityLabel="Yarıçapı artır" disabled={area.radiusKm >= MAX_RADIUS_KM} onPress={() => update(current => current.area.mode === "radius" ? { ...current, area: { ...current.area, radiusKm: Math.min(MAX_RADIUS_KM, current.area.radiusKm + 1) } } : current)} style={s.stepper}><Label style={s.stepperText}>+</Label></Touch>
-          </Box>
-          <Label style={s.muted}>{`Seçtiğin merkezden her yöne ${area.radiusKm} km uzaklığa kadar olan etkinlikler eşleşir. Merkez noktan diğer kullanıcılara gösterilmez.`}</Label>
-        </Box>}
+        <PlaceSuggestionList items={regions.items} onPick={item => void pickRegion(item)} />
+        <Box style={s.mapFrame}>
+          <MapView ref={map} provider={MAP_PROVIDER} testID="availability-map" {...DARK_MAP_PROPS} style={StyleSheet.absoluteFill} initialRegion={areaCenter ? { ...areaCenter, latitudeDelta: deltaFor(areaRadiusKm), longitudeDelta: deltaFor(areaRadiusKm) } : INITIAL_REGION} onPress={event => pickCenter(event.nativeEvent.coordinate)}>
+            {areaCenter && <Circle center={areaCenter} radius={areaRadiusKm * 1000} strokeColor="rgba(185,195,255,.9)" fillColor="rgba(105,120,255,.18)" strokeWidth={2} />}
+            {area.mode === "radius" && area.center && <Marker coordinate={area.center} pinColor={palette.blue} />}
+          </MapView>
+        </Box>
+        <Touch disabled={locating} onPress={() => void useMyLocation()} style={s.addButton}>
+          <Box style={s.row}><LocationIcon size={15} style={{ color: palette.accent }} /><Label style={s.link}>{locating ? "Konum alınıyor…" : "Konumumu kullan (isteğe bağlı)"}</Label></Box>
+        </Touch>
+        <Label style={s.fieldLabel}>Alan</Label>
+        <Box style={s.wrap}>
+          <Chip label="Tüm şehir" accessibilityLabel="Tüm şehir" selected={area.mode === "city" && !!area.place} disabled={!cityPlace} onPress={wholeCity} />
+          <Touch accessibilityLabel="Yarıçapı azalt" disabled={!areaCenter || areaRadiusKm <= MIN_RADIUS_KM} onPress={() => chooseRadius(areaRadiusKm - 1)} style={s.stepper}><Label style={s.stepperText}>−</Label></Touch>
+          {RADIUS_OPTIONS.map(km => <Chip key={km} label={`${km} km`} accessibilityLabel={`${km} kilometre yarıçap`} disabled={!areaCenter} selected={area.mode === "radius" && area.radiusKm === km} onPress={() => chooseRadius(km)} />)}
+          <Touch accessibilityLabel="Yarıçapı artır" disabled={!areaCenter || areaRadiusKm >= MAX_RADIUS_KM} onPress={() => chooseRadius(areaRadiusKm + 1)} style={s.stepper}><Label style={s.stepperText}>+</Label></Touch>
+        </Box>
+        <Label style={s.muted}>{!areaCenter ? "Bir şehir seç ya da haritada bir noktaya dokun." : area.mode === "city" && area.place
+          ? `${area.place.name} ve yaklaşık ${CITY_RADIUS_KM} km çevresindeki etkinlikler eşleşir. Daha dar bir alan için haritaya dokun ya da mesafe seç.`
+          : `Seçtiğin merkezden her yöne ${areaRadiusKm} km uzaklığa kadar olan etkinlikler eşleşir. Merkezi değiştirmek için haritada başka bir noktaya dokun; merkez noktan diğer kullanıcılara gösterilmez.`}</Label>
         <Issues messages={issuesFor("area")} />
       </Accordion>
 
@@ -366,10 +457,13 @@ const s = StyleSheet.create({
   segmentItem: { flex: 1, borderRadius: 11, alignItems: "center" },
   segmentActive: { backgroundColor: palette.selected },
   tabItem: { minHeight: 40, justifyContent: "center" },
+  tabLabel: { flexDirection: "row", alignItems: "center", gap: 6 },
   recordOver: { opacity: 0.5 },
   recordTitleOver: { color: palette.muted },
-  search: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.background, paddingHorizontal: 12 },
-  searchField: { flex: 1, color: palette.text, fontSize: 15 },
+  // Same search box as the event location step.
+  search: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48, borderRadius: 14, paddingLeft: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: "rgba(255,255,255,.05)" },
+  searchField: { flex: 1, color: palette.text, fontSize: 14, paddingVertical: 12 },
+  searchButton: { minHeight: 44, minWidth: 52, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
   mapFrame: { height: 240, borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: palette.border },
   stepper: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface, alignItems: "center" },
   stepperText: { color: palette.text, fontSize: 18, lineHeight: 22, textAlign: "center" },

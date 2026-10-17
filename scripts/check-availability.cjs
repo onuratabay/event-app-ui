@@ -84,7 +84,20 @@ module.exports = async function ({ mount, act, text, storage }) {
   assert.equal(AVAILABILITY_SERVER_READY, true)
   const server = require("./mock-server.cjs")()
   const oldFetch = global.fetch
-  global.fetch = server.fetch
+  // Region search (Google Places "regions") is answered here; everything else by the mock server.
+  const placeCalls = []
+  const REGIONS = { "kadıköy": { placeId: "kadikoy", title: "Kadıköy", subtitle: "İstanbul, Türkiye", latitude: 40.99, longitude: 29.03 }, "kazım büfe": { placeId: "kazim", title: "Kazım Büfe", subtitle: "Moda, Kadıköy/İstanbul", latitude: 40.98, longitude: 29.02 }, "ankara": { placeId: "ankara", title: "Ankara", subtitle: "Türkiye", latitude: 39.93, longitude: 32.86 } }
+  global.fetch = async (url, init) => {
+    const parsed = new URL(url)
+    if (parsed.pathname === "/places/autocomplete") {
+      placeCalls.push(parsed.search)
+      const q = (parsed.searchParams.get("q") || "").toLocaleLowerCase("tr")
+      return { ok: true, status: 200, json: async () => ({ items: Object.entries(REGIONS).filter(([name]) => name.startsWith(q)).map(([, { placeId, title, subtitle }]) => ({ placeId, title, subtitle })) }) }
+    }
+    const region = Object.values(REGIONS).find(item => parsed.pathname === `/places/${item.placeId}`)
+    if (region) return { ok: true, status: 200, json: async () => ({ placeId: region.placeId, name: region.title, address: "", latitude: region.latitude, longitude: region.longitude, city: region.subtitle.split(",")[0], district: "" }) }
+    return server.fetch(url, init)
+  }
   server.availabilities.push({ id: "old", status: "expired", dateFrom: "01/09/2026", dateTo: "03/09/2026", weekdays: [2, 3, 4], timeWindows: [], area: { mode: "city", name: "İzmir", latitude: 38.42, longitude: 27.14 }, activities: [{ interestId: "kahve", maxDurationMinutes: null }] })
   server.availabilities.push({ id: "lapsed", status: "active", dateFrom: "01/10/2026", dateTo: "05/10/2026", weekdays: [2, 3, 4], timeWindows: [], area: { mode: "city", name: "İzmir", latitude: 38.42, longitude: 27.14 }, activities: [{ interestId: "kahve", maxDurationMinutes: null }] })
   const wait = (ms = 20) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) })
@@ -137,11 +150,39 @@ module.exports = async function ({ mount, act, text, storage }) {
   await press("Birlikte: her seviye")
   await press("Padel en fazla 2 saat")
   await press("Konum")
-  await press("Haritadan alan")
-  assert(screen.root.findAll(node => node.props.testID === "availability-map").length, "The map option uses the existing map component")
-  assert(text(screen.toJSON()).includes("5 km uzaklığa kadar"), "The radius is explained as distance from the center")
+  // Same flow as the event location step: a city field, then a district search with suggestions.
+  assert(screen.root.findAll(node => node.props.testID === "availability-map").length, "The location section always shows the map")
+  assert(text(screen.toJSON()).includes("haritada bir noktaya dokun"), "With no area yet, the section says how to choose one")
+  const regionSearch = () => screen.root.findAll(node => node.props.accessibilityLabel === "Adres veya mekan ara" && typeof node.props.onChangeText === "function")[0]
+  const settle = (ms = 320) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) })
+  await act(async () => regionSearch().props.onChangeText("Kad"))
+  await settle()
+  assert(placeCalls.length && placeCalls.every(call => !new URLSearchParams(call).has("kind")), "The area search covers venues too, like the event location step")
+  await press("Kadıköy, İstanbul, Türkiye")
+  await settle(30)
+  assert(text(screen.toJSON()).includes("Kadıköy · 5 km yarıçap"), "A picked district is a named circle around it")
+  assert.equal(regionSearch().props.value, "Kadıköy", "The picked district stays in the search field")
+  await press("Seçimi kaldır")
+  assert(!screen.root.findAll(node => node.type === "Circle" && node.props.center).length && regionSearch().props.value === "", "The picked district can be removed")
+  await act(async () => regionSearch().props.onChangeText("Kazım"))
+  await settle()
+  await press("Kazım Büfe, Moda, Kadıköy/İstanbul")
+  await settle(30)
+  assert(text(screen.toJSON()).includes("Kazım Büfe · 5 km yarıçap") && regionSearch().props.value === "Kazım Büfe", "A venue can be searched and becomes a named circle around it")
+  await press("Seçimi kaldır")
+  assert(!screen.root.findAll(node => node.type === "Circle" && node.props.center).length && regionSearch().props.value === "", "The picked district can be removed")
+  await act(async () => regionSearch().props.onChangeText("Ank"))
+  await settle()
+  await press("Ankara, Türkiye")
+  await settle(30)
+  assert(byLabel("Şehir: Ankara") && byLabel("Tüm şehir").props.accessibilityState.selected, "A picked province fills the city field as the whole city")
+  await press("Şehir: Ankara")
+  await pressText("İstanbul")
+  assert(byLabel("Şehir: İstanbul"), "The city is changed from the city field")
+  assert(screen.root.findAll(node => node.type === "Circle" && node.props.radius === 30000).length, "A chosen city is drawn as its whole-city circle")
   const map = screen.root.findAll(node => node.props.testID === "availability-map")[0]
   await act(async () => map.props.onPress({ nativeEvent: { coordinate: { latitude: 41.01, longitude: 28.97 } } }))
+  assert(text(screen.toJSON()).includes("5 km uzaklığa kadar"), "Tapping the map narrows to a custom circle explained as distance from the center")
   assert(screen.root.findAll(node => node.type === "Circle" && node.props.radius === 5000).length, "The area is drawn as a circle with the radius in metres")
   await press("10 kilometre yarıçap")
   await pressText("Kaydet ve davet al")
@@ -158,7 +199,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   assert.deepEqual(created.body.activities, [{ interestId: "padel", ownLevelId: "beginner", anyPartnerLevel: true, partnerLevelIds: [], maxDurationMinutes: 120 }, { interestId: "kahve", maxDurationMinutes: null }])
   content = text(screen.toJSON())
   assert(content.includes("Kaydedildi") && content.includes("Davet alıyor"), "The saved record is listed as active")
-  assert(byLabel("Kayıtlarım").props.accessibilityState.selected && byLabel("Kayıtlarım · 1"), "Saving switches to the records tab with the count")
+  assert(byLabel("Kayıtlarım").props.accessibilityState.selected && text(byLabel("Kayıtlarım")).includes("1") && byLabel("Kayıtlarım").props.accessibilityValue?.text === "1 kayıt", "Saving switches to the records tab with the count in its badge")
   await pressText("Duraklat")
   await wait()
   assert(server.requests.some(request => /^\/users\/me\/availability\/availability-\d+\/pause$/.test(request.path)), "Pausing calls the server")

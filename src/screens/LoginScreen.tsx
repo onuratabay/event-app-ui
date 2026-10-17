@@ -1,13 +1,13 @@
 import { palette } from "../theme/palette";
 import { gatedScreen } from "../native/access"
 import { useEffect, useRef, useState } from "react"
-import { AccessibilityInfo, Animated, Easing, ScrollView, StyleSheet } from "react-native"
+import { AccessibilityInfo, Animated, Easing, StyleSheet } from "react-native"
 import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground } from "../components/GlassUI"
 import { GlassFill, INPUT_FROST } from "../components/GlassFill"
 import { ErrorNotice } from "../components/ErrorNotice"
 import { EyeIcon, EyeOffIcon } from "../components/Icons"
-import { Field, Label, Touch, Box } from "../native/UI"
+import { Field, Label, Touch, Box, Scroll } from "../native/UI"
 import { formatPhone, phoneDigits, PHONE_PREFIX } from "../content/phone"
 import { getApiErrorMessage, login } from "../api/client"
 import { useSignedOutEntry } from "../native/session"
@@ -65,9 +65,8 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
     <Box style={{ flex: 1, backgroundColor: palette.background }}>
       <AtmoBackground variant="violet" />
       <TopNavBar navigate={navigate} fallback="welcome" title="Giriş" />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.page}
-        keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
-        automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
+      {/* The shared Scroll keeps the focused field above the keyboard and links phone → password. */}
+      <Scroll style={styles.page} keyboardDismissMode="interactive">
       <Animated.View style={[styles.form, { opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}> 
         <Box style={styles.heading}>
         <Label style={styles.eyebrow}>TOPLULUĞA GİRİŞ</Label>
@@ -136,7 +135,7 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
           Vazgeç
         </Touch>
       </Animated.View>
-      </ScrollView>
+      </Scroll>
     </Box>
   )
 }

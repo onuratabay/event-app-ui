@@ -83,6 +83,8 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
   const chooseCity = async (next: string) => {
     setCity(next); setResults([])
     if (value && value.city && value.city !== next) onChange(null)
+    // Clearing the city also drops the meeting point and zooms back out to the whole country.
+    if (!next) { onChange(null); map.current?.animateToRegion?.(TURKEY, 350); return }
     const known = CITY_PRESETS.find(place => place.name === next)
     if (known) { focus(known, CITY_DELTA); return }
     setBusy("city")
@@ -150,7 +152,7 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
 
   const region = value ? [value.district, value.city].filter(Boolean).join(", ") : ""
   return <Box style={s.root}>
-    <CityPicker value={city} onChange={next => void chooseCity(next)} />
+    <CityPicker clearable value={city} onChange={next => void chooseCity(next)} />
     <Box style={s.search}>
       <SearchIcon size={15} style={{ color: palette.muted }} />
       <Field accessibilityLabel="Adres veya mekan ara" placeholder={city ? `${city} içinde adres veya mekan ara…` : "Adres veya mekan ara…"} value={query}

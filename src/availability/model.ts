@@ -26,7 +26,8 @@ export interface ActivityPreference {
 }
 export type AreaSelection =
   | { mode: "city"; place: MapPlace | null }
-  | { mode: "radius"; center: { latitude: number; longitude: number } | null; radiusKm: number }
+  // `label` names a searched district for the summary only; it is not sent to the server.
+  | { mode: "radius"; center: { latitude: number; longitude: number } | null; radiusKm: number; label?: string }
 export interface AvailabilityDraft {
   startDate: string
   /** Empty while only the first day is chosen: a single-day availability. */
@@ -43,6 +44,8 @@ export const MAX_DAYS_AHEAD = 180
 export const MIN_RADIUS_KM = 1
 export const MAX_RADIUS_KM = 50
 export const RADIUS_OPTIONS = [2, 5, 10, 25, 50]
+/** The server matches a whole-city area as its centre plus this radius (CITY_RADIUS_KM on the API). */
+export const CITY_RADIUS_KM = 30
 export const MAX_TIME_WINDOWS = 3
 export const EVENING: TimeWindow = { from: "18:00", to: "23:00" }
 
@@ -118,7 +121,7 @@ export function describeDates(draft: Pick<AvailabilityDraft, "startDate" | "endD
 }
 export function describeArea(area: AreaSelection) {
   if (area.mode === "city") return area.place ? area.place.name : "Konum seçilmedi"
-  return area.center ? `Haritadan seçilen alan · ${area.radiusKm} km yarıçap` : "Haritada merkez seçilmedi"
+  return area.center ? `${area.label || "Haritadan seçilen alan"} · ${area.radiusKm} km yarıçap` : "Haritada merkez seçilmedi"
 }
 export function describeActivity(preference: ActivityPreference, catalog: CatalogInterest[]) {
   const interest = catalog.find(item => item.id === preference.interestId)

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { Alert, Linking, StyleSheet, Switch } from "react-native"
 import Constants from "expo-constants"
-import { Box, Field, Label, Scroll, Touch, openExternal } from "../native/UI"
+import { Box, Field, Label, Scroll, Touch, openExternal, Reveal } from "../native/UI"
 import { DEFAULT_PREFERENCES, usePreferences, type AppPreferences } from "../native/preferences"
 import { useStore } from "../native/Store"
 import { changePassword, deleteAccount, getApiErrorMessage, getLegalConsents, getPreferences, logout, putPreference, setMarketingConsent, type NotificationPreferences } from "../api/client"
@@ -135,12 +135,12 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
         <Row title={data.user.name || "Profilim"} detail="Profil fotoğrafı, ad, şehir ve Instagram" onPress={() => navigate("profile")} />
         <Row title="İlgi alanlarım" detail="Önerilen etkinlikleri belirleyen ilgi alanlarını düzenle" onPress={() => navigate("interests")} />
         <Row title="Şifremi değiştir" detail="Mevcut şifreni doğrulayarak yeni bir şifre belirle" open={passwordOpen} onPress={() => { setPasswordOpen(!passwordOpen); setError(null) }} />
-        {passwordOpen && <Box style={s.form}>
+        {passwordOpen && <Reveal><Box style={s.form}>
           <Password label="Mevcut şifre" value={oldPassword} onChange={setOldPassword} />
           <Password label="Yeni şifre (en az 8 karakter, 1 özel karakter)" value={newPassword} onChange={setNewPassword} />
           <Password label="Yeni şifre tekrar" value={repeatPassword} onChange={setRepeatPassword} />
           <Touch disabled={busy} onPress={() => void submitPassword()} style={s.primary}><Label style={s.primaryLabel}>{busy ? "Kaydediliyor…" : "Şifreyi güncelle"}</Label></Touch>
-        </Box>}
+        </Box></Reveal>}
       </Section>
 
       <Section title="Bildirimler">
@@ -191,11 +191,11 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
 
       <Section title="Hesabı sil">
         <Row title="Hesabımı sil" detail="Hesabını ve ilişkili tüm verilerini kalıcı olarak kaldır" danger open={deleteOpen} onPress={() => { setDeleteOpen(!deleteOpen); setError(null) }} />
-        {deleteOpen && <Box style={s.form}>
+        {deleteOpen && <Reveal><Box style={s.form}>
           <Label style={s.detail}>Profilin, oluşturduğun etkinlikler, katılımların ve mesajların silinir. Bu işlem geri alınamaz.</Label>
           <Password label="Şifreni gir" value={deletePassword} onChange={setDeletePassword} />
           <Touch disabled={busy} onPress={submitDelete} style={s.destructive}><Label style={s.destructiveLabel}>{busy ? "Siliniyor…" : "Hesabımı kalıcı olarak sil"}</Label></Touch>
-        </Box>}
+        </Box></Reveal>}
       </Section>
     </Scroll>
   </Box>

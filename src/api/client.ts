@@ -491,6 +491,8 @@ export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/e
 export const getProfileStats = () => request<{ attended: number; organized: number }>('/events/stats', { background: true })
 // The full list loads only when it is opened (covers are heavy).
 export const getAttendedEvents = (limit = 50) => request<EventListResponse>(`/events/attended?limit=${limit}`, { background: true })
+/** "Düzenlediği" on the profile: own events that started or ended, newest first. */
+export const getOrganizedEvents = (limit = 50) => request<EventListResponse>(`/events/organized?limit=${limit}`, { background: true })
 /** Profile "Arşiv": every event the user created, any status, newest first. Only ever the requester's own. */
 export const getOwnedEvents = (page = 1) => request<EventListResponse>(`/events/mine?page=${page}&limit=20`, { background: true })
 export async function getMyEvents(page = 1, options: { background?: boolean } = {}) {

@@ -1,8 +1,7 @@
 import * as Clipboard from "expo-clipboard"
 
 import * as ImagePicker from "expo-image-picker"
-import { Alert, Share } from "react-native"
-import type { AppEvent } from "../types"
+import { Alert } from "react-native"
 export async function selectPhoto(camera = false): Promise<string | null> {
   try {
     if (camera) {
@@ -28,9 +27,6 @@ export async function selectPhoto(camera = false): Promise<string | null> {
     Alert.alert("Fotoğraf eklenemedi", "Lütfen tekrar dene.")
     return null
   }
-}
-export async function shareEvent(event: AppEvent, url: string) {
-  await Share.share({ title: event.title, message: `${event.title}\n${event.date} · ${event.time}\n${event.location}\nMisafir olarak katıl: ${url}` })
 }
 export async function copyEvent(url: string) {
   await Clipboard.setStringAsync(url)

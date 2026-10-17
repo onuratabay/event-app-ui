@@ -338,7 +338,7 @@ export default function DiscoverScreen({
     finally { setLoadingMore(false); }
   };
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
-      <AtmoBackground motif="events" />
+      <AtmoBackground />
 
       <Box style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol, ui.overflowHidden]]}>
         {/* Events */}

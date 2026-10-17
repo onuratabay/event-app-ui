@@ -10,6 +10,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -350,6 +351,44 @@ export function Touch({
 }
 /** Inside a `Scroll` with `keyboardReveal`: called by a focused `Field` so it is scrolled above the keyboard. */
 const KeyboardRevealContext = createContext<((input: TextInput | null) => void) | null>(null)
+
+/**
+ * Keyboard "next" between form fields, like Tab on a desktop: every editable field inside a Scroll
+ * or Sheet registers here, and "next" moves to the field that follows it on screen (top to bottom,
+ * then left to right); after the last one the keyboard closes.
+ */
+interface FieldChain { register: (input: TextInput) => () => void; next: (from: TextInput | null) => void }
+const FieldChainContext = createContext<FieldChain | null>(null)
+function useFieldChain(): FieldChain {
+  const inputs = useRef(new Set<TextInput>())
+  return useMemo(() => ({
+    register: input => { inputs.current.add(input); return () => { inputs.current.delete(input) } },
+    next: from => {
+      const place = (input: TextInput) => new Promise<{ input: TextInput; x: number; y: number } | null>(resolve => {
+        try { input.measureInWindow((x, y, width, height) => resolve(width || height ? { input, x, y } : null)) } catch { resolve(null) }
+      })
+      void Promise.all([...inputs.current].map(place)).then(rows => {
+        const order = rows.filter((row): row is NonNullable<typeof row> => !!row)
+          .sort((a, b) => Math.abs(a.y - b.y) < 8 ? a.x - b.x : a.y - b.y)
+        const index = order.findIndex(row => row.input === from)
+        const target = index >= 0 ? order[index + 1] : undefined
+        if (target) target.input.focus(); else Keyboard.dismiss()
+      })
+    },
+  }), [])
+}
+/** A Box-sized space kept between an anchored block and the scroll area's top or bottom edge. */
+const ANCHOR_GAP = 16
+const ScrollAnchorContext = createContext<((target: View | null) => void) | null>(null)
+/** Scrolls the nearest Scroll so `target` is in view (used when a card or section opens). */
+export const useScrollAnchor = () => useContext(ScrollAnchorContext)
+/** Wraps content that appears on demand (an opened card, an extra field) and scrolls it into view. */
+export function Reveal({ children, style }: { children: ReactNode; style?: NativeStyleProp }) {
+  const anchor = useScrollAnchor()
+  const ref = useRef<View | null>(null)
+  useEffect(() => { anchor?.(ref.current) }, [])
+  return <View ref={ref} collapsable={false} style={split(style).view}>{children}</View>
+}
 const assignRef = <T,>(ref: React.Ref<T> | undefined, value: T | null) => {
   if (typeof ref === "function") ref(value)
   else if (ref) (ref as React.RefObject<T | null>).current = value
@@ -398,7 +437,7 @@ export function Scroll({
   children,
   horizontal,
   ref,
-  keyboardReveal = false,
+  keyboardReveal = true,
   onScroll,
   enter: _,
   glass: __,
@@ -408,11 +447,12 @@ export function Scroll({
   enter?: boolean
   glass?: boolean
   ref?: React.Ref<ScrollView>
-  /** Keep the focused text field above the keyboard (forms). */
+  /** Keep the focused text field above the keyboard (on by default). */
   keyboardReveal?: boolean
 }) {
   const scrollRef = useRef<ScrollView | null>(null)
   const { reveal, offset } = useKeyboardReveal(keyboardReveal, scrollRef)
+  const chain = useFieldChain()
   const inherited = useContext(Typography),
     { text, view } = split(style)
   const {
@@ -429,6 +469,19 @@ export function Scroll({
     flexDirection,
     ...frame
   } = view
+  // Floating top bars and the bottom bar sit over the scroll area; its paddings mark how much.
+  const insetTop = Math.min(Number(paddingTop ?? padding ?? 0) || 0, 140)
+  const insetBottom = Math.min(Number(paddingBottom ?? padding ?? 0) || 0, 120)
+  const anchor = (target: View | null) => {
+    const scroll = scrollRef.current as unknown as View | null
+    if (!target || !scroll || horizontal) return
+    // After the opened content has laid out: scroll the least needed to show it, top edge first.
+    setTimeout(() => scroll.measureInWindow?.((_sx, sy, _sw, sh) => target.measureInWindow((_x, y, _w, h) => {
+      const top = sy + insetTop + ANCHOR_GAP, bottom = sy + sh - insetBottom - ANCHOR_GAP
+      const delta = y < top ? y - top : y + h > bottom ? Math.min(y + h - bottom, y - top) : 0
+      if (delta) scrollRef.current?.scrollTo({ y: Math.max(0, offset.current + delta), animated: true })
+    })), 120)
+  }
   return (
     <Typography.Provider value={{ ...inherited, ...text }}>
       <ScrollView
@@ -458,7 +511,9 @@ export function Scroll({
         keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
       >
-        <KeyboardRevealContext.Provider value={reveal}><Content style={view}>{children}</Content></KeyboardRevealContext.Provider>
+        <KeyboardRevealContext.Provider value={reveal}><FieldChainContext.Provider value={chain}><ScrollAnchorContext.Provider value={anchor}>
+          <Content style={view}>{children}</Content>
+        </ScrollAnchorContext.Provider></FieldChainContext.Provider></KeyboardRevealContext.Provider>
       </ScrollView>
     </Typography.Provider>
   )
@@ -520,9 +575,19 @@ export function Field({
 }: FieldProps) {
   const inherited = useContext(Typography)
   const reveal = useContext(KeyboardRevealContext)
+  const chain = useContext(FieldChainContext)
   const inputRef = useRef<TextInput | null>(null)
   const [open, setOpen] = useState(false)
   const dateMode = mode === "date" || mode === "time"
+  // Every editable field is a stop for "next". Single-line fields also move on with their return key,
+  // unless they have their own submit (search, sign in) or return key; multi-line fields keep Enter
+  // for new lines.
+  const inChain = !!chain && !dateMode && props.editable !== false
+  const chained = inChain && !props.multiline && !props.onSubmitEditing && (props.returnKeyType === undefined || props.returnKeyType === "next")
+  useEffect(() => {
+    if (!inChain || !inputRef.current) return
+    return chain!.register(inputRef.current)
+  }, [chain, inChain])
   if (dateMode)
     return (
       <>
@@ -546,6 +611,9 @@ export function Field({
       {...props}
       ref={node => { inputRef.current = node; assignRef(ref, node) }}
       onFocus={event => { props.onFocus?.(event); reveal?.(inputRef.current) }}
+      returnKeyType={chained ? "next" : props.returnKeyType}
+      submitBehavior={chained ? "submit" : props.submitBehavior}
+      onSubmitEditing={chained ? () => chain!.next(inputRef.current) : props.onSubmitEditing}
       value={value}
       onChangeText={onChangeText}
       style={[
@@ -585,6 +653,7 @@ export function Sheet({
   children,
   style,
 }: LayoutProps & { onClose: () => void }) {
+  const chain = useFieldChain()
   return (
     <Modal
       transparent
@@ -604,7 +673,7 @@ export function Sheet({
               { position: "relative", flex: 1, justifyContent: "flex-end" },
             ]}
           >
-            {children}
+            <FieldChainContext.Provider value={chain}>{children}</FieldChainContext.Provider>
           </Box>
         </SafeAreaView>
       </Pressable>

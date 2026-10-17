@@ -8,7 +8,7 @@ import { Avatar, AtmoBackground, GlassCard, GlassFill, GlassInput, GlassTextarea
 import { CameraIcon, CheckIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, PlusIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
-import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
+import { Box, Field, Label, Picture, Scroll, Touch, Reveal } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import TopNavBar from "../components/TopNavBar";
@@ -381,7 +381,7 @@ export default function CreateEventScreen({
                     <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>Yeni ilgi alanı</Label>
                   </Touch>}
               </Box>
-              {proposalOpen && <Box style={[[ui.mt4, ui.p4, ui.rounded2xl, ui.border, ui.borderWhite10, ui.spaceY3], { backgroundColor: palette.surface }]} enter>
+              {proposalOpen && <Reveal><Box style={[[ui.mt4, ui.p4, ui.rounded2xl, ui.border, ui.borderWhite10, ui.spaceY3], { backgroundColor: palette.surface }]} enter>
                   <GlassInput label="İlgi alanının adı" placeholder="Örn. Okçuluk" value={proposalName} maxLength={40} onChangeText={setProposalName} />
                   <Label style={[[ui.textSm, ui.textWhite60, ui.fontMedium]]}>Katılımcılara seviye sorulsun mu?</Label>
                   <Box style={[[ui.flex, ui.gap3]]}>
@@ -390,7 +390,7 @@ export default function CreateEventScreen({
                   {proposalLevels && <Label style={[[ui.textXs, ui.textWhite40]]}>Diğer etkinliklerdeki seviyeler (Başlangıç, Orta, İleri…) bu ilgi alanında da seçilebilir olur.</Label>}
                   <Label style={[[ui.textXs, ui.textWhite40]]}>Yönetici onaylayana kadar yalnızca senin etkinliklerinde kullanılır. Hazır görseli olmadığından kapak fotoğrafı yüklemen gerekecek.</Label>
                   <PrimaryButton onPress={() => void submitProposal()} disabled={proposing || proposalName.trim().length < 2 || proposalLevels === null}>{proposing ? "Ekleniyor…" : "Ekle ve seç"}</PrimaryButton>
-                </Box>}
+                </Box></Reveal>}
             </Box>}
 
           {/* Step 1 - Level */}
@@ -443,7 +443,7 @@ export default function CreateEventScreen({
                       <Label style={[[ui.textSm, ui.fontMedium]]}>Özel süre</Label>
                     </Touch>
                 </Box>
-                {customDurationOpen && <Box style={[[ui.spaceY3], { marginTop: 16 }]}>
+                {customDurationOpen && <Reveal><Box style={[[ui.spaceY3], { marginTop: 16 }]}>
                     <Box style={[[ui.flex, ui.gap3]]}>
                       <GlassInput label="Saat" accessibilityLabel="Süre saat" placeholder="0" keyboardType="number-pad" maxLength={2} value={customDuration.hours} onChangeText={hours => setCustomDuration(p => ({ ...p, hours: hours.replace(/\D/g, "") }))} />
                       <GlassInput label="Dakika" placeholder="0" keyboardType="number-pad" maxLength={2} value={customDuration.minutes} onChangeText={minutes => setCustomDuration(p => ({ ...p, minutes: clampMinutes(minutes) }))} />
@@ -451,7 +451,7 @@ export default function CreateEventScreen({
                     <Label style={[[ui.textXs], { color: customMinutes > MAX_DURATION_MINUTES ? palette.error : palette.muted }]}>
                       {customMinutes > MAX_DURATION_MINUTES ? "Süre en fazla 24 saat olabilir." : customDurationValid ? `Süre: ${formatDuration(customMinutes)}` : "Saat ve dakika gir."}
                     </Label>
-                  </Box>}
+                  </Box></Reveal>}
               </Box>
               <Box style={[[ui.h4]]} />
             </Box>}

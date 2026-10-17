@@ -6,10 +6,11 @@ import { onSocket, socketAction, watchEvent } from '../services/socket';
 import { participate, getApiErrorMessage, getEvent, getEventCandidateCount, cancelEvent } from "../api/client";
 import { formatScore } from "../events/score";
 import { eventPhase, isLivePhase, isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Alert, StyleSheet } from "react-native";
-import { Avatar, GlassCard } from "../components/GlassUI";
+import { AtmoBackground, Avatar, GlassCard } from "../components/GlassUI";
 import { CheckIcon, ClockIcon, LocationIcon, ShareIcon, StarIcon } from "../components/Icons";
+import { openDirections } from "../native/directions";
 import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
@@ -98,6 +99,7 @@ export default function EventDetailScreen({
   const roomReady = isRoomReady(event);
   const isForming = !roomReady && !['cancelled', 'closed'].includes(event.status || '');
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
+      <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="discover" title={event.title} subtitle={`${event.date} · ${event.time}`} floating right={<NavAction label="Paylaş" onPress={() => setShareOpen(true)}><ShareIcon size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} style={{ color: palette.text }} /></NavAction>} />
       <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol], { paddingBottom: actionHeight + 20 + navInset }]}>
         {/* Cover image header */}
@@ -136,7 +138,9 @@ export default function EventDetailScreen({
             }, {
               icon: <LocationIcon size={17} strokeWidth={1.75} />,
               label: "Konum",
-              value: event.location
+              value: event.location,
+              // Tapping the location starts directions in the phone's map or navigation app.
+              onPress: () => openDirections({ name: event.location, latitude: event.latitude, longitude: event.longitude })
             }, {
               icon: <ClockIcon size={17} strokeWidth={1.75} />,
               label: "Süre",
@@ -145,15 +149,21 @@ export default function EventDetailScreen({
               icon: <CheckIcon size={17} strokeWidth={1.75} />,
               label: "Seviye",
               value: event.level
-            }] : [])].map((item, i) => <GlassCard key={i} style={[[ui.p3], { height: META_BOX_HEIGHT }]}>
-                  <Box style={[[ui.textWhite30, ui.mb1]]}>{item.icon}</Box>
+            }] : [])].map((item: { icon: ReactNode; label: string; value: string; onPress?: () => void }, i) => {
+              const card = <GlassCard key={i} style={[[ui.p3], { height: META_BOX_HEIGHT }]}>
+                  <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb1]]}>
+                    <Box style={[[ui.textWhite30]]}>{item.icon}</Box>
+                    {item.onPress ? <Label style={[[ui.text10px, ui.fontMedium], { color: palette.accent }]}>Yol tarifi ›</Label> : null}
+                  </Box>
                   <Label style={[[ui.text10px, ui.textWhite30, ui.uppercase, ui.trackingWider]]}>
                     {item.label}
                   </Label>
                   <Label numberOfLines={2} style={[[ui.textSm, ui.textWhite80, ui.mt05, ui.fontMedium]]}>
                     {item.value}
                   </Label>
-                </GlassCard>)}
+                </GlassCard>;
+              return item.onPress ? <Touch key={i} accessibilityLabel={`${item.label}: ${item.value}, yol tarifi al`} onPress={item.onPress}>{card}</Touch> : card;
+            })}
             </Box>
           </Box>
 

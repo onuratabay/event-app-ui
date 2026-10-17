@@ -139,6 +139,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await act(async () => registration.root.findAll(n => n.props.mode === "date" && typeof n.props.onChangeText === "function")[0].props.onChangeText("1995-06-15"))
   await act(async () => registration.root.findAllByType("Pressable").find(n => String(n.props.accessibilityLabel).startsWith("Şehir:")).props.onPress())
   await act(async () => registration.root.findAllByType("Pressable").find(n => n.props.accessibilityState && "selected" in n.props.accessibilityState && text(n).includes("Ankara")).props.onPress())
+  await tap(registration, "Topluluk İlkeleri ve Sözleşmeler")
   await tap(registration, "Topluluk Kuralları")
   await tap(registration, "KVKK Aydınlatma Metni")
   await tap(registration, "ticari elektronik ileti")
@@ -465,6 +466,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
         { ...cardBase, id: "own-cancel", interest: { id: "yoga", slug: "yoga", name: "Yoga" }, owner: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" }, status: { enum: "cancelled", name: "" } },
         { ...cardBase, id: "own-done", interest: { id: "film", slug: "film", name: "Film" }, owner: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" }, status: { enum: "closed", name: "" } },
       ], total: 3 }) }
+      if (parsed.pathname === "/events/organized") return { ok: true, status: 200, json: async () => ({ items: [{ ...cardBase, id: "own-done", interest: { id: "film", slug: "film", name: "Film" }, locationName: "Yazlık Sinema", owner: { id: "pending-user", firstName: "Bekleyen", lastName: "Üye" }, status: { enum: "closed", name: "" } }], total: 2 }) }
       if (parsed.pathname === "/events/attended") return { ok: true, status: 200, json: async () => ({ items: parsed.searchParams.get("limit") === "1" ? [] : [{ ...cardBase, id: "done-1", interest: { id: "film", slug: "film", name: "Film" }, locationName: "Eski Sinema", status: { enum: "closed", name: "Bitti" }, viewerParticipationStatus: "confirmed" }], total: 3 }) }
       if (parsed.pathname === "/friends/of/ali") return { ok: true, status: 200, json: async () => ({ items: [{ user: { id: "zeynep", firstName: "Zeynep", lastName: "Aydın", profilePhoto: null }, friendsSince: new Date().toISOString() }], total: 1 }) }
       if (parsed.pathname === "/friends/of/pending-user") return { ok: true, status: 200, json: async () => ({ items: [{ user: { id: "ali", firstName: "Ali", lastName: "Kaya", profilePhoto: null }, friendsSince: new Date().toISOString() }], total: 1 }) }
@@ -536,6 +538,11 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     await press(own, "Katıldığım etkinlikleri göster")
     await settle()
     assert(text(own.toJSON()).includes("Eski Sinema"), "Tapping Katıldığı lists those events")
+    await press(own, "Listeyi kapat")
+    // "Düzenlediği" opens its list the same way.
+    await press(own, "Düzenlediğim etkinlikleri göster")
+    await settle()
+    assert(text(own.toJSON()).includes("Düzenlediğim etkinlikler") && text(own.toJSON()).includes("Yazlık Sinema"), "Tapping Düzenlediği lists the events you organized")
     await press(own, "Listeyi kapat")
     // Archive: every event I created, with its status; only on my own profile.
     await press(own, "Arşivi aç")

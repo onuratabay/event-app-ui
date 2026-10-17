@@ -3,10 +3,10 @@ import { useFocusEffect } from "expo-router";
 import { getNotifications, hasSession } from "../api/client";
 import { useStore } from "../native/Store";
 import { onSocket } from "../services/socket";
-import { Box, Label } from "../native/UI";
 import { palette } from "../theme/palette";
 import { BellIcon } from "./Icons";
 import HeaderIconButton from "./HeaderIconButton";
+import CountBadge from "./CountBadge";
 
 export default function NotificationButton({ onPress }: { onPress: () => void }) {
   const { data } = useStore();
@@ -26,8 +26,7 @@ export default function NotificationButton({ onPress }: { onPress: () => void })
   useEffect(() => { if (!data.user.id) setCount(0); }, [data.user.id]);
   return <HeaderIconButton plain label={count ? `Bildirimler, ${count} okunmamış` : "Bildirimler"} onPress={onPress}>
     <BellIcon size={20} strokeWidth={1.8} style={{ color: palette.text }} />
-    {count > 0 && <Box pointerEvents="none" style={{ position: "absolute", top: 3, right: 1, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: palette.blue, alignItems: "center", justifyContent: "center" }}>
-      <Label style={{ fontSize: 9, lineHeight: 12, color: palette.text, fontFamily: "Outfit-SemiBold" }}>{count > 99 ? "99+" : count}</Label>
-    </Box>}
+    {/* Anchored past the bell's top-right corner so it only overlaps the corner, not the bell. */}
+    <CountBadge count={count} solid style={{ position: "absolute", top: -8, left: 14 }} />
   </HeaderIconButton>;
 }

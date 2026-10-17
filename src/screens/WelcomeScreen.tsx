@@ -20,44 +20,6 @@ export default function WelcomeScreen({
 
       {/* Premium animated background */}
       <Box style={[[ui.fixed, ui.inset0, ui.overflowHidden]]}>
-        {/* Slow drifting glass planes */}
-        <Box style={[[ui.fixed], {
-        top: "8%",
-        left: "-10%",
-        width: "70%",
-        height: "40%",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.04)",
-        borderRadius: 90,
-        transform: [{
-          rotate: "-12deg"
-        }]
-      }]} gradient={["rgba(146,125,255,0.06)", "rgba(105,120,255,0.03)"]} glass enter />
-        <Box style={[[ui.fixed], {
-        top: "30%",
-        right: "-15%",
-        width: "55%",
-        height: "35%",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.03)",
-        borderRadius: 90,
-        transform: [{
-          rotate: "8deg"
-        }]
-      }]} gradient={["rgba(105,120,255,0.05)", "rgba(146,125,255,0.04)"]} glass enter />
-        <Box style={[[ui.fixed], {
-        bottom: "20%",
-        left: "5%",
-        width: "45%",
-        height: "28%",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.03)",
-        borderRadius: 90,
-        transform: [{
-          rotate: "20deg"
-        }]
-      }]} gradient={["rgba(146,125,255,0.04)", "rgba(255,255,255,0.02)"]} enter />
-
         {/* Thin light ray */}
         <Box style={[[ui.fixed, ui.top0, ui.left35_0], {
         width: 1,

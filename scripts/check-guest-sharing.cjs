@@ -48,15 +48,18 @@ module.exports = async ({ act, text, storage, tap, audit }) => {
   }
   let tree
   await act(async () => { tree = create(React.createElement(ShareSheet, { event, onClose() {} })) })
-  let copy = tree.root.findAllByType('Pressable').find(node => text(node).trim() === 'Davet bağlantısını kopyala')
+  let copy = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Bağlantıyı kopyala')
   assert(copy.props.disabled, 'Sharing is disabled before responsibility consent')
   assert(!requests.some(row => row.path.endsWith('/share')))
   const checkbox = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityRole === 'checkbox')
   await act(async () => checkbox.props.onPress())
-  await press(tree, 'Davet bağlantısını kopyala')
+  await press(tree, 'Bağlantıyı kopyala')
   assert.deepEqual(JSON.parse(requests.find(row => row.path.endsWith('/share')).body), { acceptResponsibility: true })
   assert.equal(global.__clipboard, `https://ewent.app/e/${code}`, 'Copy uses a personal HTTPS link')
-  await press(tree, 'WhatsApp ve diğer uygulamalar')
+  // Each platform opens directly with the invite prefilled; "Diğer" is the system share sheet.
+  await press(tree, 'WhatsApp')
+  assert(global.__openedUrl.startsWith('whatsapp://send?text=') && decodeURIComponent(global.__openedUrl).includes(`https://ewent.app/e/${code}`), 'WhatsApp opens with the invite prefilled')
+  await press(tree, 'Diğer')
   assert(global.__lastShare.message.includes(`https://ewent.app/e/${code}`))
   assert.equal(requests.filter(row => row.path.endsWith('/share')).length, 1, 'The same panel reuses its accepted link')
   await act(async () => tree.unmount())
