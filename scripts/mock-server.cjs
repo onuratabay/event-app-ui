@@ -41,6 +41,20 @@ module.exports = function () {
     else if (path.startsWith('/friends/requests/') && path.endsWith('/decline')) { const id = path.split('/')[3]; state.friendRequests = state.friendRequests.filter(user => user.id !== id); result = { message: 'ok' } }
     else if (path === '/notifications/read-all') { notifications.forEach(row => row.readAt = new Date().toISOString()); result = { success: true } }
     else if (path.startsWith('/notifications/') && path.endsWith('/read')) { const row = notifications.find(row => row.id === path.split('/')[2]); if (row) row.readAt = new Date().toISOString(); result = { success: true } }
+    else if (path === '/admin/stats') {
+      if (user.role !== 'admin') return { ok: false, status: 403, text: async () => JSON.stringify({ message: 'Bu alana yalnızca yöneticiler erişebilir.' }) }
+      const days = Array.from({ length: 30 }, (_, i) => new Date(Date.UTC(2026, 9, 18 - 29 + i)).toISOString().slice(0, 10))
+      const daily = peak => days.map((_, i) => i % 7 === 0 ? peak : i % 3)
+      result = {
+        generatedAt: '2026-10-18T09:30:00.000Z',
+        users: { total: 128, admins: 2, byStatus: { approved: 96, reference_pending: 14, profile_incomplete: 12, rejected: 6 }, newToday: 3, new7d: 21, new30d: 64, active: { day: 18, week: 57, month: 103 }, withPhoto: 80, withInstagram: 110, withPush: 70, pushTokens: { ios: 44, android: 31 }, locked: 1, marketingConsent: 52, ageBuckets: [{ name: '18–24', count: 30 }, { name: '25–34', count: 61 }, { name: '35–44', count: 25 }, { name: '45–54', count: 9 }, { name: '55+', count: 3 }], topCities: [{ name: 'İstanbul', count: 70 }, { name: 'Ankara', count: 31 }], topInterests: [{ name: 'Padel', count: 44 }, { name: 'Kahve', count: 40 }] },
+        events: { total: 245, active: 19, upcoming: 15, today: 4, overdue: 0, created7d: 33, created30d: 120, byStatus: { waiting_participants: 15, started: 4, closed: 150, cancelled: 76 }, byVisibility: { public: 230, invite_only: 15 }, cancellations: { insufficient_participants: 50, owner_request: 26 }, avgConfirmed: 4.25, fillRate: 0.62, reachedMinimum: 140, notCancelled: 169, paid: 12, topInterests: [{ name: 'Padel', count: 60 }] },
+        participation: { byStatus: { confirmed: 900, invited: 40, waitlisted: 12, declined: 88 }, guests: 25, activeGuests: 6, shareLinks: 41, checkins: 300, favorites: 210 },
+        engagement: { eventMessages: 5400, eventMessages7d: 610, announcements: 22, guestMessages: 15, conversations: 75, directMessages: 1300, directMessages7d: 190, friendships: 260, friendRequests: 18, reviews: 410, avgEventScore: 4.37, participantRatings: 820, avgParticipantScore: 4.61, availability: { active: 34, paused: 5 } },
+        moderation: { reports: { submitted: 3, completed: 9 }, reportTargets: { event: 5, user: 7 }, references: { pending: 9, approved: 120, declined: 4 }, interestProposals: 2, interests: 18 },
+        series: { days, registrations: daily(6), events: daily(9), messages: daily(80) },
+      }
+    }
     else if (path.startsWith('/admin/applications')) {
       if (user.role !== 'admin') return { ok: false, status: 403, text: async () => JSON.stringify({ message: 'Bu alana yalnızca yöneticiler erişebilir.' }) }
       if (!options.method && path !== '/admin/applications') {

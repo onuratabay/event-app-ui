@@ -345,6 +345,19 @@ export interface MembershipApplication {
   status: { enum: string; name: string }; interests: string[]; approvedReferences: number; createdAt: string
 }
 export interface ApplicationsPage { items: MembershipApplication[]; total: number; page: number; hasMore: boolean; counts: Record<ApplicationFilter, number> }
+type Counts = Record<string, number>
+type Ranked = Array<{ name: string; count: number }>
+/** Admin dashboard figures (GET /admin/stats); series cover the last 30 days, oldest first. */
+export interface AdminStats {
+  generatedAt: string
+  users: { total: number; admins: number; byStatus: Counts; newToday: number; new7d: number; new30d: number; active: { day: number; week: number; month: number }; withPhoto: number; withInstagram: number; withPush: number; pushTokens: { ios: number; android: number }; locked: number; marketingConsent: number; ageBuckets: Ranked; topCities: Ranked; topInterests: Ranked }
+  events: { total: number; active: number; upcoming: number; today: number; overdue: number; created7d: number; created30d: number; byStatus: Counts; byVisibility: Counts; cancellations: Counts; avgConfirmed: number | null; fillRate: number | null; reachedMinimum: number; notCancelled: number; paid: number; topInterests: Ranked }
+  participation: { byStatus: Counts; guests: number; activeGuests: number; shareLinks: number; checkins: number; favorites: number }
+  engagement: { eventMessages: number; eventMessages7d: number; announcements: number; guestMessages: number; conversations: number; directMessages: number; directMessages7d: number; friendships: number; friendRequests: number; reviews: number; avgEventScore: number | null; participantRatings: number; avgParticipantScore: number | null; availability: { active: number; paused: number } }
+  moderation: { reports: Counts; reportTargets: Counts; references: Counts; interestProposals: number; interests: number }
+  series: { days: string[]; registrations: number[]; events: number[]; messages: number[] }
+}
+export const getAdminStats = () => request<AdminStats>("/admin/stats", { background: true })
 export const getApplications = (params: { status: ApplicationFilter; q?: string; page?: number }, signal?: AbortSignal) =>
   request<ApplicationsPage>(`/admin/applications?${new URLSearchParams({ status: params.status, page: String(params.page || 1), limit: '20', ...(params.q?.trim() ? { q: params.q.trim() } : {}) })}`, { signal, background: true })
 export interface MembershipApplicationDetail extends MembershipApplication {

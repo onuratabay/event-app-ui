@@ -44,7 +44,18 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   await act(async () => tree.unmount())
   tree = await mount('Admin')
   await settle()
+  // The panel opens on the statistics overview; applications are the second tab, with the pending count.
   let content = text(tree.toJSON())
+  assert(server.requests.some(row => row.path === '/admin/stats'), 'The overview loads the statistics')
+  for (const part of ['Toplam üye', '128', 'Aktif kullanıcı', '57', 'Aktif etkinlik', '19', 'Toplam etkinlik', '245', 'Yeni kayıtlar', 'Durum dağılımı', 'Yaş grupları', 'İptal nedenleri', 'Şikayetler', '4,37 / 5'])
+    assert(content.includes(part), `The overview shows ${part}`)
+  const dayBar = tree.root.findAllByType('Pressable').find(node => /^\d+ Eki: \d+$/.test(String(node.props.accessibilityLabel)))
+  assert(dayBar, 'Each day of a daily chart can be tapped')
+  await act(async () => dayBar.props.onPress?.({}))
+  assert(text(tree.toJSON()).includes(dayBar.props.accessibilityLabel.replace(':', ' ·')), 'Tapping a day shows its value')
+  await press(tree, 'Başvurular')
+  await settle()
+  content = text(tree.toJSON())
   assert(content.includes('Ada Yeni, 31') && content.includes('Can Deneme, 36'), 'Pending applications are listed with age')
   assert(content.includes('Bekleyen · 2') && content.includes('ada@example.com') && content.includes('1 onaylı referans'), 'Cards show contact, references and tab counts')
   const search = tree.root.findAll(node => node.props.accessibilityLabel === 'Başvurularda ara' && typeof node.props.onChangeText === 'function')[0]

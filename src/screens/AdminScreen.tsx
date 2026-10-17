@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 import { Alert, RefreshControl, StyleSheet } from "react-native"
-import { decideApplication, decideInterest, getPendingInterests, type PendingInterest, getApiErrorMessage, getApplicationDetail, getApplications, type ApplicationDecision, type ApplicationFilter, type ApplicationsPage, type MembershipApplication, type MembershipApplicationDetail } from "../api/client"
+import { getAdminStats, type AdminStats as AdminStatsData, decideApplication, decideInterest, getPendingInterests, type PendingInterest, getApiErrorMessage, getApplicationDetail, getApplications, type ApplicationDecision, type ApplicationFilter, type ApplicationsPage, type MembershipApplication, type MembershipApplicationDetail } from "../api/client"
 import TopNavBar from "../components/TopNavBar"
+import AdminStats from "../components/AdminStats"
+import CountBadge from "../components/CountBadge"
 import { AtmoBackground } from "../components/GlassUI"
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "../components/Icons"
 import LoadingSpinner from "../components/LoadingSpinner"
@@ -144,6 +146,25 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  // Two tabs: the statistics overview (default) and the membership applications.
+  const [tab, setTab] = useState<"overview" | "applications">("overview")
+  const [stats, setStats] = useState<AdminStatsData | null>(null)
+  const [statsError, setStatsError] = useState<string | null>(null)
+  const loadStats = async () => {
+    if (!isAdmin) return
+    setStatsError(null)
+    try {
+      const result = await getAdminStats()
+      // An older server (or a partial answer) has no statistics yet; say so instead of drawing nothing.
+      if (!result?.users || !result.events || !result.series) throw new Error("İstatistikler bu sunucu sürümünde henüz yok.")
+      setStats(result)
+    }
+    catch (cause) {
+      if (cause instanceof Error && /^API 403:/.test(cause.message)) setForbidden(true)
+      else setStatsError(getApiErrorMessage(cause, "İstatistikler yüklenemedi."))
+    }
+  }
+  useEffect(() => { if (tab === "overview") void loadStats() }, [tab, isAdmin])
   // One card is open at a time; its details load on first open and are kept until the account changes.
   const [openId, setOpenId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, MembershipApplicationDetail>>({})
@@ -179,7 +200,7 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
   useEffect(() => { void load(1) }, [filter, search, isAdmin, attempt])
   // Pull to refresh reloads the current tab and the counts.
   const [pulling, setPulling] = useState(false)
-  const pullRefresh = async () => { setPulling(true); try { await load(1) } finally { setPulling(false) } }
+  const pullRefresh = async () => { setPulling(true); try { await (tab === "overview" ? loadStats() : load(1)) } finally { setPulling(false) } }
 
   const decide = (item: MembershipApplication, decision: ApplicationDecision) => {
     const name = `${item.firstName} ${item.lastName}`.trim()
@@ -211,8 +232,21 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
   const blocked = !isAdmin || forbidden
   return <Box style={s.screen}>
     <AtmoBackground />
-    <TopNavBar navigate={navigate} fallback="settings" title="Üyelik başvuruları" subtitle={page && !blocked ? `${page.counts.pending} onay bekliyor` : undefined} />
+    <TopNavBar navigate={navigate} fallback="settings" title="Yönetim" subtitle={page && !blocked ? `${page.counts.pending} onay bekliyor` : undefined} />
     {blocked ? <Box style={s.center}><Label style={s.title}>Bu sayfaya erişim yetkin yok</Label><Label style={s.muted}>Üyelik başvurularını yalnızca yöneticiler yönetebilir.</Label></Box> : <Scroll style={s.page} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={pulling} onRefresh={() => { void pullRefresh() }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={84} />}>
+      <Box style={s.tabs} accessibilityRole="tablist">
+        {([["overview", "Genel bakış"], ["applications", "Başvurular"]] as const).map(([id, label]) => <Touch key={id} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === id }} onPress={() => setTab(id)} style={[s.tab, tab === id && s.tabOn]}>
+          <Box style={s.tabLabel}>
+            <Label style={[s.chipText, tab === id && s.chipTextOn]}>{label}</Label>
+            {id === "applications" && <CountBadge count={page?.counts.pending ?? 0} />}
+          </Box>
+        </Touch>)}
+      </Box>
+      {tab === "overview" ? <>
+        {statsError && <Box style={s.stateBox}><Label style={s.error}>{statsError}</Label><Touch onPress={() => void loadStats()} style={s.retry}><Label style={s.retryText}>Tekrar dene</Label></Touch></Box>}
+        {!stats && !statsError && <Box style={s.stateBox}><LoadingSpinner /></Box>}
+        {stats && <AdminStats stats={stats} />}
+      </> : <>
       <PendingInterests reload={attempt + (pulling ? 1 : 0)} />
       <Box style={s.search}>
         <SearchIcon size={16} style={{ color: palette.muted }} />
@@ -230,6 +264,7 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
       {page?.items.map(item => <ApplicationCard key={item.id} item={item} busy={busyId === item.id} open={openId === item.id} detail={details[item.id] || null} detailError={detailErrors[item.id] || null}
         onToggle={() => toggle(item.id)} onRetryDetail={() => loadDetail(item.id)} onDecide={decision => decide(item, decision)} />)}
       {page?.hasMore && <Touch disabled={loading} onPress={() => void load(page.page + 1)} style={s.more}><Label style={s.retryText}>{loading ? "Yükleniyor…" : "Daha fazla göster"}</Label></Touch>}
+      </>}
     </Scroll>}
   </Box>
 }
@@ -285,5 +320,9 @@ const s = StyleSheet.create({
   tag: { overflow: "hidden", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, fontSize: 12, color: palette.accent, backgroundColor: palette.selected },
   warning: { color: "#fbbf24", fontSize: 12 },
   reviewButton: { flex: 0, marginTop: 10 },
+  tabs: { flexDirection: "row", padding: 4, gap: 4, borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.surface },
+  tab: { flex: 1, minHeight: 40, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  tabOn: { backgroundColor: palette.selected },
+  tabLabel: { flexDirection: "row", alignItems: "center", gap: 6 },
   more: { alignSelf: "center", minHeight: 44, paddingHorizontal: 16, justifyContent: "center" },
 })
