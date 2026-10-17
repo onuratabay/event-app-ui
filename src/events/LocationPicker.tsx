@@ -34,6 +34,15 @@ export function placeLabel(venue: string, place: PickedPlace | null) {
   return parts.filter((part, index) => parts.findIndex(other => other.toLocaleLowerCase("tr-TR") === part.toLocaleLowerCase("tr-TR")) === index).join(", ")
 }
 const point = ({ latitude, longitude }: Point): Point => ({ latitude, longitude })
+/** A readable line for a geocoder hit ("Moda Cd., Kadıköy, İstanbul"); empty when it cannot be named. */
+async function describe(target: Point) {
+  try {
+    const [address] = await Location.reverseGeocodeAsync(target)
+    if (!address) return ""
+    const parts = [address.name || [address.street, address.streetNumber].filter(Boolean).join(" "), address.subregion || address.district, address.city || address.region]
+    return parts.filter((part, index): part is string => !!part && parts.indexOf(part) === index).join(", ")
+  } catch { return "" }
+}
 // Android's geocoder needs the location permission; iOS geocodes without it.
 const canGeocode = async () => Platform.OS !== "android" || (await Location.requestForegroundPermissionsAsync()).granted
 
@@ -50,7 +59,7 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
   const latest = useRef(0)
   const [city, setCity] = useState(value?.city || matchCity(defaultCity))
   const [query, setQuery] = useState("")
-  const [results, setResults] = useState<Point[]>([])
+  const [results, setResults] = useState<(Point & { label: string })[]>([])
   const [busy, setBusy] = useState<"city" | "search" | "locate" | null>(null)
   const preset = CITY_PRESETS.find(place => place.name === city)
   const [initialRegion] = useState(() => value ? { ...point(value), latitudeDelta: POINT_DELTA, longitudeDelta: POINT_DELTA }
@@ -91,9 +100,10 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
     try {
       if (!await canGeocode()) { Alert.alert("Konum izni gerekli", "Adres aramak için konum izni ver ya da haritaya dokunarak noktayı kendin seç."); return }
       const found = (await Location.geocodeAsync(city ? `${text}, ${city}, Türkiye` : `${text}, Türkiye`)).slice(0, 3).map(point)
-      setResults(found)
       if (!found.length) Alert.alert("Adres bulunamadı", "Farklı yazmayı dene ya da haritaya dokunarak noktayı seç.")
       else if (found.length === 1) choose(found[0], text)
+      // Several hits are told apart by their street and district rather than raw coordinates.
+      else setResults(await Promise.all(found.map(async hit => ({ ...hit, label: await describe(hit) }))))
     } catch { Alert.alert("Adres aranamadı", "Bağlantını kontrol et ya da haritaya dokunarak noktayı seç.") }
     finally { setBusy(null) }
   }
@@ -111,6 +121,14 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
       focus(target, POINT_DELTA)
       onChange({ ...target, city: found, district: place.district, address: place.address })
     } catch { Alert.alert("Yer seçilemedi", "Bağlantını kontrol et ya da haritaya dokunarak noktayı seç.") }
+  }
+  // Tapping a venue on the Google map picks it with its name (Apple Maps does not report venue taps).
+  const pickVenue = (name: string, target: Point) => {
+    const label = name.replace(/\s+/g, " ").trim()
+    if (label) onVenueChange(label)
+    setQuery(""); setResults([])
+    focus(target, POINT_DELTA)
+    void pick(target)
   }
   const choose = (target: Point, label = query.trim()) => {
     setResults([])
@@ -143,17 +161,18 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
     {results.length > 1 && <Box style={s.results}>
       {results.map((result, index) => <Touch key={index} accessibilityLabel={`Sonuç ${index + 1}`} onPress={() => choose(result)} style={s.result}>
         <LocationIcon size={14} style={{ color: palette.accent }} />
-        <Label style={s.resultText} numberOfLines={1}>{`${query.trim()} · ${result.latitude.toFixed(4)}, ${result.longitude.toFixed(4)}`}</Label>
+        <Label style={s.resultText} numberOfLines={1}>{result.label || `${query.trim()} (${index + 1})`}</Label>
       </Touch>)}
     </Box>}
     <Box style={s.mapFrame} onTouchStart={() => onMapTouch?.(true)} onTouchEnd={() => onMapTouch?.(false)} onTouchCancel={() => onMapTouch?.(false)}>
       <MapView ref={map} provider={MAP_PROVIDER} testID="event-location-map" style={StyleSheet.absoluteFill} initialRegion={initialRegion} {...DARK_MAP_PROPS}
-        showsUserLocation={false} toolbarEnabled={false} onPress={event => void pick(event.nativeEvent.coordinate)}>
+        showsUserLocation={false} toolbarEnabled={false} onPress={event => void pick(event.nativeEvent.coordinate)}
+        onPoiClick={event => pickVenue(event.nativeEvent.name, event.nativeEvent.coordinate)}>
         {value && <Marker coordinate={point(value)} draggable pinColor={palette.blue} onDragEnd={event => void pick(event.nativeEvent.coordinate)} />}
       </MapView>
     </Box>
     <Label style={value ? s.picked : s.hint}>
-      {value ? `📍 ${region || "Seçilen nokta"}` : busy === "city" ? "Şehir bulunuyor…" : "Buluşma noktasını seçmek için haritaya dokun."}
+      {value ? `📍 ${region || "Seçilen nokta"}` : busy === "city" ? "Şehir bulunuyor…" : "Buluşma noktasını seçmek için haritada bir mekana ya da noktaya dokun."}
     </Label>
     {value && <Label style={s.hint}>Değiştirmek için haritada başka bir yere dokun ya da pini sürükle.</Label>}
     <Touch disabled={!!busy} onPress={() => void locate()} style={s.locate}>

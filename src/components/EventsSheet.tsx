@@ -1,6 +1,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { palette } from "../theme/palette"
+import { GlassFill } from "./GlassFill"
 import { Box, Label, Picture, Touch } from "../native/UI"
 import type { AppEvent } from "../types"
 
@@ -17,7 +18,7 @@ export default function EventsSheet({ title, events, error, emptyText, onClose, 
   return <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
     <Box style={s.backdrop}>
       <Pressable accessibilityLabel="Listeyi kapat" onPress={onClose} style={StyleSheet.absoluteFill} />
-      <SafeAreaView edges={["bottom"]} style={s.sheet}>
+      <SafeAreaView edges={["bottom"]} style={s.sheet}><GlassFill kind="sheet" topRadius={24} />
         <Box style={s.header}>
           <Label style={s.title} numberOfLines={1}>{title}{events ? ` · ${events.length}` : ""}</Label>
           <Touch accessibilityLabel="Listeyi kapat" onPress={onClose} style={s.close}><Label style={s.closeLabel}>Kapat</Label></Touch>
@@ -42,7 +43,7 @@ export default function EventsSheet({ title, events, error, emptyText, onClose, 
 
 const s = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.55)" },
-  sheet: { backgroundColor: palette.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
+  sheet: { backgroundColor: palette.glassSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
   header: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { flex: 1, fontFamily: "Outfit-SemiBold", fontSize: 16, lineHeight: 22, color: palette.text },
   close: { minHeight: 44, justifyContent: "center", paddingHorizontal: 8 },

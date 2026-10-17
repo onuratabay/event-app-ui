@@ -14,4 +14,12 @@ export const palette = {
   success: "#6fd0b6",
   error: "#f39baf",
   actionGradient: ["#4d5bcb", "#6651c9", "#4b5cce"] as const,
+  /** Frosted surfaces: translucent tints laid over a blur so the ambient background glows through. */
+  glass: "rgba(24,31,60,.52)",
+  glassCard: "rgba(24,31,60,.66)",
+  glassCardStrong: "rgba(30,39,72,.66)",
+  glassStrong: "rgba(30,39,72,.66)",
+  glassSheet: "rgba(16,21,42,.78)",
+  glassBorder: "rgba(205,214,255,.15)",
+  glassHighlight: ["rgba(255,255,255,.09)", "rgba(255,255,255,.015)", "rgba(185,195,255,.04)"] as const,
 } as const

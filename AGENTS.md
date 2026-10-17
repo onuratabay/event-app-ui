@@ -3,7 +3,7 @@
 Expo SDK 57 + React Native + TypeScript application for iOS and Android.
 
 - `app/`: Expo Router routes, native stack and safe-area/keyboard setup.
-- `src/screens/`: Existing application screens. Preserve their Turkish copy and midnight navy visual design with restrained blue/violet accents from `src/theme/palette.ts`.
+- `src/screens/`: Existing application screens. Preserve their Turkish copy and midnight navy visual design with restrained blue/violet accents from `src/theme/palette.ts`. Screens sit on the animated `AtmoBackground`; cards and sheets are frosted glass (`palette.glass*` background plus `GlassFill` or `GlassCard`), not opaque `palette.surface`.
 - `src/components/`: Shared cards, controls, icons and bottom navigation.
 - `src/native/UI.tsx`: Native layout, typography, press feedback, scrolling, images and sheets.
 - `src/data.ts`: Sample users, events and messages served by the test mock server (not used by the app).

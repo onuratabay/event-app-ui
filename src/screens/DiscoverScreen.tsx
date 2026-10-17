@@ -92,9 +92,9 @@ function SortSheet({
       backgroundColor: "rgba(0,0,0,0.5)"
     }]} glass />
       <Touch onPress={e => e.stopPropagation()} style={[[ui.relative, ui.roundedT28px, ui.overflowHidden], {
-      backgroundColor: "rgba(10,10,22,0.92)",
+      backgroundColor: palette.glassSheet,
       borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.10)",
+      borderColor: palette.glassBorder,
       borderBottomWidth: 0,
       borderBottomColor: "transparent"
     }]} glass enter>
@@ -168,9 +168,9 @@ function EventCard({
   const phase = eventPhase(event);
   return <Box style={[[], {}]} enter>
       <RippleButton onPress={onPress} accessibilityLabel={`${event.title}, ${PHASE_A11Y[phase]}`} rippleColor="rgba(255,255,255,0.06)" style={[[ui.wFull, ui.textLeft, ui.rounded2xl, ui.overflowHidden], {
-      backgroundColor: palette.surface,
+      backgroundColor: palette.glassCard,
       borderWidth: 1,
-      borderColor: palette.border
+      borderColor: palette.glassBorder
     }]} glass>
         {/* Cover */}
         <Box style={[[ui.relative, ui.h44, ui.overflowHidden, ui.bgGray900]]}>
@@ -338,7 +338,7 @@ export default function DiscoverScreen({
     finally { setLoadingMore(false); }
   };
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
-      <AtmoBackground />
+      <AtmoBackground motif="events" />
 
       <Box style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol, ui.overflowHidden]]}>
         {/* Events */}
@@ -353,7 +353,9 @@ export default function DiscoverScreen({
           ListEmptyComponent={!store.feedLoaded ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 48 }} /> : <DiscoverEmptyState interests={store.user.interests} filterLabel={sortBy === "mine" ? "Senin etkinliklerin" : activeFilter !== "Sana Özel" && EVENTS.some(isOpenForFeed) ? activeFilter : undefined}
             onClearFilter={() => { setActiveFilter("Sana Özel"); setSortBy("recommended"); }} onCreate={activity => navigate("create-event", activity ? { activity } : undefined)} />}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 20 }} /> : null}
-          refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={() => { void pullToRefresh(); }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={112} />}
+          // The app-wide event loader (ApiLoadingOverlay) covers the refresh, so the native spinner is hidden:
+          // transparent on iOS, and on Android parked above the screen so its circle never slides in.
+          refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={() => { void pullToRefresh(); }} tintColor="transparent" colors={["transparent"]} progressBackgroundColor="transparent" progressViewOffset={Platform.OS === "android" ? -200 : 112} />}
           onEndReached={() => { void handleLoadMore(); }}
           onEndReachedThreshold={0.45}
           initialNumToRender={4}

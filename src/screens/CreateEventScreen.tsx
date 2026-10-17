@@ -4,7 +4,7 @@ import { Alert } from "react-native";
 import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions, getMyProposedInterests, proposeInterest } from "../api/client";
 import { isUnlimitedCapacity, mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useRef, useState } from "react";
-import { Avatar, AtmoBackground, GlassCard, GlassInput, GlassTextarea } from "../components/GlassUI";
+import { Avatar, AtmoBackground, GlassCard, GlassFill, GlassInput, GlassTextarea } from "../components/GlassUI";
 import { CameraIcon, CheckIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, PlusIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
@@ -370,13 +370,13 @@ export default function CreateEventScreen({
               </Label>
               <Box style={[[ui.grid, ui.gap3]]} columns={2}>
                 {!activities.length && <Touch onPress={loadCatalog}>Seçenekleri yeniden yükle</Touch>}
-              {ACTIVITIES.map(a => <Touch key={a.label} onPress={() => chooseActivity(a.label)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, data.activity === a.label ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
+              {ACTIVITIES.map(a => <Touch key={a.label} onPress={() => chooseActivity(a.label)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, data.activity === a.label ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={data.activity === a.label ? "rgba(105,120,255,.16)" : undefined} />
                     <CategoryIcon name={a.label} size={28} style={{ color: palette.accent, marginBottom: 12 }} />
                     <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>
                       {a.label}
                     </Label>
                   </Touch>)}
-                {activities.length > 0 && <Touch accessibilityLabel="Yeni ilgi alanı ekle" onPress={() => setProposalOpen(open => !open)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, proposalOpen ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]], { borderStyle: "dashed" }]}>
+                {activities.length > 0 && <Touch accessibilityLabel="Yeni ilgi alanı ekle" onPress={() => setProposalOpen(open => !open)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, proposalOpen ? [ui.borderC8a44a50] : [ui.borderWhite8]], { borderStyle: "dashed" }]}><GlassFill radius={16} tint={proposalOpen ? "rgba(105,120,255,.16)" : undefined} />
                     <PlusIcon size={28} style={{ color: palette.accent, marginBottom: 12 }} />
                     <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>Yeni ilgi alanı</Label>
                   </Touch>}
@@ -385,7 +385,7 @@ export default function CreateEventScreen({
                   <GlassInput label="İlgi alanının adı" placeholder="Örn. Okçuluk" value={proposalName} maxLength={40} onChangeText={setProposalName} />
                   <Label style={[[ui.textSm, ui.textWhite60, ui.fontMedium]]}>Katılımcılara seviye sorulsun mu?</Label>
                   <Box style={[[ui.flex, ui.gap3]]}>
-                    {([[true, "Evet, seviye sorulsun"], [false, "Hayır, gerek yok"]] as const).map(([value, label]) => <Touch key={label} accessibilityState={{ selected: proposalLevels === value }} onPress={() => setProposalLevels(value)} style={[[ui.flex1, ui.p3, ui.rounded2xl, ui.textCenter, ui.border, ui.textSm, proposalLevels === value ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>{label}</Touch>)}
+                    {([[true, "Evet, seviye sorulsun"], [false, "Hayır, gerek yok"]] as const).map(([value, label]) => <Touch key={label} accessibilityState={{ selected: proposalLevels === value }} onPress={() => setProposalLevels(value)} style={[[ui.flex1, ui.p3, ui.rounded2xl, ui.textCenter, ui.border, ui.textSm, proposalLevels === value ? [ui.borderC8a44a50, ui.textC8a44a] : [ui.borderWhite8, ui.textWhite70]]]}><GlassFill radius={16} tint={proposalLevels === value ? "rgba(105,120,255,.16)" : undefined} />{label}</Touch>)}
                   </Box>
                   {proposalLevels && <Label style={[[ui.textXs, ui.textWhite40]]}>Diğer etkinliklerdeki seviyeler (Başlangıç, Orta, İleri…) bu ilgi alanında da seçilebilir olur.</Label>}
                   <Label style={[[ui.textXs, ui.textWhite40]]}>Yönetici onaylayana kadar yalnızca senin etkinliklerinde kullanılır. Hazır görseli olmadığından kapak fotoğrafı yüklemen gerekecek.</Label>
@@ -402,7 +402,7 @@ export default function CreateEventScreen({
                 Sana uygun kişileri bulalım.
               </Label>
               <Box style={[[ui.spaceY3]]}>
-                {LEVELS.map(level => <Touch key={level} onPress={() => selectAndNext("level", level)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.textLeft, ui.flex, ui.itemsCenter, ui.justifyBetween, ui.border, data.level === level ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
+                {LEVELS.map(level => <Touch key={level} onPress={() => selectAndNext("level", level)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.textLeft, ui.flex, ui.itemsCenter, ui.justifyBetween, ui.border, data.level === level ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={data.level === level ? "rgba(105,120,255,.16)" : undefined} />
                     <Label style={[[ui.textBase, ui.textWhite80, ui.fontMedium]]}>
                       {level}
                     </Label>
@@ -436,10 +436,10 @@ export default function CreateEventScreen({
                   Tahminen ne kadar vaktiniz var?
                 </Label>
                 <Box style={[[ui.grid, ui.gap3]]} columns={3}>
-                  {DURATIONS.map(minutes => <Touch key={minutes} onPress={() => { setCustomDurationOpen(false); setData(p => ({ ...p, durationMinutes: minutes })); }} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, !customDurationOpen && data.durationMinutes === minutes ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>
+                  {DURATIONS.map(minutes => <Touch key={minutes} onPress={() => { setCustomDurationOpen(false); setData(p => ({ ...p, durationMinutes: minutes })); }} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, !customDurationOpen && data.durationMinutes === minutes ? [ui.borderC8a44a50, ui.textC8a44a] : [ui.borderWhite8, ui.textWhite70]]]}><GlassFill radius={16} tint={!customDurationOpen && data.durationMinutes === minutes ? "rgba(105,120,255,.16)" : undefined} />
                       <Label style={[[ui.textSm, ui.fontMedium]]}>{formatDuration(minutes)}</Label>
                     </Touch>)}
-                  <Touch onPress={() => setCustomDurationOpen(true)} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, customDurationOpen || data.durationMinutes && !DURATIONS.includes(data.durationMinutes) ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>
+                  <Touch onPress={() => setCustomDurationOpen(true)} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, customDurationOpen || data.durationMinutes && !DURATIONS.includes(data.durationMinutes) ? [ui.borderC8a44a50, ui.textC8a44a] : [ui.borderWhite8, ui.textWhite70]]]}><GlassFill radius={16} tint={customDurationOpen || data.durationMinutes && !DURATIONS.includes(data.durationMinutes) ? "rgba(105,120,255,.16)" : undefined} />
                       <Label style={[[ui.textSm, ui.fontMedium]]}>Özel süre</Label>
                     </Touch>
                 </Box>
@@ -580,7 +580,6 @@ export default function CreateEventScreen({
               </Label>
 
               <Touch style={[[ui.h52, ui.rounded2xl, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.gap3], {
-            backgroundColor: "rgba(255,255,255,0.04)",
             borderWidth: 1,
             borderColor: "rgba(255,255,255,0.12)"
           }]} onPress={async () => {
@@ -590,6 +589,7 @@ export default function CreateEventScreen({
               coverImage: uri
             }));
           }}>
+                <GlassFill radius={16} />
                 {data.coverImage && <Picture uri={data.coverImage} style={{
               width: "100%",
               height: 130,
@@ -619,7 +619,7 @@ export default function CreateEventScreen({
               const Icon = p.icon;
               const selected = data.privacy === p.label;
               const locked = p.enum === INVITE_ONLY && !canInvite;
-              return <Touch key={p.label} disabled={locked} onPress={() => p.enum === INVITE_ONLY ? chooseInviteOnly(p.label) : selectAndNext("privacy", p.label)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap4, ui.border, selected ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
+              return <Touch key={p.label} disabled={locked} onPress={() => p.enum === INVITE_ONLY ? chooseInviteOnly(p.label) : selectAndNext("privacy", p.label)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap4, ui.border, selected ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={selected ? "rgba(105,120,255,.16)" : undefined} />
                       <Box style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0, selected ? [ui.textC8a44a] : [ui.textWhite35]], {
                   backgroundColor: selected ? "rgba(105,120,255,0.10)" : "rgba(255,255,255,0.05)",
                   borderWidth: 1,
@@ -646,7 +646,7 @@ export default function CreateEventScreen({
                   {friends === null ? <Label style={[[ui.textSm, ui.textWhite40]]}>Arkadaşların yükleniyor…</Label> : !friends.length ? <Label style={[[ui.textSm, ui.textWhite40]]}>Henüz aktif arkadaşın yok.</Label> : friends.map(friend => {
                 const name = `${friend.firstName} ${friend.lastName}`.trim();
                 const chosen = invitedIds.includes(friend.id);
-                return <Touch key={friend.id} accessibilityLabel={`${name} davet et`} accessibilityState={{ selected: chosen }} onPress={() => toggleInvite(friend.id)} style={[[ui.wFull, ui.p3, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap3, ui.border, chosen ? [ui.borderC8a44a50, ui.bgC8a44a10] : [ui.borderWhite8, ui.bgWhite004]]]}>
+                return <Touch key={friend.id} accessibilityLabel={`${name} davet et`} accessibilityState={{ selected: chosen }} onPress={() => toggleInvite(friend.id)} style={[[ui.wFull, ui.p3, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap3, ui.border, chosen ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={chosen ? "rgba(105,120,255,.16)" : undefined} />
                         <Avatar uri={friend.profilePhoto || ""} name={name} size="sm" />
                         <Label style={[[ui.textSm, ui.textWhite85], { flex: 1, textAlign: "left" }]}>{name}</Label>
                         {chosen && <CheckIcon size={16} strokeWidth={2} style={{ color: palette.accent }} />}

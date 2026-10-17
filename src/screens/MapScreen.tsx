@@ -200,7 +200,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     <View style={StyleSheet.absoluteFill} onLayout={event => setSize(event.nativeEvent.layout)}>
       <MapView ref={map} provider={MAP_PROVIDER} testID="event-map" style={StyleSheet.absoluteFill} initialRegion={INITIAL_REGION} {...DARK_MAP_PROPS}
         rotateEnabled={false} pitchEnabled={false} showsCompass={false}
-        showsUserLocation={showUser} showsMyLocationButton={false} showsPointsOfInterests={false} showsBuildings={false} showsTraffic={false} toolbarEnabled={false}
+        showsUserLocation={showUser} showsMyLocationButton={false} showsBuildings={false} showsTraffic={false} toolbarEnabled={false}
         onMapReady={() => setReady(true)} onRegionChange={setRegion} onRegionChangeComplete={setRegion}
         onPanDrag={() => { centered.current = true }}
         onPress={() => setSelected([])} legalLabelInsets={{ top: 0, left: 8, right: 8, bottom: navInset + 8 }}>

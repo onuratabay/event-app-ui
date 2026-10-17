@@ -2,7 +2,7 @@ import ActivityIndicator from "../components/LoadingSpinner";
 import { useEffect, useState } from "react"
 import { StyleSheet } from "react-native"
 import { getApiErrorMessage, getEventCandidates, inviteEventCandidates, type EventCandidate } from "../api/client"
-import { Avatar } from "../components/GlassUI"
+import { Avatar, GlassFill } from "../components/GlassUI"
 import { CheckIcon, CloseIcon, UserPlusIcon } from "../components/Icons"
 import { Box, Label, Scroll, Sheet, Touch } from "../native/UI"
 import { palette } from "../theme/palette"
@@ -36,7 +36,7 @@ export default function InviteCandidatesSheet({ eventId, onClose }: { eventId: s
     finally { setSending(false) }
   }
   return <Sheet onClose={() => !sending && onClose()}>
-    <Touch haptic={false} onPress={() => {}} style={s.panel}>
+    <Touch haptic={false} onPress={() => {}} style={s.panel}><GlassFill kind="sheet" topRadius={24} />
       <Box style={s.head}>
         <Label style={s.title} accessibilityRole="header">Takvim havuzundan davet et</Label>
         <Touch accessibilityLabel="Kapat" onPress={onClose} style={s.close}><CloseIcon size={18} style={{ color: palette.muted }} /></Touch>
@@ -75,7 +75,7 @@ export default function InviteCandidatesSheet({ eventId, onClose }: { eventId: s
 }
 
 const s = StyleSheet.create({
-  panel: { backgroundColor: palette.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: palette.border, padding: 20, gap: 12, alignItems: "stretch", maxHeight: "88%" },
+  panel: { backgroundColor: palette.glassSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: palette.glassBorder, padding: 20, gap: 12, alignItems: "stretch", maxHeight: "88%" },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 17, lineHeight: 23 },
   close: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },

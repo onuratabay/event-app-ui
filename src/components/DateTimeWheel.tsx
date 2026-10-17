@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { palette } from "../theme/palette"
+import { GlassFill } from "./GlassFill"
 
 const ROW = 44
 const pad = (value: number) => String(value).padStart(2, "0")
@@ -56,7 +57,7 @@ export default function DateTimeWheel({ mode, value, onConfirm, onClose }: { mod
   return <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
     <View style={s.backdrop}>
       <Pressable accessibilityLabel="Seçimi kapat" onPress={onClose} style={StyleSheet.absoluteFill} />
-      <SafeAreaView edges={["bottom"]} style={s.panel}>
+      <SafeAreaView edges={["bottom"]} style={s.panel}><GlassFill kind="sheet" topRadius={24} />
         <View style={s.toolbar}>
           <Pressable onPress={onClose} accessibilityRole="button" style={s.action}><Text allowFontScaling={false}style={s.cancel}>İptal</Text></Pressable>
           <Text allowFontScaling={false}style={s.title}>{mode === "time" ? "Saat seç" : "Tarih seç"}</Text>
@@ -81,7 +82,7 @@ export default function DateTimeWheel({ mode, value, onConfirm, onClose }: { mod
 }
 const s = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.55)" },
-  panel: { backgroundColor: palette.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingBottom: 16 },
+  panel: { backgroundColor: palette.glassSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingBottom: 16 },
   toolbar: { height: 60, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: palette.border },
   action: { minWidth: 60, height: 44, justifyContent: "center", alignItems: "center" },
   title: { fontFamily: "Outfit-SemiBold", fontSize: 16, lineHeight: 22, color: palette.text, includeFontPadding: false },

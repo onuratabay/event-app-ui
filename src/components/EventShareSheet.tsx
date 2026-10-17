@@ -5,6 +5,7 @@ import { copyEvent, shareEvent } from '../native/media'
 import { Box, Label, Sheet, Touch } from '../native/UI'
 import { CheckIcon, CloseIcon, ShareIcon } from './Icons'
 import { palette } from '../theme/palette'
+import { GlassFill } from './GlassFill'
 import type { AppEvent } from '../types'
 
 export default function EventShareSheet({ event, onClose }: { event: AppEvent; onClose: () => void }) {
@@ -34,7 +35,7 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
   }
   return <Sheet onClose={() => { if (!busy) onClose() }}>
     <Box style={s.backdrop} />
-    <Touch onPress={press => press.stopPropagation()} style={s.panel}>
+    <Touch onPress={press => press.stopPropagation()} style={s.panel}><GlassFill kind="sheet" topRadius={28} />
       <Box style={s.header}><Label style={s.title}>Etkinliği paylaş</Label><Touch accessibilityLabel="Paylaşımı kapat" disabled={busy} onPress={onClose} style={s.close}><CloseIcon size={20} style={{ color: palette.text }} /></Touch></Box>
       <Label style={s.event}>{event.title}</Label>
       <Label style={s.body}>WhatsApp grubuna veya başka bir yere gönderebileceğin kişisel davet bağlantısı oluştur. Gelen misafirler yalnızca bu etkinliği görebilir.</Label>
@@ -52,7 +53,7 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
 }
 const s = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,.55)' },
-  panel: { backgroundColor: palette.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, gap: 14, alignItems: 'stretch' },
+  panel: { backgroundColor: palette.glassSheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, gap: 14, alignItems: 'stretch' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, title: { color: palette.text, fontSize: 21, fontFamily: 'Outfit-SemiBold' }, close: { width: 44, height: 44 },
   event: { color: palette.accent, fontSize: 15, fontFamily: 'Outfit-Medium' }, body: { color: palette.muted, fontSize: 13, lineHeight: 20, textAlign: 'left' },
   consent: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: palette.elevated, borderRadius: 16, padding: 14 },

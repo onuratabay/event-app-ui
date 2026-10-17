@@ -7,7 +7,7 @@ import { MAP_PROVIDER } from "../map/provider"
 import { DARK_MAP_PROPS } from "../map/darkStyle"
 import { createAvailability, deleteAvailability, getApiErrorMessage, getAvailabilities, getMapInterests, setAvailabilityPaused, updateAvailability, type ApiAvailability } from "../api/client"
 import { useBottomNavInset } from "../components/BottomNav"
-import { AtmoBackground, GlassCard } from "../components/GlassUI"
+import { AtmoBackground, GlassCard, GlassFill } from "../components/GlassUI"
 import { CategoryIcon, CheckIcon, ChevronDownIcon, CloseIcon, LocationIcon, PlusIcon, SearchIcon } from "../components/Icons"
 import TopNavBar from "../components/TopNavBar"
 import { DURATIONS, formatDuration } from "../events/duration"
@@ -320,7 +320,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
     </Box>}
 
     {reviewing && <Sheet onClose={() => !saving && setReviewing(false)}>
-      <Touch haptic={false} onPress={() => {}} style={s.sheet}>
+      <Touch haptic={false} onPress={() => {}} style={s.sheet}><GlassFill kind="sheet" topRadius={24} />
         <Label style={s.sheetTitle}>Kaydetmeden önce kontrol et</Label>
         {[describeDates(draft), `${describeDays(draft.weekdays)} · ${describeTimes(draft.timeWindows)}`, describeArea(area), ...draft.activities.map(item => { const text = describeActivity(item, interests); return `${text.title}: ${text.detail}` })].map(line => <Label key={line} style={s.summaryLine}>{line}</Label>)}
         <Touch disabled={saving} onPress={() => void save()} gradient={palette.actionGradient} style={s.primary}><Label style={s.primaryText}>{saving ? "Kaydediliyor…" : "Kaydet ve davet al"}</Label></Touch>
@@ -393,6 +393,6 @@ const s = StyleSheet.create({
   primaryDisabled: { borderColor: "rgba(148,163,184,.22)" },
   primaryText: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 16, lineHeight: 22, letterSpacing: 0.4 },
   stickyNote: { color: palette.muted, fontSize: 12, lineHeight: 16, textAlign: "center" },
-  sheet: { backgroundColor: palette.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 10, borderWidth: 1, borderColor: palette.border, alignItems: "stretch" },
+  sheet: { backgroundColor: palette.glassSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 10, borderWidth: 1, borderColor: palette.glassBorder, alignItems: "stretch" },
   sheetTitle: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 17, lineHeight: 23, marginBottom: 4 },
 })

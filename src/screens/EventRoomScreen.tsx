@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
-import { AtmoBackground } from "../components/GlassUI";
+import { AtmoBackground, GlassFill } from "../components/GlassUI";
 import { deleteMessage, editMessage, getApiErrorMessage, getEvent, getEventActivity, getMessageReads, getMessages, markRoomRead, putPreference, renameRoom, reportUser, sendMessage, type ApiMessage } from "../api/client";
 import { EMPTY_USER, defaultRoomTitle, mapApiEvent, participantCount, roomTitle, setOpenRoom } from "../native/Store";
 import { useStore } from "../native/Store";
@@ -51,7 +51,7 @@ function dayLabel(iso?: string) {
 function ActionSheet({ title, options, onClose }: { title?: string; options: SheetOption[]; onClose: () => void }) {
   return <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
     <Pressable accessibilityLabel="Menüyü kapat" style={s.sheetBackdrop} onPress={onClose}>
-      <Pressable style={s.sheet} onPress={() => {}}>
+      <Pressable style={s.sheet} onPress={() => {}}><GlassFill kind="sheet" topRadius={24} />
         {title ? <Label style={s.sheetTitle} numberOfLines={2}>{title}</Label> : null}
         {options.map(option => <Touch key={option.label} accessibilityLabel={option.label} onPress={() => { onClose(); option.onPress(); }} style={s.sheetOption}>
           <Label style={[s.sheetLabel, option.danger && s.danger]}>{option.label}</Label>
@@ -334,7 +334,7 @@ export default function EventRoomScreen({
           <Box style={s.sheetBackdrop}>
             <Pressable accessibilityLabel="Oda bilgisini kapat" onPress={() => setInfoOpen(false)} style={StyleSheet.absoluteFill} />
             {/* Safe area keeps the last rows above Android's system navigation bar. */}
-            <SafeAreaView edges={["bottom"]} style={s.peopleSheet}>
+            <SafeAreaView edges={["bottom"]} style={s.peopleSheet}><GlassFill kind="sheet" topRadius={24} />
               <Box style={s.peopleSheetHeader}>
                 <Label style={s.peopleSheetTitle} numberOfLines={1}>{roomTitle(event)}</Label>
                 <Touch accessibilityLabel="Oda bilgisini kapat" onPress={() => setInfoOpen(false)} style={s.peopleSheetClose}><Label style={s.peopleSheetCloseLabel}>Kapat</Label></Touch>
@@ -508,7 +508,7 @@ const s = StyleSheet.create({
   panelButtonLabel: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 13 },
   people: { gap: 8 },
   person: { flexDirection: "row", alignItems: "center", gap: 8 },
-  peopleSheet: { backgroundColor: palette.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
+  peopleSheet: { backgroundColor: palette.glassSheet, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
   peopleSheetHeader: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   peopleSheetTitle: { fontFamily: "Outfit-SemiBold", fontSize: 16, lineHeight: 22, color: palette.text },
   peopleSheetClose: { minHeight: 44, justifyContent: "center", paddingHorizontal: 8 },
@@ -572,7 +572,7 @@ const s = StyleSheet.create({
   connection: { color: palette.muted, fontSize: 12, lineHeight: 17, paddingHorizontal: 20, paddingTop: 8, textAlign: "center" },
   danger: { color: palette.error },
   sheetBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,.55)" },
-  sheet: { gap: 4, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.border },
+  sheet: { gap: 4, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: palette.glassSheet, borderTopWidth: 1, borderColor: palette.glassBorder },
   sheetTitle: { color: palette.muted, fontSize: 13, lineHeight: 18, textAlign: "center", paddingHorizontal: 12, paddingBottom: 8 },
   sheetOption: { minHeight: 50, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,.04)" },
   sheetCancel: { marginTop: 6, backgroundColor: "rgba(255,255,255,.08)" },

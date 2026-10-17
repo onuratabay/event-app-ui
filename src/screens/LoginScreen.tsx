@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { AccessibilityInfo, Animated, Easing, ScrollView, StyleSheet } from "react-native"
 import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground } from "../components/GlassUI"
+import { GlassFill, INPUT_FROST } from "../components/GlassFill"
 import { ErrorNotice } from "../components/ErrorNotice"
 import { EyeIcon, EyeOffIcon } from "../components/Icons"
 import { Field, Label, Touch, Box } from "../native/UI"
@@ -82,6 +83,8 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
           />
         )}
         <Label style={styles.fieldLabel}>Telefon</Label>
+        <Box style={styles.inputFrame}>
+        <GlassFill radius={16} {...INPUT_FROST} />
         <Field
           mode="tel"
           value={phone}
@@ -95,8 +98,10 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
           maxLength={17}
           style={styles.input}
         />
+        </Box>
         <Label style={styles.fieldLabel}>Şifre</Label>
         <Box style={styles.passwordWrap}>
+          <GlassFill radius={16} {...INPUT_FROST} />
           <Field
             value={password}
             onChangeText={setPassword}
@@ -142,9 +147,10 @@ const styles = StyleSheet.create({
   heroTitle: { color: palette.text, fontFamily: "Fraunces", fontSize: 36, lineHeight: 45, letterSpacing: -0.7, paddingVertical: 2 },
   eyebrow: { color: palette.accent, fontSize: 11, letterSpacing: 4, fontFamily: "Outfit-Medium", marginBottom: 8 },
   fieldLabel: { color: "#b6b0ae", fontSize: 12, fontFamily: "Outfit-Medium", marginTop: 6, marginLeft: 4 },
-  passwordWrap: { position: "relative", justifyContent: "center" },
+  passwordWrap: { position: "relative", justifyContent: "center", borderRadius: 16 },
   passwordInput: { paddingRight: 56 },
   passwordToggle: { position: "absolute", right: 4, top: 0, bottom: 0, width: 48, alignItems: "center", justifyContent: "center" },
   passwordIcon: { color: "#c7ceff" },
-  input: { minHeight: 56, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(105,120,255,0.18)", backgroundColor: "rgba(255,255,255,0.045)", color: "#f4f5ff", fontSize: 15 },
+  input: { minHeight: 56, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: palette.glassBorder, backgroundColor: "transparent", color: "#f4f5ff", fontSize: 15 },
+  inputFrame: { borderRadius: 16 },
 })

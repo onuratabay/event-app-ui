@@ -1,10 +1,12 @@
 import { palette } from "../theme/palette";
-import { useEffect, useState } from "react"
-import { Keyboard, Platform, StyleSheet } from "react-native"
+import { useEffect, useRef, useState } from "react"
+import { Animated, Easing, Keyboard, Platform, StyleSheet } from "react-native"
+import { BrandMark } from "./Brand"
+import { useReduceMotion } from "./GlassUI"
 import { useStore } from "../native/Store"
 import { Box, Label, Picture, Touch } from "../native/UI"
 import type { NavigateFn, Screen } from "../types"
-import { MessageIcon, LocationIcon, CompassIcon, PlusIcon } from "./Icons"
+import { MessageIcon, LocationIcon, CompassIcon } from "./Icons"
 const nav: [Screen, string][] = [
   ["discover", "Keşfet"],
   ["map", "Harita"],
@@ -12,8 +14,14 @@ const nav: [Screen, string][] = [
   ["rooms", "Odalar"],
   ["profile", "Profil"],
 ]
+// Floating bar geometry. Bar radius = item radius + bar padding, so the active pill's
+// corners run parallel to the bar's; every tab target is 52pt tall (above the 44/48 minimums).
+const BAR_OFFSET = 10
+const BAR_PADDING = 6
+const ITEM_HEIGHT = 52
+const ITEM_RADIUS = 16
 /** Space the floating bar occupies above the bottom edge; content and sticky bars sit above it. */
-export const NAV_CLEARANCE = 74
+export const NAV_CLEARANCE = BAR_OFFSET + ITEM_HEIGHT + BAR_PADDING * 2 + 2
 export function useKeyboardVisible() {
   const [visible, setVisible] = useState(false)
   useEffect(() => {
@@ -36,6 +44,15 @@ export default function BottomNav({
 }) {
   const { data } = useStore()
   const ME = data.user
+  const reduceMotion = useReduceMotion()
+  // Tapping "Oluştur" spins the W one full turn around its vertical axis with a small lift.
+  const spin = useRef(new Animated.Value(0)).current
+  const spinMark = () => {
+    if (reduceMotion) return
+    spin.stopAnimation()
+    spin.setValue(0)
+    Animated.timing(spin, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
+  }
   return (
     <Box pointerEvents="box-none" style={s.frame}>
       <Box glass style={s.bar}>
@@ -44,20 +61,11 @@ export default function BottomNav({
             key={screen}
             accessibilityLabel={label}
             accessibilityState={{ selected: active === screen }}
-            onPress={() => navigate(screen)}
-            gradient={
-              screen === "create-event"
-                ? palette.actionGradient
-                : undefined
-            }
+            onPress={() => { if (screen === "create-event") spinMark(); navigate(screen) }}
             style={[
               s.item,
               active === screen && { backgroundColor: "rgba(185,195,255,.12)", borderColor: "rgba(185,195,255,.20)" },
-              screen === "create-event" && {
-                backgroundColor: "#4d5bcb",
-                flex: 0,
-                width: 52,
-              },
+              screen === "create-event" && s.create,
             ]}
           >
             {screen === "map" ? (
@@ -75,18 +83,19 @@ export default function BottomNav({
             ) : screen === "profile" ? (
               <Picture
                 uri={ME.avatar}
-                style={{ width: 24, height: 24, borderRadius: 12 }}
+                style={[s.avatar, active === screen && s.avatarActive]}
               />
             ) : (
-              screen === "create-event" ? <PlusIcon size={22} strokeWidth={1.75} style={{ color: palette.text }} /> : <CompassIcon size={22} strokeWidth={1.75} style={{ color: active === screen ? "#c7ceff" : palette.muted }} />
+              screen === "create-event" ? <Animated.View style={{ transform: [
+                { perspective: 600 },
+                { rotateY: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) },
+                { scale: spin.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.18, 1] }) },
+              ] }}><BrandMark size={34} /></Animated.View> : <CompassIcon size={22} strokeWidth={1.75} style={{ color: active === screen ? "#c7ceff" : palette.muted }} />
             )}
             {screen !== "create-event" && (
               <Label
-                style={{
-                  fontSize: 11,
-                  fontFamily: "Outfit-Medium",
-                  color: active === screen ? "#c7ceff" : palette.muted,
-                }}
+                numberOfLines={1}
+                style={[s.label, { color: active === screen ? "#c7ceff" : palette.muted }]}
               >
                 {label}
               </Label>
@@ -100,7 +109,7 @@ export default function BottomNav({
 const s = StyleSheet.create({
   frame: {
     position: "absolute",
-    bottom: 8,
+    bottom: BAR_OFFSET,
     left: 16,
     right: 16,
     alignItems: "center",
@@ -111,8 +120,8 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    padding: 8,
-    borderRadius: 24,
+    padding: BAR_PADDING,
+    borderRadius: ITEM_RADIUS + BAR_PADDING,
     backgroundColor: "rgba(11,16,32,.94)",
     borderWidth: 1,
     borderColor: "rgba(183,197,255,.12)",
@@ -122,10 +131,18 @@ const s = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
-    borderRadius: 16,
-    minHeight: 48,
+    gap: 3,
+    height: ITEM_HEIGHT,
+    paddingVertical: 6,
+    borderRadius: ITEM_RADIUS,
     borderWidth: 1,
     borderColor: "transparent",
   },
+  // Square, slightly set apart from its neighbours so the primary action reads as one.
+  // Dark glass tile with a blue rim and glow, like the app icon, so the colourful W stands out.
+  create: { flex: 0, width: ITEM_HEIGHT, marginHorizontal: 4, backgroundColor: "#141a3c", borderColor: "rgba(122,140,255,.55)",
+    boxShadow: "0px 0px 14px rgba(105,120,255,.45)" },
+  label: { fontSize: 11, lineHeight: 14, letterSpacing: 0.2, fontFamily: "Outfit-Medium" },
+  avatar: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: "transparent" },
+  avatarActive: { borderColor: palette.accent },
 })
