@@ -31,7 +31,7 @@ export default function SplashScreen({
       try {
         if (await hasSession()) {
           const me = await getCurrentUser();
-          destination = gatedScreen(me.status?.enum) ?? "discover";
+          destination = gatedScreen(me.status?.enum, me) ?? "discover";
         }
       } catch {
         // A stale local token must never open an empty authenticated feed.

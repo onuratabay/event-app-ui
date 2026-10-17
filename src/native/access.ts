@@ -1,13 +1,13 @@
 import type { Screen } from "../types"
 
 /**
- * Accounts that are not approved never enter the app. An unfinished application resumes at the
- * reference step (then profile); a filed one waits on the approval page. Unknown means "not loaded yet".
+ * Accounts that are not approved never enter the app. An unfinished application resumes where it stopped:
+ * the Instagram/reference step until the (required) Instagram handle is saved, then the profile step
+ * (optional photo, interests). A filed one waits on the approval page. Unknown means "not loaded yet".
  */
-export function gatedScreen(status?: string): Screen | null {
+export function gatedScreen(status?: string, account?: { instagramUsername?: string | null }): Screen | null {
   if (!status || status === "approved") return null
-  // An unfinished application resumes at the reference step; the profile (interests) comes after it.
-  if (status === "profile_incomplete") return "onboarding-2"
+  if (status === "profile_incomplete") return account?.instagramUsername ? "interests" : "onboarding-2"
   return "onboarding-3"
 }
 

@@ -67,7 +67,7 @@ module.exports = function () {
     else if (path.startsWith('/users/me/preferences/')) { preferences[path.split('/').pop()] = body.value; result = body.value }
     else if (path === '/users/me/profile') { Object.assign(user, body); result = { ...user } }
     else if (path === '/users/me/interests') { if (body) interests = body.interestIds.map(id => ({ id, name: 'Padel' })); result = interests }
-    else if (path === '/interests') result = [{ id: 'padel', name: 'Padel', slug: 'padel', levels: [{ id: 'beginner', enum: 'beginner', name: 'Başlangıç' }] }, { id: 'kahve', name: 'Kahve', slug: 'kahve', levels: [] }]
+    else if (path === '/interests') result = [{ id: 'padel', name: 'Padel', slug: 'padel', levels: [{ id: 'beginner', enum: 'beginner', name: 'Başlangıç' }] }, { id: 'kahve', name: 'Kahve', slug: 'kahve', levels: [] }, { id: 'yoga', name: 'Yoga', slug: 'yoga', levels: [] }]
     else if (path === '/enum-values') result = new URL(url).searchParams.get('group') === 'event_level' ? [{ id: 'beginner', enum: 'beginner', name: 'Başlangıç' }] : [{ id: 'public', enum: 'public', name: 'Herkese Açık' }, { id: 'recommended', enum: 'recommended', name: 'Önerilenler' }, { id: 'invite_only', enum: 'invite_only', name: 'Sadece Davet' }]
     else if (path === '/events/can-create') result = { canCreate: !state.createBlocked, message: state.createBlocked ? 'Yeni etkinlik açma hakkınız kalmadı. Daha fazlası için dükkana gidin.' : null }
     else if (path === '/users/me/settings') result = { canCreateInviteOnly: true }

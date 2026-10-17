@@ -46,7 +46,7 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
       const response = await login(`+90${phoneDigits(phone)}`, password)
       setData(current => ({ ...current, user: updateStoreUser(current.user, response.user), onboarding: {} }))
       // Pending accounts go to their own page and never load the in-app feed.
-      const target = gatedScreen((response.user as { status?: { enum: string } }).status?.enum)
+      const target = gatedScreen((response.user as { status?: { enum: string } }).status?.enum, response.user as { instagramUsername?: string | null })
       if (target) { navigate(target, { reset: true }); return }
       // The button keeps its busy state while the feed loads (at most 4 s), so Discover opens filled.
       void refreshEvents().catch(() => {})

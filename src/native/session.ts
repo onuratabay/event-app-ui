@@ -11,7 +11,7 @@ export function useSignedOutEntry(navigate: NavigateFn) {
     hasSession().then(session => {
       if (!active) return
       if (!session) { setChecking(false); return }
-      return getCurrentUser().then(me => { if (active) navigate(gatedScreen(me.status?.enum) ?? "discover", { reset: true }) })
+      return getCurrentUser().then(me => { if (active) navigate(gatedScreen(me.status?.enum, me) ?? "discover", { reset: true }) })
     }).catch(() => { if (active) setChecking(false) })
     return () => { active = false }
   }, [navigate])

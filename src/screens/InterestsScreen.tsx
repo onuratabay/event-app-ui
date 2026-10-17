@@ -16,6 +16,8 @@ import { NavigateFn } from "../types";
 interface Props {
   navigate: NavigateFn;
 }
+/** The application needs at least three interests (the server checks it too). */
+const MIN_INTERESTS = 3;
 export default function InterestsScreen({
   navigate
 }: Props) {
@@ -74,7 +76,7 @@ export default function InterestsScreen({
             Neler seni{"\n"}heyecanlandırır?
           </Label>
           <Label style={[[ui.textSm, ui.textWhite45, ui.mt2]]}>
-            Sana en uygun etkinlikleri bulmak için en az bir ilgi alanı seç.
+            Sana en uygun etkinlikleri bulmak için en az {MIN_INTERESTS} ilgi alanı seç. Profil fotoğrafı isteğe bağlı.
           </Label>
         </Box>
 
@@ -143,7 +145,7 @@ export default function InterestsScreen({
           backgroundColor: "rgba(255,255,255,0.07)"
         }]} />
           <Label style={[[ui.textXs, ui.textWhite25]]}>
-            {selected.size} seçildi
+            {selected.size < MIN_INTERESTS ? `${selected.size}/${MIN_INTERESTS} seçildi · en az ${MIN_INTERESTS}` : `${selected.size} seçildi`}
           </Label>
           <Box style={[[ui.flex1, ui.hPx], {
           backgroundColor: "rgba(255,255,255,0.07)"
@@ -159,9 +161,9 @@ export default function InterestsScreen({
 
         {/* Sticky CTA */}
         <Box style={[[ui.flexShrink0, ui.px6, ui.pb10, ui.pt4], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up">
-          <Touch onPress={save} disabled={saving || selected.size === 0 || !catalog.length} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.textBase, ui.fontSemibold, ui.trackingWide], {
-          color: selected.size > 0 ? palette.text : "rgba(255,255,255,0.25)"
-        }]} gradient={selected.size > 0 ? palette.actionGradient : ["rgba(255,255,255,0.08)", "rgba(255,255,255,0.08)"]}>
+          <Touch onPress={save} disabled={saving || selected.size < MIN_INTERESTS || !catalog.length} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.textBase, ui.fontSemibold, ui.trackingWide], {
+          color: selected.size >= MIN_INTERESTS ? palette.text : "rgba(255,255,255,0.25)"
+        }]} gradient={selected.size >= MIN_INTERESTS ? palette.actionGradient : ["rgba(255,255,255,0.08)", "rgba(255,255,255,0.08)"]}>
             Kurulumu Tamamla
           </Touch>
         </Box>

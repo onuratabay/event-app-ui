@@ -239,8 +239,10 @@ export async function logout() {
  * Discover feed page. `photos: false` skips the base64 covers (the server reads them one by one),
  * so the list arrives fast and the covers follow in a second, background request.
  */
+// The home feed asks only for events still open to join (openOnly); ended or cancelled ones used to fill the
+// first pages, which the feed hides, so it looked empty until a later page loaded.
 export async function getEvents(page = 1, limit = 20, options: { photos?: boolean; background?: boolean } = {}) {
-  return request<EventListResponse>(`/events?page=${page}&limit=${limit}${options.photos === false ? "&includePhotos=false" : ""}`, { background: options.background })
+  return request<EventListResponse>(`/events?page=${page}&limit=${limit}&openOnly=true${options.photos === false ? "&includePhotos=false" : ""}`, { background: options.background })
 }
 
 /** Events from the server for search: between two dates (dd/mm/yyyy, inclusive), optionally in some interests. */

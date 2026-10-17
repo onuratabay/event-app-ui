@@ -532,7 +532,11 @@ function Step3({
 }: {
   navigate: NavigateFn;
 }) {
-  const { data: store, refreshEvents } = useStore();
+  const { data: store, refreshEvents, loadReferences } = useStore();
+  // The middle step names what the application waits for: a reference only if one was asked for and is
+  // still open; otherwise the team reviews it (admin approval).
+  useEffect(() => { void loadReferences().catch(() => {}); }, []);
+  const awaitingReference = !!store.references?.some(row => row.direction === "outgoing" && row.status === "pending");
   // The waiting page is where a push notification is worth asking for: we tell them when they are approved.
   const [push, setPush] = useState<PushState | null>(null);
   useEffect(() => { void registerForPush(true).then(setPush); }, []);
@@ -544,14 +548,14 @@ function Step3({
     void refreshEvents().catch(() => {});
     navigate("discover", { reset: true });
   }, [store.user.status]);
-  // "Başvurunu inceliyoruz" is only for an application waiting for its reference (it is approved the
-  // moment the reference is); the reference step is the current one.
+  // "Başvurunu inceliyoruz": the application waits for its reference (approved the moment it is) or,
+  // without one, for an admin; that middle step is the current one.
   const current = 1;
   // Accounts an admin put under review, or took passive (later also rating rules), see the same page
   // with review copy instead of the application timeline.
   const passive = store.user.status === "passive" || store.user.status === "security_review";
   const takenPassive = store.user.status === "passive";
-  const stages = ["Başvuru Alındı", "Referans Bekleniyor", "Onay"].map((label, i) => ({
+  const stages = ["Başvuru Alındı", awaitingReference ? "Referans Bekleniyor" : "Başvuru İnceleniyor", "Onay"].map((label, i) => ({
     label,
     state: i < current ? "done" : i === current ? "current" : "future"
   }));

@@ -95,7 +95,8 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   }
   tree = await mount('Interests', { navigate: (screen, opts) => { destination = { screen, opts } } })
   await settle()
-  await tap(tree, 'Padel')
+  // The application needs three interests.
+  for (const interest of ['Padel', 'Kahve', 'Yoga']) await tap(tree, interest)
   const saveButton = tree.root.findAllByType('Pressable').filter(node => /Kaydet|Tamamla|Devam/.test(text(node))).at(-1)
   assert(saveButton, 'Interests screen has a save button')
   await act(async () => saveButton.props.onPress?.({ stopPropagation() {} }))
@@ -230,13 +231,22 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
     global.__testNotifications = undefined; global.__testNavigations = undefined
   }
 
-  // "Başvurunu inceliyoruz" is only for an application waiting for its reference; a review gets review copy.
+  // "Başvurunu inceliyoruz": the middle step says "Referans Bekleniyor" only while a reference request is open;
+  // without one the team reviews it. An account under review gets review copy.
   server.user.status = { enum: 'reference_pending' }
+  server.state.references.splice(0)
   tree = await mount('Onboarding', { step: 3 })
   await settle()
   content = text(tree.toJSON()).replace(/\s+/g, ' ')
-  assert(content.includes('Başvurunu inceliyoruz.') && content.includes('Referans Bekleniyor'), 'Waiting for a reference shows the application page')
+  assert(content.includes('Başvurunu inceliyoruz.') && content.includes('Başvuru İnceleniyor') && !content.includes('Referans Bekleniyor'), 'Without a reference request the application waits for review, not for a reference')
   await act(async () => tree.unmount())
+  server.state.references.push({ id: 'ref-wait', status: 'pending', direction: 'outgoing', createdAt: '2026-10-14T10:00:00Z', requester: { id: server.user.id, name: 'Sunucu Kullanıcısı' }, recipient: { id: 'member-1', name: 'Deniz Üye' } })
+  tree = await mount('Onboarding', { step: 3 })
+  await settle()
+  content = text(tree.toJSON()).replace(/\s+/g, ' ')
+  assert(content.includes('Başvurunu inceliyoruz.') && content.includes('Referans Bekleniyor'), 'Waiting for a requested reference shows it')
+  await act(async () => tree.unmount())
+  server.state.references.splice(0)
   server.user.status = { enum: 'security_review' }
   tree = await mount('Onboarding', { step: 3 })
   await settle()

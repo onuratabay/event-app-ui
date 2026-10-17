@@ -24,7 +24,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     const body = path === "/auth/login" || path === "/auth/register" ? { user: user(current), tokens: { accessToken: "a", refreshToken: "r" } }
       : path === "/auth/me" ? user(current)
       : path === "/users/me/profile/complete" ? (current = "approved", user(current))
-      : path === "/interests" ? [{ id: "padel", name: "Padel", slug: "padel", levels: [] }]
+      : path === "/interests" ? [{ id: "padel", name: "Padel", slug: "padel", levels: [] }, { id: "kahve", name: "Kahve", slug: "kahve", levels: [] }, { id: "yoga", name: "Yoga", slug: "yoga", levels: [] }]
       : path === "/users/me/interests" ? (options.body ? [{ id: "padel", name: "Padel" }] : [])
       : path === "/users/me/preferences" ? {}
       : path === "/legal/documents" ? { items: [{ type: "terms", version: 1, required: true }, { type: "privacy", version: 1, required: true }, { type: "marketing", version: 3, required: false }] }
@@ -149,7 +149,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   assert.equal(signUp.marketingConsent, true)
   await act(async () => registration.unmount())
 
-  // Profile completion: an interest is required, the photo is not; saving approves and opens the app.
+  // Profile completion: three interests are required, the photo is not; saving approves and opens the app.
   storage.set("event-app:access-token", "a"); current = "profile_incomplete"; calls.length = 0
   let completed
   const profile = await mount("Interests", { navigate: (route, opts) => { completed = { route, opts } } })
@@ -157,7 +157,10 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   const finish = () => profile.root.findAllByType("Pressable").find(n => text(n).includes("Kurulumu Tamamla"))
   assert.equal(finish().props.disabled, true, "Interests are required before finishing")
   await tap(profile, "Padel")
-  assert.equal(finish().props.disabled, false, "One interest is enough; the photo is optional")
+  await tap(profile, "Kahve")
+  assert.equal(finish().props.disabled, true, "Two interests are not enough")
+  await tap(profile, "Yoga")
+  assert.equal(finish().props.disabled, false, "Three interests are enough; the photo is optional")
   await tap(profile, "Kurulumu Tamamla")
   await act(() => new Promise(resolve => setTimeout(resolve, 20)))
   assert(calls.includes("/users/me/profile/complete"), "Saving asks the server to approve the completed profile")
