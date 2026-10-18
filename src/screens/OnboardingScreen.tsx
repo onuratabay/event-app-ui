@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ContinueButton } from "../components/ContinueButton";
 import { formatLocalPhone, formatPhone, PHONE_COUNTRY_CODE, phoneDigits } from "../content/phone";
 import { GlassFill, INPUT_FROST } from "../components/GlassFill";
+import { useKeyboardVisible } from "../components/BottomNav";
 import { Box, Label, Scroll, Touch, useScrollAnchor } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn, type Screen as AppScreen } from "../types";
@@ -230,7 +231,10 @@ function StickyBar({
   children: React.ReactNode;
 }) {
   const safeBottom = useSafeAreaInsets().bottom;
-  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pt4, ui.z40], { paddingBottom: 32 + safeBottom }]} gradient={[palette.background, "transparent"]} gradientDirection="up">
+  // With the keyboard open the bar sits right on it: the home-indicator space is not needed, so the
+  // bar stays low and covers less of the form.
+  const keyboardOpen = useKeyboardVisible();
+  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pt4, ui.z40], { paddingBottom: keyboardOpen ? 12 : 32 + safeBottom }]} gradient={[palette.background, "transparent"]} gradientDirection="up">
       {children}
     </Box>;
 }

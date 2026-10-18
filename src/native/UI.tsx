@@ -413,20 +413,26 @@ const assignRef = <T,>(ref: React.Ref<T> | undefined, value: T | null) => {
 const KEYBOARD_GAP = 24
 /**
  * Scrolls the focused field above the keyboard once it is open: measures where the field sits on screen
- * and, if the keyboard would cover it, scrolls just enough to show it with a small gap.
+ * and, if it would be hidden, scrolls just enough to show it with a small gap. "Hidden" means below the
+ * keyboard or under what floats over the bottom of the scroll area (a sticky "Devam Et" bar rises with
+ * the keyboard); `insetBottom` is that floating part, read from the Scroll's bottom padding.
  */
-function useKeyboardReveal(enabled: boolean, scrollRef: React.RefObject<ScrollView | null>) {
+function useKeyboardReveal(enabled: boolean, scrollRef: React.RefObject<ScrollView | null>, insetBottom = 0) {
   const offset = useRef(0)
   const keyboardTop = useRef<number | null>(null)
   const pending = useRef<TextInput | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const scrollAbove = (input: TextInput | null) => {
     const top = keyboardTop.current
+    const scroll = scrollRef.current as unknown as View | null
     if (!input || top === null) return
-    input.measureInWindow((_x, y, _width, height) => {
-      const overlap = y + height + KEYBOARD_GAP - top
+    const reveal = (visibleBottom: number) => input.measureInWindow((_x, y, _width, height) => {
+      const overlap = y + height + KEYBOARD_GAP - visibleBottom
       if (overlap > 0) scrollRef.current?.scrollTo({ y: offset.current + overlap, animated: true })
     })
+    // The scroll area may already end above the keyboard (resized by the keyboard-avoiding root).
+    if (scroll?.measureInWindow) scroll.measureInWindow((_sx, sy, _sw, sh) => reveal(Math.min(top, sh ? sy + sh : top) - insetBottom))
+    else reveal(top - insetBottom)
   }
   useEffect(() => {
     if (!enabled) return
@@ -467,10 +473,11 @@ export function Scroll({
   keyboardReveal?: boolean
 }) {
   const scrollRef = useRef<ScrollView | null>(null)
-  const { reveal, offset } = useKeyboardReveal(keyboardReveal, scrollRef)
   const chain = useFieldChain()
   const inherited = useContext(Typography),
     { text, view } = split(style)
+  // Bottom padding marks what floats over the bottom of the scroll area (sticky bars), capped like insetBottom below.
+  const { reveal, offset } = useKeyboardReveal(keyboardReveal, scrollRef, Math.min(Number(view.paddingBottom ?? view.padding ?? 0) || 0, 120))
   const {
     padding,
     paddingTop,
