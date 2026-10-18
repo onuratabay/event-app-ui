@@ -450,7 +450,7 @@ export const getRatingForm = (eventId: string) => request<RatingForm>(`/events/$
 export const submitRatings = (eventId: string, body: { eventScore?: number; participants: ParticipantRatingInput[] }) => request<{ submitted: true }>(`/events/${encodeURIComponent(eventId)}/ratings`, { method: 'POST', body: JSON.stringify(body) })
 /** One-to-one chats with connections (no event room needed). canSend is false once you are no longer connected. */
 export interface DirectMessage { id: string; conversationId: string; senderId: string; text: string; createdAt: string }
-export interface DirectConversation { id: string; user: { id: string; firstName: string; lastName: string; profilePhoto: string | null }; canSend: boolean; lastMessage: DirectMessage | null; unreadCount: number }
+export interface DirectConversation { id: string; user: { id: string; firstName: string; lastName: string; profilePhoto: string | null }; canSend: boolean; lastMessage: DirectMessage | null; unreadCount: number; /** Has the app open right now; live updates arrive as "presence:changed". */ online?: boolean }
 export const getDirectConversations = () => request<{ items: DirectConversation[] }>('/direct', { background: true })
 // Opens the chat with a connection (created on first use); an existing chat opens even after unfriending, read-only.
 export const openDirectConversation = (userId: string) => request<DirectConversation>(`/direct/with/${encodeURIComponent(userId)}`, { method: 'POST' })

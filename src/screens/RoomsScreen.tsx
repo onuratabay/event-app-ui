@@ -56,6 +56,12 @@ export default function RoomsScreen({
     if (!screenActive) return;
     if (firstFocus.current) firstFocus.current = false; else void loadChats();
     const stops = ["dm:message", "friend:changed", "sync:required"].map(name => onSocket(name, () => { void loadChats(); }));
+    // Online / offline changes update the dots without reloading the list.
+    stops.push(onSocket("presence:changed", (payload: { userId: string; online: boolean }) => setChats(current => {
+      const next = current.map(chat => chat.user.id === payload.userId ? { ...chat, online: payload.online } : chat);
+      if (cacheKey) chatCache.set(cacheKey, next);
+      return next;
+    })));
     return () => { stops.forEach(stop => stop()); };
   }, [screenActive]);
   const EVENTS = store.events;
@@ -80,7 +86,11 @@ export default function RoomsScreen({
               return <Touch key={chat.id} accessibilityLabel={`${name} ile sohbet`} onPress={() => navigate("direct-chat", { userId: chat.user.id })} style={[[ui.wFull, ui.textLeft]]}>
                 <GlassCard style={[[ui.p4]]}>
                   <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-                    <Avatar uri={chat.user.profilePhoto || ""} name={name} size="lg" />
+                    {/* A green dot only while the person is online; nothing when offline. */}
+                    <Box style={{ position: "relative" }}>
+                      <Avatar uri={chat.user.profilePhoto || ""} name={name} size="lg" />
+                      {chat.online && <Box accessibilityLabel="Çevrimiçi" style={{ position: "absolute", right: 0, bottom: 0, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: palette.background, backgroundColor: palette.success }} />}
+                    </Box>
                     <Box style={[[ui.flex1, ui.minW0]]}>
                       <Label style={[[ui.textSm, chat.unreadCount > 0 ? ui.fontSemibold : ui.fontMedium, ui.textWhite85]]} numberOfLines={1}>{name}</Label>
                       <Label style={[[ui.textXs, chat.unreadCount > 0 ? ui.textWhite70 : ui.textWhite40]]} numberOfLines={1}>

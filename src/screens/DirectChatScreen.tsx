@@ -81,6 +81,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
       }),
       onSocket("dm:read", (payload: { conversationId: string; at: string }) => { if (payload.conversationId === id) setOtherReadAt(payload.at); }),
       onSocket("friend:changed", (payload: { userId: string }) => { if (payload.userId === userId) refreshAccess(); }),
+      onSocket("presence:changed", (payload: { userId: string; online: boolean }) => { if (payload.userId === userId) setConversation(current => current ? { ...current, online: payload.online } : current); }),
       onSocket("sync:required", () => { void load(); }),
     ];
     void load();
@@ -130,7 +131,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
 
   return <View ref={screenRef} style={s.screen}>
     <AtmoBackground />
-    <TopNavBar navigate={navigate} fallback="rooms" walkthroughId="direct-person" title={name} subtitle={conversation && !canSend ? "Artık bağlantın değil" : undefined}
+    <TopNavBar navigate={navigate} fallback="rooms" walkthroughId="direct-person" title={name} subtitle={conversation ? !canSend ? "Artık bağlantın değil" : conversation.online ? "● Çevrimiçi" : "Çevrimdışı" : undefined}
       onTitlePress={conversation ? () => navigate("profile", { userId: conversation.user.id }) : undefined} titleHint="Profilini açar" />
     <Box style={s.body}>
       {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
