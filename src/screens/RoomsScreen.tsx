@@ -23,6 +23,15 @@ function lastMessageLabel(at: string) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return date.toDateString() === now.toDateString() ? `${pad(date.getHours())}:${pad(date.getMinutes())}` : `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
 }
+/** How many chats and rooms show before "Daha fazla göster". */
+const PREVIEW_COUNT = 3;
+/** Under a list cut to its newest three: shows the rest, or folds them away again. Hidden when nothing is cut. */
+function MoreToggle({ total, open, onPress }: { total: number; open: boolean; onPress: () => void }) {
+  if (total <= PREVIEW_COUNT) return null;
+  return <Touch accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={onPress} style={[[ui.textXs, ui.fontMedium], { color: palette.accent, alignSelf: "center", minHeight: 40, justifyContent: "center", paddingHorizontal: 12 }]}>
+    {open ? "Daha az göster" : `Daha fazla göster (${total - PREVIEW_COUNT})`}
+  </Touch>;
+}
 /** Last one-to-one chat list per account (this app session), shown at once while /direct refreshes it. */
 const chatCache = new Map<string, DirectConversation[]>();
 export default function RoomsScreen({
@@ -41,6 +50,9 @@ export default function RoomsScreen({
     if (cacheKey) chatCache.set(cacheKey, result.items);
     setChats(current => JSON.stringify(current) === JSON.stringify(result.items) ? current : result.items);
   }).catch(() => {});
+  // Messages and rooms show their newest three; "Daha fazla göster" lists the rest.
+  const [showAllChats, setShowAllChats] = useState(false);
+  const [showAllRooms, setShowAllRooms] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const reloadMine = async (pulled = false) => {
     if (pulled) setRefreshing(true);
@@ -80,7 +92,7 @@ export default function RoomsScreen({
             Mesajlar
           </Label>
           <Box style={[[ui.spaceY3]]}>
-            {chats.map(chat => {
+            {(showAllChats ? chats : chats.slice(0, PREVIEW_COUNT)).map(chat => {
               const name = `${chat.user.firstName} ${chat.user.lastName}`.trim();
               const last = chat.lastMessage;
               return <Touch key={chat.id} accessibilityLabel={`${name} ile sohbet`} onPress={() => navigate("direct-chat", { userId: chat.user.id })} style={[[ui.wFull, ui.textLeft]]}>
@@ -108,6 +120,7 @@ export default function RoomsScreen({
                 </GlassCard>
               </Touch>;
             })}
+            <MoreToggle total={chats.length} open={showAllChats} onPress={() => setShowAllChats(open => !open)} />
           </Box>
         </Box>}
 
@@ -116,14 +129,13 @@ export default function RoomsScreen({
           <Box walkthroughId="rooms-active"><Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
             Sohbetler</Label></Box>
           {activeEvents.length > 0 ? <Box style={[[ui.spaceY3]]}>
-              {activeEvents.map(event => <Touch key={event.id} onPress={() => navigate("event-room", {
+              {(showAllRooms ? activeEvents : activeEvents.slice(0, PREVIEW_COUNT)).map(event => <Touch key={event.id} onPress={() => navigate("event-room", {
             eventId: event.id
           })} style={[[ui.wFull, ui.textLeft]]}>
                   <GlassCard style={[[ui.p4, ui.borderEmerald40010]]}>
                     <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
                       <Box style={[[ui.relative]]}>
                         <Picture uri={event.coverImage} accessibilityLabel="" style={[[ui.w12, ui.h12, ui.roundedXl]]} />
-                        <Box style={[[ui.fixed, ui.Top1, ui.Right1, ui.w35, ui.h35, ui.roundedFull, ui.bgEmerald400, ui.border2, ui.border06060e]]} />
                       </Box>
                       <Box style={[[ui.flex1, ui.minW0]]}>
                         <Label style={[[ui.textSm, (event.unreadCount || 0) > 0 ? ui.fontSemibold : ui.fontMedium, ui.textWhite85]]} numberOfLines={1}>
@@ -132,14 +144,9 @@ export default function RoomsScreen({
                         <Label style={[[ui.textXs, ui.textWhite40]]} numberOfLines={1}>
                           {event.lastMessageAt ? `Son mesaj ${lastMessageLabel(event.lastMessageAt)}` : "Henüz mesaj yok"} · {event.time}
                         </Label>
-                        <Box style={[[ui.flex, ui.itemsCenter, ui.gap15, ui.mt1]]}>
-                          <Box style={[[ui.flex]]}>
-                            {event.participants.slice(0, 4).map(p => <Picture key={p.id} uri={p.avatar} accessibilityLabel="" style={[[ui.w4, ui.h4, ui.roundedFull]]} />)}
-                          </Box>
-                          <Label style={[[ui.text10px, ui.textWhite30]]}>
-                            {event.participants.length} katılımcı
-                          </Label>
-                        </Box>
+                        <Label style={[[ui.text10px, ui.textWhite30, ui.mt1]]}>
+                          {event.participants.length} katılımcı
+                        </Label>
                       </Box>
                       <Box style={[[ui.flex, ui.flexCol, ui.itemsEnd, ui.gap1]]}>
                         {(store.mutedRooms || []).includes(event.id) ? <Label accessibilityLabel="Sessize alındı" style={[[ui.text10px, ui.textWhite40]]}>🔕 Sessiz</Label> : (event.unreadCount || 0) > 0 ? <Box accessibilityLabel={`${event.unreadCount} okunmamış mesaj`} style={{ minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: palette.accent }}>
@@ -156,6 +163,7 @@ export default function RoomsScreen({
                     </Box>
                   </GlassCard>
                 </Touch>)}
+              <MoreToggle total={activeEvents.length} open={showAllRooms} onPress={() => setShowAllRooms(open => !open)} />
             </Box> : <GlassCard style={[[ui.p6, ui.textCenter]]}>
               <MessageIcon size={32} style={{ color: palette.muted, marginBottom: 16 }} />
               <Label style={[[ui.textSm, ui.textWhite35]]}>
