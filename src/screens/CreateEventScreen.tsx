@@ -145,6 +145,7 @@ export default function CreateEventScreen({
     durationMinutes: null as number | null,
     location: "",
     minParticipants: 2,
+    // No maximum while the minimum is 2; above it "Sınır koy" is the default (see the minimum card).
     maxParticipants: null as number | null,
     description: "",
     privacy: ""
@@ -311,7 +312,7 @@ export default function CreateEventScreen({
                   { icon: <ClockIcon size={16} />, text: data.durationMinutes ? formatDuration(data.durationMinutes) : "Süre" },
                   { icon: <LocationIcon size={16} />, text: placeLabel(data.location, place) || "Konum" },
                   ...(data.level ? [{ icon: <StarIcon size={16} />, text: data.level }] : []),
-                  { icon: <UsersIcon size={16} />, text: data.maxParticipants ? `${data.minParticipants}-${data.maxParticipants} kişi` : `En az ${data.minParticipants} kişi` },
+                  { icon: <UsersIcon size={16} />, text: data.maxParticipants ? data.maxParticipants === data.minParticipants ? `Tam ${data.minParticipants} kişi` : `${data.minParticipants}-${data.maxParticipants} kişi` : `En az ${data.minParticipants} kişi` },
                   { icon: <LockIcon size={16} />, text: data.privacy ? `${data.privacy}${invitedIds.length && isInviteOnly ? ` · ${invitedIds.length} davetli` : ""}` : "Gizlilik" }
                 ].map((item, index) => <Box key={index} style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>{item.icon}<Label style={{ flexShrink: 1 }}>{item.text}</Label></Box>)}
               </Box>
@@ -478,24 +479,27 @@ export default function CreateEventScreen({
             value: data.minParticipants,
             display: `${data.minParticipants} kişi`,
             canDecrease: data.minParticipants > MIN_PARTICIPANTS,
-            canIncrease: data.minParticipants < MAX_PARTICIPANTS - 1,
+            canIncrease: data.minParticipants < MAX_PARTICIPANTS,
             change: (delta: number) => setData(p => {
-              const min = Math.min(MAX_PARTICIPANTS - 1, Math.max(MIN_PARTICIPANTS, p.minParticipants + delta));
-              // Max opens once min rises above 2 and must always stay above min.
-              const max = min === MIN_PARTICIPANTS ? null : Math.max(min + 1, p.maxParticipants ?? 0);
+              const min = Math.min(MAX_PARTICIPANTS, Math.max(MIN_PARTICIPANTS, p.minParticipants + delta));
+              // The maximum field appears once the minimum is above 2, with "Sınır koy" chosen (starting at the
+              // minimum); back at 2 it hides and the event has no maximum. A set limit never drops below the minimum.
+              const max = min === MIN_PARTICIPANTS ? null
+                : p.minParticipants === MIN_PARTICIPANTS ? min
+                : p.maxParticipants === null ? null : Math.max(min, p.maxParticipants);
               return { ...p, minParticipants: min, maxParticipants: max };
             })
           }, {
             label: "Maksimum",
             value: data.maxParticipants ?? 0,
             display: data.maxParticipants ? `${data.maxParticipants} kişi` : "",
-            // The max card stays hidden while min is 2 (unlimited capacity).
+            // Shown only when the organizer chose to set a limit.
             hidden: data.maxParticipants === null,
-            canDecrease: data.maxParticipants !== null && data.maxParticipants > data.minParticipants + 1,
+            canDecrease: data.maxParticipants !== null && data.maxParticipants > data.minParticipants,
             canIncrease: data.maxParticipants !== null && data.maxParticipants < MAX_PARTICIPANTS,
             change: (delta: number) => setData(p => p.maxParticipants === null ? p : {
               ...p,
-              maxParticipants: Math.min(MAX_PARTICIPANTS, Math.max(p.minParticipants + 1, p.maxParticipants + delta))
+              maxParticipants: Math.min(MAX_PARTICIPANTS, Math.max(p.minParticipants, p.maxParticipants + delta))
             })
           }].filter(card => !("hidden" in card && card.hidden)).map(({
             label,
@@ -525,8 +529,18 @@ export default function CreateEventScreen({
                     </Touch>
                   </Box>
                 </Box>)}
+              {/* Above a minimum of 2 the maximum is optional: no limit, or a cap (equal to the minimum = exactly that many). */}
+              {data.minParticipants > MIN_PARTICIPANTS && <Box>
+                <Label style={[[ui.textSm, ui.textWhite60, ui.mb2]]}>Maksimum katılımcı</Label>
+                <Box style={[[ui.flex, ui.gap3]]}>
+                  {([[false, "Sınır yok"], [true, "Sınır koy"]] as const).map(([limited, label]) => {
+                    const selected = (data.maxParticipants !== null) === limited;
+                    return <Touch key={label} accessibilityState={{ selected }} onPress={() => setData(p => ({ ...p, maxParticipants: limited ? p.maxParticipants ?? p.minParticipants : null }))} style={[[ui.flex1, ui.p3, ui.rounded2xl, ui.textCenter, ui.border, ui.textSm, selected ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>{label}</Touch>;
+                  })}
+                </Box>
+              </Box>}
               <Label style={[[ui.textXs, ui.textWhite40]]}>
-                {data.maxParticipants === null ? "Etkinlik minimum katılımcı sayısına göre ilerler. Maksimum belirlemek için minimumu 2'nin üzerine çıkar." : "Maksimum, minimumdan büyük olmalı."}
+                {data.minParticipants === MIN_PARTICIPANTS ? "Etkinlik minimum katılımcı sayısına göre ilerler. Maksimum belirlemek için minimumu 2'nin üzerine çıkar." : data.maxParticipants === null ? "Sınır yok: minimum dolunca etkinlik hayata geçer, isteyenler katılmaya devam edebilir." : data.maxParticipants === data.minParticipants ? `Tam ${data.minParticipants} kişilik: ${data.minParticipants} kişi dolunca katılım kapanır.` : `${data.minParticipants} kişi dolunca etkinlik hayata geçer; ${data.maxParticipants} kişide katılım kapanır.`}
               </Label>
 
               {/* Participants and the message to them share one step. */}

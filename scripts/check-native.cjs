@@ -660,12 +660,21 @@ async function tap(tree, label) {
   global.__testReverseGeocode = undefined
   await tap(createEvent,"Devam Et")
   const maxCard = () => createEvent.root.findAllByType("Pressable").some(n => n.props.accessibilityLabel === "Maksimum artır")
-  assert(!maxCard(), "Max card is hidden while min is 2")
+  // The maximum appears only once the minimum is above 2, with "Sınır koy" chosen and starting at the minimum.
+  assert(!maxCard() && !text(createEvent.toJSON()).includes("Sınır koy"), "No maximum field while the minimum is 2")
   const pressLabel = async label => { const node = createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === label); assert(node, `Missing button: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })) }
   await pressLabel("Minimum artır")
-  assert(maxCard(), "Max card appears once min is above 2")
-  await pressLabel("Minimum azalt")
-  assert(!maxCard(), "Max card hides again when min returns to 2")
+  assert(maxCard(), "Above 2 the maximum field appears with a limit chosen")
+  await pressLabel("Minimum artır")
+  await pressLabel("Minimum artır")
+  assert(text(createEvent.toJSON()).includes("Tam 5 kişilik"), "The limit follows the minimum: exactly that many")
+  const maxDecrease = createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Maksimum azalt")
+  assert.equal(maxDecrease.props.disabled, true, "The maximum never goes below the minimum")
+  await tap(createEvent, "Sınır yok")
+  assert(!maxCard(), "Choosing no limit hides the max card")
+  assert(text(createEvent.toJSON()).includes("Sınır yok: minimum dolunca"), "No limit is explained")
+  for (let i = 0; i < 3; i++) await pressLabel("Minimum azalt")
+  assert(!maxCard() && !text(createEvent.toJSON()).includes("Sınır koy"), "Back at 2 the maximum field hides again")
   assert(text(createEvent.toJSON()).includes("Hızlı ekle"), "Message to participants is on the participants step")
   {
     // Long quick-add chips stay inside the row: capped width, left-aligned text, × never shrinks away.
