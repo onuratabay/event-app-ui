@@ -185,12 +185,18 @@ export default function EventDetailScreen({
               </Box>
             </Box>
             <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.flexWrap]]}>
-              {event.participants.filter(p => p.id !== store.user.id).map(p => <Box key={p.id} style={[[ui.flex, ui.flexCol, ui.itemsCenter, ui.gap1]]}>
+              {event.participants.filter(p => p.id !== store.user.id).map(p => {
+                const guest = p.id.startsWith("guest:");
+                const person = <>
                     <Avatar uri={p.avatar} name={p.name} size="sm" />
-                    <Label style={[[ui.text9px, ui.textWhite35, ui.textCenter], { maxWidth: p.id.startsWith("guest:") ? 80 : 48 }]} numberOfLines={p.id.startsWith("guest:") ? 2 : 1}>
-                      {p.id.startsWith("guest:") ? `Misafir · ${p.name.replace(/ · Misafir$/, "")}` : p.name.split(" ")[0]}
+                    <Label style={[[ui.text9px, ui.textWhite35, ui.textCenter], { maxWidth: guest ? 80 : 48 }]} numberOfLines={guest ? 2 : 1}>
+                      {guest ? `Misafir · ${p.name.replace(/ · Misafir$/, "")}` : p.name.split(" ")[0]}
                     </Label>
-                  </Box>)}
+                  </>;
+                // Members open their profile; guests have none.
+                return guest ? <Box key={p.id} style={[[ui.flex, ui.flexCol, ui.itemsCenter, ui.gap1]]}>{person}</Box>
+                  : <Touch key={p.id} accessibilityLabel={`${p.name} profilini aç`} onPress={() => navigate("profile", { userId: p.id })} style={[[ui.flex, ui.flexCol, ui.itemsCenter, ui.gap1], { minHeight: 0 }]}>{person}</Touch>;
+              })}
               {joined && <Box style={[[ui.flex, ui.flexCol, ui.itemsCenter, ui.gap1]]}>
                   <Box style={[[ui.w8, ui.h8, ui.roundedFull, ui.bgC8a44a20, ui.border, ui.borderC8a44a30, ui.flex, ui.itemsCenter, ui.justifyCenter]]}>
                     <Label style={[[ui.textXs, ui.textC8a44a]]}>Sen</Label>
