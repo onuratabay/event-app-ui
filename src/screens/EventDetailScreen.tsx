@@ -77,7 +77,10 @@ export default function EventDetailScreen({
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const load = (background = false) => getEvent(eventId, { background }).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(error => { if (active && !background) setLoadError(getApiErrorMessage(error, 'Etkinlik yüklenemedi.')); });
-    void load();
+    // An event already in the list (feed, rooms, search) shows at once: the fresh copy then loads quietly,
+    // without the full-screen loader. Only an event not loaded yet shows the loader (and errors).
+    const cached = !!event;
+    void load(cached);
     // The socket only sends the new count; reload so the participant list shows who joined or left.
     // Bursts (several joins at once) collapse into one request.
     const release = watchEvent(eventId);

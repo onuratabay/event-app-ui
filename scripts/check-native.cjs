@@ -809,8 +809,13 @@ async function tap(tree, label) {
     assert(dialogs[0].message.includes("1 referans isteği"), "Pending references are counted")
     assert.equal(server.state.references.find(row => row.id === "ref-wait").status, "declined", "A pending reference request is declined")
     assert(!text(notifications.toJSON()).includes("Referans isteğin yanıtlandı") && !text(notifications.toJSON()).includes("etkinliğine davet etti") && !text(notifications.toJSON()).includes("senden referans istiyor"), "The screen is cleared, reference cards included")
+    // Chat messages are pushes only: a room message notification never shows in the list.
+    server.notifications.push({ id: "chat-1", type: "message", title: "Yeni oda mesajı", body: "Gizli", eventId: null, actorId: null, readAt: null, createdAt: new Date().toISOString() })
+    await act(async () => { require("./mock-socket.cjs").instances.at(-1).receive("notification:created", server.notifications.at(-1)); await new Promise(r => setTimeout(r, 20)) })
+    assert(!text(notifications.toJSON()).includes("Gizli"), "Room and direct chat messages are not listed as notifications")
+    server.notifications.splice(server.notifications.findIndex(row => row.id === "chat-1"), 1)
     // Nothing waiting: a plain confirmation, and "Sadece bildirimleri sil" never declines anything.
-    server.notifications.push({ id: "notice-3", type: "message", title: "Yeni oda mesajı", body: "Selam", eventId: null, actorId: null, readAt: null, createdAt: new Date().toISOString() })
+    server.notifications.push({ id: "notice-3", type: "announcement", title: "Yeni etkinlik duyurusu", body: "Selam", eventId: null, actorId: null, readAt: null, createdAt: new Date().toISOString() })
     await act(async () => { require("./mock-socket.cjs").instances.at(-1).receive("notification:created", server.notifications.at(-1)); await new Promise(r => setTimeout(r, 20)) })
     dialogs.length = 0
     global.__testAlert = (title, message, buttons) => { dialogs.push({ title, message }); buttons.find(button => button.style === "destructive").onPress() }
@@ -821,7 +826,7 @@ async function tap(tree, label) {
     // Nothing left to show: like "Tümünü oku", "Tümünü sil" is disabled.
     const deleteAll = () => notifications.root.findAll(n => n.props.accessibilityLabel === "Tüm bildirimleri sil" && "disabled" in n.props)[0]
     assert.equal(deleteAll().props.disabled, true, "Tümünü sil is disabled when there is nothing to delete")
-    server.notifications.push({ id: "notice-4", type: "message", title: "Yine mesaj", body: "Selam", eventId: null, actorId: null, readAt: null, createdAt: new Date().toISOString() })
+    server.notifications.push({ id: "notice-4", type: "announcement", title: "Yine duyuru", body: "Selam", eventId: null, actorId: null, readAt: null, createdAt: new Date().toISOString() })
     await act(async () => { require("./mock-socket.cjs").instances.at(-1).receive("notification:created", server.notifications.at(-1)); await new Promise(r => setTimeout(r, 20)) })
     assert.equal(deleteAll().props.disabled, false, "Tümünü sil is enabled again when a notification arrives")
     global.__testAlert = undefined

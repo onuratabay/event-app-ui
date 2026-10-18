@@ -4,20 +4,22 @@ import { useNavigate } from "../native/navigation"
 import { mapApiEvent, useStore } from "../native/Store"
 import { onPushOpened } from "../services/push"
 
-// Tapping a push about an event ("Sana uygun bir etkinlik oluşturuldu") opens that event's detail.
+// Tapping a push about an event ("Sana uygun bir etkinlik oluşturuldu") opens that event's detail;
+// a room message opens the room, a direct message the chat with its sender.
+type Target = { eventId: string; screen: "event-detail" | "event-room" | "rate-event" }
 export default function PushOpenHandler() {
   const { data, setData } = useStore()
   const navigate = useNavigate()
   const ready = !!data.user.id && data.user.status === "approved"
-  const pending = useRef<{ eventId: string; rating: boolean } | null>(null)
+  const pending = useRef<Target | null>(null)
   const pendingChat = useRef<string | null>(null)
-  const open = async ({ eventId, rating }: { eventId: string; rating: boolean }) => {
+  const open = async ({ eventId, screen }: Target) => {
     // "Etkinlik tamamlandı" opens the rating page instead of the event detail.
-    if (rating) { navigate("rate-event", { eventId }); return }
+    if (screen === "rate-event") { navigate("rate-event", { eventId }); return }
     try {
       const event = await getEvent(eventId)
       setData(store => ({ ...store, events: [mapApiEvent(event), ...store.events.filter(row => row.id !== event.id)] }))
-      navigate("event-detail", { eventId: event.id })
+      navigate(screen, { eventId: event.id })
     } catch { /* The event may be gone; the notification list still has it. */ }
   }
   useEffect(() => onPushOpened(payload => {
@@ -29,7 +31,7 @@ export default function PushOpenHandler() {
     }
     const eventId = typeof payload.eventId === "string" ? payload.eventId : null
     if (!eventId) return
-    const target = { eventId, rating: payload.type === "event_rating" }
+    const target: Target = { eventId, screen: payload.type === "event_rating" ? "rate-event" : payload.type === "message" || payload.type === "announcement" ? "event-room" : "event-detail" }
     // A push can open the app before the session is loaded; it is opened once the member is in.
     if (ready) void open(target); else pending.current = target
   }), [ready])

@@ -16,6 +16,8 @@ import { Box, Label, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import type { NavigateFn } from "../types";
 
+// Room and one-to-one chat messages arrive as device pushes only; the list never shows them (the server leaves them out too).
+const CHAT_TYPES = new Set(["message", "direct_message"]);
 export default function NotificationsScreen({ navigate }: { navigate: NavigateFn }) {
   const navInset = useBottomNavInset();
   const { data, setData } = useStore();
@@ -35,7 +37,7 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
       if (!await hasSession()) { if (current === generation.current) setLoading(false); return; }
       const result = await getNotifications();
       if (current !== generation.current || version !== refreshVersion.current) return;
-      setNotifications(result.items); setUnreadCount(result.unreadCount); setNextCursor(result.nextCursor); setError(null);
+      setNotifications(result.items.filter(row => !CHAT_TYPES.has(row.type))); setUnreadCount(result.unreadCount); setNextCursor(result.nextCursor); setError(null);
     } catch (cause) { if (current === generation.current) setError(getApiErrorMessage(cause, "Bildirimler yüklenemedi.")); }
     finally { if (current === generation.current) setLoading(false); }
   }, []);
@@ -44,6 +46,7 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
     setNotifications([]); setUnreadCount(0); setNextCursor(null); setLoading(true); setError(null); setBusy(false); pending.current = false;
     const created = onSocket("notification:created", (row: AppNotification) => {
       refreshVersion.current++;
+      if (CHAT_TYPES.has(row.type)) return;
       setNotifications(current => [row, ...current.filter(item => item.id !== row.id)]);
       void refresh();
     });
@@ -137,7 +140,7 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
     try {
       const result = await getNotifications(nextCursor);
       if (current !== generation.current) return;
-      setNotifications(rows => [...new Map([...rows, ...result.items].map(row => [row.id, row])).values()]); setNextCursor(result.nextCursor);
+      setNotifications(rows => [...new Map([...rows, ...result.items.filter(row => !CHAT_TYPES.has(row.type))].map(row => [row.id, row])).values()]); setNextCursor(result.nextCursor);
     } catch (cause) { if (current === generation.current) setError(getApiErrorMessage(cause)); }
     finally { if (current === generation.current) { pending.current = false; setBusy(false); } }
   };
