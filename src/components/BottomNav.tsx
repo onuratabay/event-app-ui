@@ -1,6 +1,8 @@
 import { palette } from "../theme/palette";
 import { useEffect, useRef, useState } from "react"
 import { Animated, Easing, Keyboard, Platform, StyleSheet } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { LinearGradient } from "expo-linear-gradient"
 import { BrandMark } from "./Brand"
 import { useReduceMotion } from "./GlassUI"
 import { useStore } from "../native/Store"
@@ -33,7 +35,9 @@ export function useKeyboardVisible() {
 }
 /** Bottom padding a screen needs so the global bar never covers its content (0 while typing). */
 export function useBottomNavInset() {
-  return useKeyboardVisible() ? 0 : NAV_CLEARANCE
+  // The root no longer pads the home indicator, so the bar (and what clears it) sits above it.
+  const safeBottom = useSafeAreaInsets().bottom
+  return useKeyboardVisible() ? 0 : NAV_CLEARANCE + safeBottom
 }
 export default function BottomNav({
   active,
@@ -45,6 +49,7 @@ export default function BottomNav({
   const { data } = useStore()
   const ME = data.user
   const reduceMotion = useReduceMotion()
+  const safeBottom = useSafeAreaInsets().bottom
   // Tapping "Oluştur" spins the W one full turn around its vertical axis with a small lift.
   const spin = useRef(new Animated.Value(0)).current
   const spinMark = () => {
@@ -54,8 +59,10 @@ export default function BottomNav({
     Animated.timing(spin, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
   }
   return (
-    <Box pointerEvents="box-none" style={s.frame}>
+    <Box pointerEvents="box-none" style={[s.frame, { bottom: BAR_OFFSET + safeBottom }]}>
       <Box glass style={s.bar}>
+        {/* 3D glass: a lit top edge fading into a darker base, over the blurred screen behind. */}
+        <LinearGradient pointerEvents="none" colors={["rgba(170,185,255,.14)", "rgba(146,125,255,.05)", "rgba(10,14,40,.12)"]} locations={[0, 0.5, 1]} style={s.sheen} />
         {nav.map(([screen, label]) => (
           <Touch
             key={screen}
@@ -113,6 +120,8 @@ const s = StyleSheet.create({
     left: 16,
     right: 16,
     alignItems: "center",
+    zIndex: 100,
+    elevation: 24,
   },
   bar: {
     width: "100%",
@@ -122,11 +131,15 @@ const s = StyleSheet.create({
     gap: 4,
     padding: BAR_PADDING,
     borderRadius: ITEM_RADIUS + BAR_PADDING,
-    backgroundColor: "rgba(11,16,32,.94)",
+    backgroundColor: "rgba(20,26,58,.24)",
     borderWidth: 1,
-    borderColor: "rgba(183,197,255,.12)",
-    boxShadow: "0px 10px 22px rgba(0,0,0,.28)",
+    borderColor: "rgba(190,200,255,.18)",
+    borderTopColor: "rgba(190,200,255,.08)",
+    borderBottomColor: "rgba(105,120,255,.10)",
+    overflow: "hidden",
+    boxShadow: "0px 26px 40px -14px rgba(0,0,0,.6), 0px 10px 28px -6px rgba(90,100,255,.22)",
   },
+  sheen: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   item: {
     flex: 1,
     alignItems: "center",

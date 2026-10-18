@@ -19,6 +19,8 @@ export interface AppUser {
     punctuality: number
     communication: number
     community: number
+    /** Average rating of the members this one brought in (references and codes); null until rated. */
+    referrals?: { members: number; average: number | null }
   }
   stats: {
     attended: number

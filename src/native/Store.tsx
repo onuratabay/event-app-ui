@@ -52,7 +52,7 @@ const mergeFeed = (current: AppEvent[], items: import('../api/client').ApiEvent[
 export function updateStoreUser(user: Data["user"], remoteUser: unknown) {
   if (!remoteUser || typeof remoteUser !== "object") return user
   const remote = remoteUser as import('../api/client').ApiUser
-  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0, scores: remote.scores ? { punctuality: remote.scores.punctuality ?? 0, communication: remote.scores.communication ?? 0, community: remote.scores.community ?? 0 } : user.scores, status: remote.status?.enum ?? user.status, role: remote.role ?? user.role }
+  return { ...user, id: remote.id, name: `${remote.firstName || ''} ${remote.lastName || ''}`.trim(), avatar: remote.profilePhoto || '', city: remote.city || '', bio: remote.bio || '', instagram: remote.instagramUsername || '', score: remote.rank || 0, scores: remote.scores ? { punctuality: remote.scores.punctuality ?? 0, communication: remote.scores.communication ?? 0, community: remote.scores.community ?? 0, referrals: remote.scores.referrals ? { members: remote.scores.referrals.members, average: remote.scores.referrals.average } : undefined } : user.scores, status: remote.status?.enum ?? user.status, role: remote.role ?? user.role }
 
 }
 // Events without a participant cap are stored with the API's highest allowed capacity.
@@ -413,6 +413,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // Both sides of a reference get these events, so the stored list never needs a refetch.
     const referenceCreated = onSocket('reference:created', (row: import('../api/client').ReferenceRequest) => setData(current => current.references ? { ...current, references: [row, ...current.references.filter(item => item.id !== row.id)] } : current))
     const referenceUpdated = onSocket('reference:updated', (patch: { id: string; status: import('../api/client').ReferenceRequest['status'] }) => setData(current => current.references ? { ...current, references: current.references.map(item => item.id === patch.id ? { ...item, status: patch.status } : item) } : current))
+    const referenceDeleted = onSocket('reference:deleted', (patch: { id: string }) => setData(current => current.references ? { ...current, references: current.references.filter(item => item.id !== patch.id) } : current))
     // An admin decision (approve / review / reject) reaches the waiting account at once.
     const accountStatus = onSocket('account:status', (patch: { status: string }) => setData(current => ({ ...current, user: { ...current.user, status: patch.status } })))
     const roomMessage = onSocket('room:message', (delta: { eventId: string; at: string; userId?: string }) => setData(current => ({ ...current, events: current.events.map(event => event.id !== delta.eventId ? event : {
@@ -449,7 +450,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const generation = sessionGeneration.current
       void getCurrentUser().then(remote => { if (generation === sessionGeneration.current) setData(current => current.user.id === remote.id ? { ...current, user: updateStoreUser(current.user, remote) } : current) }).catch(() => {})
     })
-    return () => { cleanups.forEach(cleanup => cleanup()); accountStatus(); roomMessage(); referenceCreated(); referenceUpdated(); promoted(); joinedHere(); unknownRoom(); resync(); renamed(); scoresChanged() }
+    return () => { cleanups.forEach(cleanup => cleanup()); accountStatus(); roomMessage(); referenceCreated(); referenceUpdated(); referenceDeleted(); promoted(); joinedHere(); unknownRoom(); resync(); renamed(); scoresChanged() }
   }, [guestMode])
   return <Context.Provider value={{ data: guestMode ? initial : data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, refreshFeed, refreshMyEvents, refreshRooms, whenReady, loadReferences, resetSession: () => { referencesLoaded.current = false; roomsLoaded.current = false; feedLoad.current = null; stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
     {!guestMode && storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}

@@ -6,7 +6,8 @@ import TopNavBar, { NavAction } from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { Circle, Path, Polyline } from "react-native-svg";
-import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, getOrganizedEvents, getProfileStats, getCurrentUser, type FriendRelationship } from "../api/client";
+import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, getOrganizedEvents, getProfileStats, getCurrentUser, createReferenceCode, getActiveReferenceCode, type FriendRelationship } from "../api/client";
+import { GeneratedCode } from "../components/GeneratedCode";
 import FriendActions from "../components/FriendActions";
 import ConnectionsSheet from "../components/ConnectionsSheet";
 import EventsSheet from "../components/EventsSheet";
@@ -497,6 +498,15 @@ export default function ProfileScreen({
               </Touch>
 
               {showReferences && <Box style={{ padding: 16 }}>
+                {/* A one-time code that counts as your reference for one applicant, valid for 24 hours. */}
+                {store.user.status === "approved" && <Box style={{ marginBottom: 16 }}>
+                  <GeneratedCode label="Referans kodu oluştur" create={createReferenceCode} load={getActiveReferenceCode}
+                    hint="Kod 24 saat geçerli ve tek kişilik. Kodu kullanan kişi senin referansınla katılır; etkinliklerde aldığı olumlu ya da olumsuz puanlar senin referans puanına yansır." />
+                </Box>}
+                {!!user.scores.referrals?.members && <Box style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+                  <Label style={[[ui.textXs, ui.textWhite50]]}>{`Referans puanın · ${user.scores.referrals.members} kişi`}</Label>
+                  <Label style={[[ui.textXs, ui.fontMedium], { color: palette.accent }]}>{user.scores.referrals.average == null ? "Henüz puanlanmadı" : formatScore(user.scores.referrals.average)}</Label>
+                </Box>}
                 {!references.length && <Label style={[[ui.textSm, ui.textWhite40]]}>Henüz onaylanmış referans yok.</Label>}
                 {/* "incoming" = they asked me and I approved; the other person is always shown, never me. */}
                 {[{ title: "Onay verdiklerim", rows: references.filter(ref => ref.direction === 'incoming').map(ref => ({ id: ref.id, person: ref.requester })) },

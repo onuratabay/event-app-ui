@@ -494,3 +494,15 @@ export function CategoryIcon({ name = "", ...props }: IconProps & { name?: strin
     : "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm4 5-3 5-5 3 3-5 5-3Z";
   return <LineSymbol {...props} path={path} />;
 }
+export function CopyIcon({
+  size = defaults.size,
+  style,
+  strokeWidth = defaults.strokeWidth,
+}: IconProps) {
+  return (
+    <Vector width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={[style]}>
+      <Rect x={9} y={9} width={12} height={12} rx={2} />
+      <Path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </Vector>
+  )
+}

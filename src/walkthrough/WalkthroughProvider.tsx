@@ -7,7 +7,7 @@ import { apiLoading } from "../api/loading"
 import { useOptionalGuest } from "../guest/GuestSession"
 import { useStore } from "../native/Store"
 import { useWalkthroughAutostartBlocked, useWalkthroughBlocked } from "./activity"
-import { guideForRoute, GUIDES, type Guide, type TipId } from "./config"
+import { guideForRoute, GUIDES, walkthroughFlags, type Guide, type TipId } from "./config"
 import { emptyState, hasSeen, type WalkthroughState } from "./model"
 import { WalkthroughRepository } from "./repository"
 import { hasTarget, measureTarget, useTargetRevision } from "./targets"
@@ -46,7 +46,7 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
   const autostartBlocked = useWalkthroughAutostartBlocked()
   const blockedRef = useRef(blocked); blockedRef.current = blocked
   const [presentation, setPresentation] = useState<Presentation | null>(null)
-  const run = useRef<Run | null>(null), generation = useRef(0), stepping = useRef(false)
+  const run = useRef<Run | null>(null), generation = useRef(0)
   const attempted = useRef(new Set<string>())
   const manual = useRef<string | null>(null)
   const anonymousOutcome = useRef<"complete" | "skip" | null>(null)
@@ -56,7 +56,7 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
   const repositoryRef = useRef(repository); repositoryRef.current = repository
 
   useEffect(() => {
-    run.current = null; generation.current++; stepping.current = false; setPresentation(null); attempted.current.clear()
+    run.current = null; generation.current++; setPresentation(null); attempted.current.clear()
     tipRef.current = null; setTip(null); manual.current = null
     if (!accountId) { setRepository(null); return }
     const next = new WalkthroughRepository(accountId, {
@@ -87,7 +87,7 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
   }, [repository, foreground])
   useEffect(() => {
     if (run.current && run.current.route !== route) {
-      run.current = null; generation.current++; setPresentation(null); stepping.current = false
+      run.current = null; generation.current++; setPresentation(null)
     }
     tipRef.current = null; setTip(null); tipClaiming.current = false
     setInteraction(Date.now())
@@ -97,29 +97,29 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
 
   const finish = (outcome: "complete" | "skip") => {
     const current = run.current
-    run.current = null; generation.current++; stepping.current = false; setPresentation(null)
+    run.current = null; generation.current++; setPresentation(null)
     lastPresentation.current = Date.now()
     if (!current) return
     if (current.anonymous) anonymousOutcome.current = outcome
     else void repositoryRef.current?.finish(current.guide.id, outcome)
     setInteraction(Date.now())
   }
-  const showStep = async (current: Run, index: number, direction: 1 | -1 = 1) => {
-    if (stepping.current) return
-    stepping.current = true
+  // Whole-screen annotation: measure every step's target as it sits now (no scrolling); steps whose
+  // target is missing or off screen are listed on the overlay instead of pointed at.
+  const measureAll = async (guide: Guide) => Promise.all(guide.steps.map(async step => {
+    const frame = await measureTarget(step.target)
+    return frame && frame.y + frame.height >= 32 && frame.y >= 0 && frame.y < viewport.height - 24 ? frame : null
+  }))
+  const showAll = async (current: Run) => {
     const token = ++generation.current
-    try {
-      for (let next = index; next >= 0 && next < current.guide.steps.length; next += direction) {
-        const frame = current.preview ? null : await measureTarget(current.guide.steps[next].target, true)
-        if (token !== generation.current || run.current !== current || current.route !== latestRoute.current) return
-        // Missing, zero-sized or clipped native elements never break navigation.
-        if (!current.preview && (!frame || frame.y + frame.height < 32 || frame.y < 0 || frame.y >= viewport.height - 24)) continue
-        setPresentation({ guide: current.guide, index: next, frame, preview: current.preview })
-        return
-      }
-      if (direction === -1) return
-      finish(index > 0 ? "complete" : "skip")
-    } finally { if (token === generation.current) stepping.current = false }
+    const frames = current.preview ? current.guide.steps.map(() => null) : await measureAll(current.guide)
+    if (token !== generation.current || run.current !== current || current.route !== latestRoute.current) return
+    setPresentation({ guide: current.guide, frames, preview: current.preview })
+    // Entrance animations can still move things for a moment: measure once more when they settle.
+    if (!current.preview) setTimeout(() => {
+      if (token !== generation.current || run.current !== current) return
+      void measureAll(current.guide).then(next => { if (token === generation.current && run.current === current) setPresentation(value => value ? { ...value, frames: next } : null) })
+    }, 450)
   }
   const begin = async (guide: Guide, preview = false, explicit = false, anonymous = false) => {
     if (run.current || blockedRef.current || tipRef.current) return
@@ -137,9 +137,9 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
       return
     }
     lastPresentation.current = Date.now()
-    await showStep(current, 0)
+    await showAll(current)
   }
-  const eligible = !guest || guest.ready && !guest.guest
+  const eligible = walkthroughFlags.enabled && (!guest || guest.ready && !guest.guest)
   const currentGuide = guideForRoute(path, !!params.userId && params.userId !== accountId)
   const ready = repository?.accountId === accountId && repository.remoteReady
   useEffect(() => {
@@ -165,8 +165,8 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
     const current = run.current
     if (!current || !presentation || presentation.preview || blocked) return
     let active = true
-    void measureTarget(presentation.guide.steps[presentation.index].target, true).then(frame => {
-      if (active && run.current === current && frame) setPresentation(value => value ? { ...value, frame } : null)
+    void measureAll(presentation.guide).then(frames => {
+      if (active && run.current === current) setPresentation(value => value ? { ...value, frames } : null)
     })
     return () => { active = false }
   }, [viewport.width, viewport.height, blocked])
@@ -176,10 +176,10 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
     available: !blocked,
     presenting: !!run.current && run.current.route === route && run.current.accountId === accountId,
     tip: repository?.accountId === accountId ? tip : null,
-    preview: id => { const guide = GUIDES.find(item => item.id === id); if (guide) void begin(guide, true, true) },
+    preview: id => { if (!walkthroughFlags.enabled) return; const guide = GUIDES.find(item => item.id === id); if (guide) void begin(guide, true, true) },
     replayOnNextScreen: id => { manual.current = id; setInteraction(Date.now()) },
     claimTip: async id => {
-      if (!repository || repository.accountId !== accountId || !ready || blockedRef.current || run.current || tipRef.current || tipClaiming.current || tipRoute.current === latestRoute.current || Date.now() - lastPresentation.current < 1800) return false
+      if (!walkthroughFlags.enabled || !repository || repository.accountId !== accountId || !ready || blockedRef.current || run.current || tipRef.current || tipClaiming.current || tipRoute.current === latestRoute.current || Date.now() - lastPresentation.current < 1800) return false
       const expectedRoute = latestRoute.current
       tipClaiming.current = true
       try {
@@ -195,7 +195,7 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
   return <Context.Provider value={value}>
     <View style={s.root} onStartShouldSetResponderCapture={() => { if (!presentation) { latestTouch.current++; setInteraction(Date.now()) }; return false }}>
       <View style={s.root} accessibilityElementsHidden={visible} importantForAccessibility={visible ? "no-hide-descendants" : "auto"}>{children}</View>
-      {presentation && visible && <WalkthroughOverlay presentation={presentation} onClose={() => finish("skip")} onNext={() => { const current = run.current; if (current) void showStep(current, presentation.index + 1) }} onBack={() => { const current = run.current; if (current) void showStep(current, presentation.index - 1, -1) }} />}
+      {presentation && visible && <WalkthroughOverlay presentation={presentation} onClose={() => finish("skip")} onDone={() => finish("complete")} />}
     </View>
   </Context.Provider>
 }

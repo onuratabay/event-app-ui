@@ -4,7 +4,7 @@ import { onSocket } from '../services/socket'
 import { useEffect, useRef, useState } from "react"
 import { Linking, Platform } from "react-native"
 import * as Contacts from "expo-contacts/legacy"
-import { getApiErrorMessage, getReferenceRequests, matchReferenceContacts, sendReferenceRequest, type ReferenceMember, type ReferenceRequest } from "../api/client"
+import { deleteReferenceRequest, getApiErrorMessage, getReferenceRequests, matchReferenceContacts, sendReferenceRequest, type ReferenceMember, type ReferenceRequest } from "../api/client"
 import { Box, Label, Touch } from "../native/UI"
 import { ui } from "../theme/styles"
 import { ErrorNotice } from "./ErrorNotice"
@@ -40,8 +40,9 @@ export function ReferencePicker({ onApproved, refreshSignal = 0, onRefreshed }: 
     void refresh()
     const created = onSocket('reference:created', row => { if (row.direction !== 'outgoing') return; setRequests(current => [row, ...current.filter(r => r.id !== row.id)].slice(0, 100)) })
     const updated = onSocket('reference:updated', patch => setRequests(current => current.map(row => row.id === patch.id ? { ...row, status: patch.status } : row)))
+    const removed = onSocket('reference:deleted', patch => setRequests(current => current.filter(row => row.id !== patch.id)))
     const sync = onSocket('sync:required', () => { void refresh() })
-    return () => { active = false; created(); updated(); sync() }
+    return () => { active = false; created(); updated(); removed(); sync() }
   }, [])
   // Pull to refresh on the parent screen.
   useEffect(() => {
@@ -82,12 +83,21 @@ export function ReferencePicker({ onApproved, refreshSignal = 0, onRefreshed }: 
     } catch (cause) { setError(getApiErrorMessage(cause, "Referans isteği gönderilemedi. Tekrar dene.")) }
     finally { setSending(null) }
   }
+  const [removing, setRemoving] = useState<string | null>(null)
+  const remove = async (request: ReferenceRequest) => {
+    if (removing) return
+    setRemoving(request.id); setError(null)
+    try { await deleteReferenceRequest(request.id); setRequests(current => current.filter(r => r.id !== request.id)) }
+    catch (cause) { setError(getApiErrorMessage(cause, "Kişi kaldırılamadı. Tekrar dene.")) }
+    finally { setRemoving(null) }
+  }
+  const removeButton = (request: ReferenceRequest) => <Touch accessibilityLabel={`${request.recipient.name} kişisini kaldır`} onPress={() => void remove(request)} disabled={removing !== null} hitSlop={8} style={[[ui.textXs, ui.textWhite50]]}>{removing === request.id ? "Kaldırılıyor…" : "Kaldır"}</Touch>
   const statusText = (status: ReferenceRequest["status"]) => status === "approved" ? "Referans onaylandı" : status === "declined" ? "İstek kabul edilmedi" : "Onay bekleniyor"
   return <Box walkthroughId="reference-picker" style={{ gap: 12, marginTop: 14 }}>
     <ContextualTip id="references" when={loaded || requests.length > 0} />
-    <Label style={[[ui.textXs, ui.textWhite45]]}>Paylaşmayı seçtiğin kişiler arasındaki topluluk üyelerinden referans iste. Eşleştirme için yalnızca telefon numaraları kullanılır.</Label>
+    
     <Touch onPress={() => void loadContacts(limited)} disabled={busy} style={[[ui.py3, ui.roundedXl, ui.textSm, ui.textWhite80], { backgroundColor: "rgba(105,120,255,0.08)", borderWidth: 1, borderColor: "rgba(105,120,255,0.2)" }]}>
-      {busy ? "Üyeler aranıyor…" : loaded ? limited ? "Paylaşılan kişileri değiştir" : "Rehberi yenile" : "Rehberden üye bul"}
+      {busy ? "Üyeler aranıyor…" : loaded ? limited ? "Paylaşılan kişileri değiştir" : "Rehberi yenile" : "Arkadaşını ekle"}
     </Touch>
     {denied && <Box style={{ gap: 8 }}><Label style={[[ui.textXs, ui.textWhite50]]}>Kişilerini görmek için rehber erişimine izin ver.</Label><Touch onPress={() => void Linking.openSettings()} style={[[ui.textSm, ui.textC8a44a]]}>Ayarları aç</Touch></Box>}
     {loaded && members.length === 0 && <Label style={[[ui.textXs, ui.textWhite50]]}>Paylaştığın kişiler arasında referans verebilecek bir üye bulunamadı.</Label>}
@@ -95,10 +105,10 @@ export function ReferencePicker({ onApproved, refreshSignal = 0, onRefreshed }: 
       const request = requests.find(r => r.recipient.id === member.id)
       return <Box key={member.id} style={{ padding: 12, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.04)", gap: 6 }}>
         <Label style={[[ui.textSm, ui.textWhite85]]}>{member.name}</Label>
-        {request ? <Label style={[[ui.textXs, ui.textWhite50]]}>{statusText(request.status)}</Label> : <Touch onPress={() => void send(member)} disabled={sending !== null} style={[[ui.py25, ui.textSm, ui.textC8a44a]]}>{sending === member.id ? "Gönderiliyor…" : "Referans iste"}</Touch>}
+        {request ? <Box style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Label style={[[ui.textXs, ui.textWhite50]]}>{statusText(request.status)}</Label>{removeButton(request)}</Box> : <Touch onPress={() => void send(member)} disabled={sending !== null} style={[[ui.py25, ui.textSm, ui.textC8a44a]]}>{sending === member.id ? "Gönderiliyor…" : "Referans iste"}</Touch>}
       </Box>
     })}
-    {requests.filter(r => !members.some(m => m.id === r.recipient.id)).map(request => <Box key={request.id} style={{ gap: 4 }}><Label style={[[ui.textSm, ui.textWhite85]]}>{request.recipient.name}</Label><Label style={[[ui.textXs, ui.textWhite50]]}>{statusText(request.status)}</Label></Box>)}
+    {requests.filter(r => !members.some(m => m.id === r.recipient.id)).map(request => <Box key={request.id} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Box style={{ flex: 1, gap: 4 }}><Label style={[[ui.textSm, ui.textWhite85]]}>{request.recipient.name}</Label><Label style={[[ui.textXs, ui.textWhite50]]}>{statusText(request.status)}</Label></Box>{removeButton(request)}</Box>)}
     {error && <ErrorNotice title="Referans işlemi tamamlanamadı" message={error} onDismiss={() => setError(null)} />}
   </Box>
 }

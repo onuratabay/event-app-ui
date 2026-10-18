@@ -16,11 +16,19 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   const calls = []
   const urls = []
   const bodies = []
+  let registerConflict = false, loginFails = false
   global.fetch = async (url, options = {}) => {
     const path = new URL(url).pathname
     calls.push(path)
     urls.push(url)
     if (options.body) bodies.push({ path, body: JSON.parse(options.body) })
+    if (path === "/auth/register" && registerConflict) return { ok: false, status: 409, text: async () => JSON.stringify({ statusCode: 409, errors: [{ field: "phoneNumber", message: "Bu telefon numarası zaten kayıtlı" }] }) }
+    if (path === "/access-codes/redeem") {
+      const code = JSON.parse(options.body).code.toUpperCase()
+      return code === "EVENT2026" ? { ok: true, status: 200, json: async () => ({ target: "discover", status: "approved" }) }
+        : { ok: false, status: 404, text: async () => JSON.stringify({ statusCode: 404, errors: [{ field: null, message: "Bu kod geçerli değil veya süresi dolmuş." }] }) }
+    }
+    if (path === "/auth/login" && loginFails) return { ok: false, status: 401, text: async () => JSON.stringify({ statusCode: 401, errors: [{ field: null, message: "Telefon numarası veya şifre hatalı" }] }) }
     const body = path === "/auth/login" || path === "/auth/register" ? { user: user(current), tokens: { accessToken: "a", refreshToken: "r" } }
       : path === "/auth/me" ? user(current)
       : path === "/users/me/profile/complete" ? (current = "approved", user(current))
@@ -149,6 +157,58 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   assert.deepEqual(signUp.acceptedDocuments, [{ type: "terms", version: 1 }, { type: "privacy", version: 1 }, { type: "marketing", version: 3 }], "Opting in records the marketing text version too")
   assert.equal(signUp.marketingConsent, true)
   await act(async () => registration.unmount())
+
+  // A half-finished registration (account saved, app never heard back) resumes with the same phone and password.
+  const fillAndSubmit = async (tree) => {
+    const fields = tree.root.findAllByType("TextInput")
+    for (const [index, value] of ["Ada", "Yeni", "ada@example.com", "+90 532 000 00 00", "Password1!"].entries()) await act(async () => fields[index].props.onChangeText(value))
+    await act(async () => tree.root.findAll(n => n.props.mode === "date" && typeof n.props.onChangeText === "function")[0].props.onChangeText("1995-06-15"))
+    await act(async () => tree.root.findAllByType("Pressable").find(n => String(n.props.accessibilityLabel).startsWith("Şehir:")).props.onPress())
+    const search = tree.root.findAllByType("TextInput").find(n => n.props.placeholder === "Şehir ara")
+    await act(async () => search.props.onChangeText("sanliurfa"))
+    const cityOption = tree.root.findAllByType("Pressable").find(n => n.props.accessibilityState && "selected" in n.props.accessibilityState && text(n).includes("Şanlıurfa"))
+    assert(cityOption, "City search ignores Turkish letters: sanliurfa finds Şanlıurfa")
+    await act(async () => cityOption.props.onPress())
+    await tap(tree, "Topluluk İlkeleri ve Sözleşmeler")
+    await tap(tree, "Topluluk Kuralları")
+    await tap(tree, "KVKK Aydınlatma Metni")
+    await tap(tree, "Devam Et")
+  }
+  storage.clear(); current = "profile_incomplete"; registered = undefined; registerConflict = true
+  let resumed = await mount("Onboarding", { step: 1, navigate: route => { registered = route } })
+  await fillAndSubmit(resumed)
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  assert.equal(registered, "onboarding-2", "The existing unfinished application continues after a sign-in with the same password")
+  assert.deepEqual(bodies.filter(row => row.path === "/auth/login").at(-1).body, { phoneNumber: "+905320000000", password: "Password1!", language: "tr" })
+  await act(async () => resumed.unmount())
+  storage.clear(); registered = undefined; loginFails = true
+  resumed = await mount("Onboarding", { step: 1, navigate: route => { registered = route } })
+  await fillAndSubmit(resumed)
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  assert.equal(registered, undefined, "A different password does not open someone else's application")
+  assert.equal(calls.at(-1), "/auth/login", "With a wrong password the sign-in attempt is the last request")
+  await act(async () => resumed.unmount())
+  registerConflict = false; loginFails = false
+  // The application's second step ("Seni biraz daha tanıyalım") has an event invite code field.
+  storage.set("event-app:access-token", "a"); current = "profile_incomplete"
+  const visited = []
+  const stepTwo = await mount("Onboarding", { step: 2, navigate: route => visited.push(route) })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  const codeInput = stepTwo.root.findAll(n => n.props.accessibilityLabel === "Etkinlik veya referans kodu" && typeof n.props.onChangeText === "function")[0]
+  assert(codeInput, "Step two has an invite code field")
+  const openCode = async value => {
+    await act(async () => stepTwo.root.findAll(n => n.props.accessibilityLabel === "Etkinlik veya referans kodu" && typeof n.props.onChangeText === "function")[0].props.onChangeText(value))
+    await act(async () => { stepTwo.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Kodu ekle").props.onPress?.({ stopPropagation() {} }); await new Promise(resolve => setTimeout(resolve, 20)) })
+  }
+  await openCode("yanlis")
+  assert(text(stepTwo.toJSON()).includes("Geçerli bir kod gir."), "An unknown code is explained under the input")
+  await openCode("event2026")
+  assert.deepEqual(bodies.filter(row => row.path === "/access-codes/redeem").at(-1).body, { code: "event2026" })
+  assert(!visited.includes("discover"), "A valid code waits for Devam Et")
+  await tap(stepTwo, "Devam Et")
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  assert(visited.includes("discover"), "With a valid code Devam Et opens the screen it was set up for (the feed)")
+  await act(async () => stepTwo.unmount())
 
   // Profile completion: three interests are required, the photo is not; saving approves and opens the app.
   storage.set("event-app:access-token", "a"); current = "profile_incomplete"; calls.length = 0

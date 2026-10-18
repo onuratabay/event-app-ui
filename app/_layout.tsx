@@ -32,6 +32,8 @@ export default function RootLayout() {
     "Outfit-Medium": require("../assets/fonts/Outfit-Medium.ttf"),
     "Outfit-SemiBold": require("../assets/fonts/Outfit-SemiBold.ttf"),
     Fraunces: require("../assets/fonts/Fraunces.ttf"),
+    // Handwritten notes on the walkthrough overlay (OFL).
+    Caveat: require("../assets/fonts/Caveat.ttf"),
   })
   useEffect(() => {
     if (loaded || error) void SplashScreen.hideAsync()
@@ -48,7 +50,8 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <PreferencesProvider>
-      <SafeAreaView style={s.root} edges={["top", "bottom"]}>
+      {/* Only the top inset: screens draw their background down to the bottom edge and pad their own content. */}
+      <SafeAreaView style={s.root} edges={["top"]}>
         <StatusBar style="light" />
         <ErrorNoticeProvider>
           <KeyboardAvoidingView

@@ -3,8 +3,11 @@ const React = require('react')
 const { create } = require('react-test-renderer')
 
 module.exports = async function ({ act, text, audit, storage }) {
+  // The feature ships switched off; its tests run it switched on and restore the flag at the end.
+  const flags = require('../src/walkthrough/config.ts').walkthroughFlags
+  flags.enabled = true
   const { WalkthroughRepository } = require('../src/walkthrough/repository.ts')
-  const { emptyState, hasSeen, mergeState, placeCard, recordProgress } = require('../src/walkthrough/model.ts')
+  const { emptyState, hasSeen, mergeState, placeCard, recordProgress, layoutNotes } = require('../src/walkthrough/model.ts')
   const { GUIDES } = require('../src/walkthrough/config.ts')
   const clone = value => JSON.parse(JSON.stringify(value))
   const accounts = new Map()
@@ -76,19 +79,32 @@ module.exports = async function ({ act, text, audit, storage }) {
       assert(placement.top + Math.min(420, placement.maxHeight) <= h - bottom - 11)
     }
   }
+  // Handwritten notes: inside the free area, never on each other or on a target, arrows ending at their target.
+  for (const [w, h, top, bottom] of [[320, 568, 32, 440], [390, 844, 59, 700], [844, 390, 12, 260]]) {
+    const steps = GUIDES.find(g => g.id === 'event-detail').steps
+    const frames = [{ x: 16, y: top + 40, width: w - 32, height: 90 }, { x: 16, y: top + 160, width: w - 32, height: 70 }, { x: 16, y: bottom - 60, width: w - 32, height: 50 }]
+    const notes = layoutNotes(steps, frames, w, top, bottom)
+    for (const note of notes) {
+      assert(note.box.x >= 24 && note.box.x + note.box.width <= w - 23 && note.box.y >= top && note.box.y + note.box.height <= bottom, `Note ${note.index} stays in the free area (${w}x${h})`)
+      assert(notes.every(other => other === note || note.box.y + note.box.height <= other.box.y || other.box.y + other.box.height <= note.box.y || note.box.x + note.box.width <= other.box.x || other.box.x + other.box.width <= note.box.x), 'Notes never overlap')
+      assert(Math.abs(note.to.y - (note.to.y < note.target.y ? note.target.y - 8 : note.target.y + note.target.height + 8)) < 1 && note.to.x >= note.target.x && note.to.x <= note.target.x + note.target.width, 'The arrow ends on its target\'s frame, within its width')
+    }
+  }
   assert.equal(new Set(GUIDES.map(guide => guide.id)).size, GUIDES.length, 'Guide IDs are unique')
   assert(GUIDES.every(guide => guide.steps.length >= 2 && guide.steps.length <= 4))
   const Overlay = require('../src/walkthrough/WalkthroughOverlay.tsx').default
-  let next = 0, back = 0, close = 0, overlay
-  await act(async () => { overlay = create(React.createElement(Overlay, { presentation: { guide: GUIDES.find(g => g.id === 'discover'), index: 1, frame: { x: 20, y: 100, width: 200, height: 50 }, preview: false }, onNext: () => next++, onBack: () => back++, onClose: () => close++ })) })
+  let done = 0, close = 0, overlay
+  // One blurred sheet: every step at once, two pointed at with arrows, the off-screen one listed.
+  await act(async () => { overlay = create(React.createElement(Overlay, { presentation: { guide: GUIDES.find(g => g.id === 'discover'), frames: [{ x: 20, y: 120, width: 300, height: 44 }, { x: 260, y: 60, width: 44, height: 44 }, null], preview: false }, onDone: () => done++, onClose: () => close++ })) })
   audit(overlay.toJSON())
-  assert(text(overlay.toJSON()).includes('Sıralama sana uysun'))
+  const sheet = text(overlay.toJSON())
+  assert(['Bugünün planını bul', 'Sıralama sana uysun', 'Planın henüz yoksa', 'Keşfet', 'Anladım'].every(part => sheet.includes(part)) && !sheet.includes('Tarih veya aktivite filtreleriyle'), 'Short notes only: titles, the guide name and the button')
+  assert(overlay.root.findAll(n => n.type === 'Path' && /Q/.test(String(n.props.d))).length >= 1, 'Notes point at their targets with arrows')
+  assert(overlay.root.findAll(n => n.props.style && [].concat(n.props.style).flat(Infinity).some(style => style && style.fontFamily === 'Caveat')).length, 'Notes are handwritten')
   const press = label => overlay.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === label)[0].props.onPress()
-  await act(async () => { press('Sonraki adım'); press('Önceki adım'); press('Rehberi geç ve kapat') })
-  assert.deepEqual([next, back, close], [1, 1, 1])
-  const progress = overlay.root.findAll(n => n.type === 'View' && n.props.accessibilityRole === 'progressbar')[0]
-  assert.equal(progress.props.accessibilityValue.now, 2)
-  await act(async () => overlay.root.findByType('Modal').props.onRequestClose())
+  await act(async () => { press('Anladım, rehberi kapat'); press('Rehberi geç') })
+  assert.deepEqual([done, close], [1, 1])
+  await act(async () => global.__testBackHandler())
   assert.equal(close, 2, 'Android back dismisses the guide')
   await act(async () => overlay.unmount())
 
@@ -124,32 +140,30 @@ module.exports = async function ({ act, text, audit, storage }) {
   try {
     await act(async () => { tree = create(element(), options) })
     await settle(1250)
-    assert(tree.root.findAllByType('Modal').length, 'First screen visit automatically opens the provider tour')
-    await act(async () => tree.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Rehberi geç ve kapat')[0].props.onPress())
+    assert(tree.root.findAll(n => n.props.testID === 'walkthrough-sheet').length, 'First screen visit automatically opens the provider tour')
+    await act(async () => tree.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Rehberi geç')[0].props.onPress())
     assert(remote(account).skippedGuides.includes('discover'))
     await settle(1100)
-    assert.equal(tree.root.findAllByType('Modal').length, 0, 'Skipped guide stays closed on its current screen')
+    assert.equal(tree.root.findAll(n => n.props.testID === 'walkthrough-sheet').length, 0, 'Skipped guide stays closed on its current screen')
     blocked = true; global.__testPathname = '/map'
     await act(async () => tree.update(element()))
     await settle(1100)
-    assert.equal(tree.root.findAllByType('Modal').length, 0, 'Critical interaction defers first-visit guidance')
+    assert.equal(tree.root.findAll(n => n.props.testID === 'walkthrough-sheet').length, 0, 'Critical interaction defers first-visit guidance')
     blocked = false; await act(async () => tree.update(element()))
     await settle(1250)
-    assert(tree.root.findAllByType('Modal').length, 'Deferred guide opens once the screen is idle')
+    assert(tree.root.findAll(n => n.props.testID === 'walkthrough-sheet').length, 'Deferred guide opens once the screen is idle')
     await act(async () => global.__testKeyboardListeners.keyboardDidShow())
-    assert.equal(tree.root.findAllByType('Modal').length, 0, 'Keyboard pauses an open tour')
+    assert.equal(tree.root.findAll(n => n.props.testID === 'walkthrough-sheet').length, 0, 'Keyboard pauses an open tour')
     await act(async () => global.__testKeyboardListeners.keyboardDidHide())
     await settle(30)
-    assert(tree.root.findAllByType('Modal').length, 'Tour resumes at the same step after keyboard closes')
-    await act(async () => tree.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Sonraki adım')[0].props.onPress())
-    await settle(30)
-    await act(async () => tree.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Rehberi bitir')[0].props.onPress())
-    assert(remote(account).completedGuides.includes('map'), 'Final step records completion')
+    assert(tree.root.findAll(n => n.props.testID === 'walkthrough-sheet').length, 'The guide comes back after the keyboard closes')
+    await act(async () => tree.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Anladım, rehberi kapat')[0].props.onPress())
+    assert(remote(account).completedGuides.includes('map'), '"Anladım" records completion')
     global.__testPathname = '/discover'; await act(async () => tree.update(element())); await settle(1100)
-    assert.equal(tree.root.findAllByType('Modal').length, 0, 'Revisiting a page does not restart its tour')
+    assert.equal(tree.root.findAll(n => n.props.testID === 'walkthrough-sheet').length, 0, 'Revisiting a page does not restart its tour')
     await act(async () => controls.preview('discover')); await settle(30)
-    assert(tree.root.findAllByType('Modal').length, 'Explicit manual replay remains available')
-    await act(async () => tree.root.findByType('Modal').props.onRequestClose())
+    assert(tree.root.findAll(n => n.props.testID === 'walkthrough-sheet').length, 'Explicit manual replay remains available')
+    await act(async () => global.__testBackHandler())
     showTip = true; await act(async () => tree.update(element())); await settle(2200)
     assert(tree.root.findAll(n => n.props.testID === 'walkthrough-tip-references').length, 'First visible feature use shows an inline tip')
     await act(async () => tree.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'İpucunu kapat')[0].props.onPress())
@@ -157,12 +171,12 @@ module.exports = async function ({ act, text, audit, storage }) {
     assert.equal(tree.root.findAll(n => n.props.testID === 'walkthrough-tip-references').length, 0, 'Dismissed contextual tip does not return')
     missingTarget = true; global.__testPathname = '/map'
     await act(async () => { controls.replayOnNextScreen('map'); tree.update(element()) }); await settle(1250)
-    await act(async () => tree.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Sonraki adım')[0].props.onPress())
-    await settle(30)
-    assert.equal(tree.root.findAllByType('Modal').length, 0, 'Missing native target is skipped without breaking the screen')
+    assert(text(tree.toJSON()).includes('Yakınında neler var?'), 'A missing native target is still explained, in the list')
+    await act(async () => tree.root.findAll(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Rehberi geç')[0].props.onPress())
+    assert.equal(tree.root.findAll(n => n.props.testID === 'walkthrough-sheet').length, 0, 'The sheet closes without breaking the screen')
   } finally {
     if (tree) await act(async () => tree.unmount())
-    global.fetch = oldFetch; global.__testPathname = oldPath; storage.clear()
+    global.fetch = oldFetch; global.__testPathname = oldPath; storage.clear(); flags.enabled = false
   }
   console.log('PASS: walkthrough first visit, skip, completion, revisit, relogin, clean second device, account isolation, offline outbox, manual replay, contextual tips, critical-operation deferral, accessible native overlay and mobile/landscape placement.')
 }

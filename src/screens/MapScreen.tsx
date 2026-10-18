@@ -15,15 +15,12 @@ import { MAP_PROVIDER } from "../map/provider"
 import { DARK_MAP_PROPS } from "../map/darkStyle"
 import { useBottomNavInset } from "../components/BottomNav"
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg"
-import { FilterChip } from "../components/GlassUI"
 import { getApiErrorMessage, getMapEvents, getMapInterests, type ApiEvent } from "../api/client"
 import { mapApiEventPreservingCover, participantCount, useStore } from "../native/Store"
 import { Box, Label, Scroll, Touch } from "../native/UI"
 import { COLORS, createIndex, densitySpots, INITIAL_REGION, isVisible, modeForZoom, regionForRadius, USER_LOCATION_RADIUS_KM, zoomForRegion } from "../map/model"
 import type { NavigateFn } from "../types"
 
-// Date is a single choice, so it is a segmented control; place, time and custom dates live in the sheet.
-const DATE_PRESETS = [["all", "Tümü"], ["today", "Bugün"], ["tomorrow", "Yarın"], ["week", "Haftaya"]] as const
 
 /** Card for an event picked on the map: what, when, where, how full, and one clear action. */
 function EventMapCard({ event, width, onOpen }: { event: ApiEvent; width: number; onOpen: () => void }) {
@@ -184,7 +181,8 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     navigate("event-detail", { eventId: event.id })
   }
   const selectedIds = new Set(selected.map(event => event.id))
-  const advancedCount = (filters.place ? 1 : 0) + (filters.timeFrom ? 1 : 0) + (filters.datePreset === "custom" ? 1 : 0)
+  // Every active choice in the sheet counts: date, activities, time and place.
+  const advancedCount = (filters.place ? 1 : 0) + (filters.timeFrom ? 1 : 0) + (filters.datePreset !== "all" ? 1 : 0) + (filters.interestIds.length ? 1 : 0)
   const anyFilter = advancedCount > 0 || filters.interestIds.length > 0 || filters.datePreset !== "all"
   const clearFilters = () => applyFilters({ ...DEFAULT_FILTERS, interestIds: [] })
   const summary = [filters.place ? `${filters.place.name} · ${filters.radiusKm} km` : "Her yerde",
@@ -254,22 +252,14 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     </View>
     <TopNavBar navigate={navigate} fallback="discover" title="Harita" subtitle={summary} floating />
 
-    {/* Filters: row 1 is the date (one choice), row 2 the sheet button with its active count and the activity types. */}
+    {/* Only the Filtreler button sits on the map; date, activity, time and place are chosen in its sheet. */}
     <Box walkthroughId="map-filters" pointerEvents="box-none" style={[s.top, { paddingTop: 66 }]}>
-      {/* Same chips as the search screen: date is a single choice in one scrollable row. */}
-      <Scroll horizontal showsHorizontalScrollIndicator={false} style={s.filters} accessibilityRole="tablist">
-        {DATE_PRESETS.map(([id, label]) => <FilterChip key={id} label={label} accessibilityLabel={`Tarih: ${label}`} selected={filters.datePreset === id} onPress={() => applyFilters({ ...filters, datePreset: id, dateFrom: "", dateTo: "" })} />)}
-      </Scroll>
-      <Box style={s.typeRow}>
+      <Box style={s.typeRow} pointerEvents="box-none">
         <Touch accessibilityLabel={advancedCount ? `Filtreler, ${advancedCount} aktif` : "Filtreler"} onPress={() => { interacted.current = true; setFilterOpen(true) }} glass style={[s.filterButton, advancedCount > 0 && s.filterButtonOn]}>
           <FilterIcon size={16} style={{ color: advancedCount ? palette.accent : palette.text }} />
           <Label style={[s.filterText, advancedCount > 0 && { color: palette.accent }]}>Filtreler</Label>
           {advancedCount > 0 && <Box style={s.badge}><Label style={s.badgeText}>{String(advancedCount)}</Label></Box>}
         </Touch>
-        <Scroll horizontal showsHorizontalScrollIndicator={false} style={[s.filters, s.typeChips]}>
-          <FilterChip label="Tüm türler" selected={!filters.interestIds.length} onPress={() => applyFilters({ ...filters, interestIds: [] })} />
-          {categories.map(item => <FilterChip key={item.id} label={item.name} selected={filters.interestIds.includes(item.id)} onPress={() => applyFilters({ ...filters, interestIds: filters.interestIds.includes(item.id) ? filters.interestIds.filter(id => id !== item.id) : [...filters.interestIds, item.id] })} />)}
-        </Scroll>
       </Box>
     </Box>
 

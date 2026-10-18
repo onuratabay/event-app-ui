@@ -5,7 +5,8 @@ import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
 import { CategoryIcon } from "../components/Icons";
 import { onSocket, socketAction, watchEvent } from '../services/socket';
-import { participate, getApiErrorMessage, getEvent, getEventCandidateCount, cancelEvent } from "../api/client";
+import { participate, getApiErrorMessage, getEvent, getEventCandidateCount, cancelEvent, createEventCode } from "../api/client";
+import { GeneratedCode } from "../components/GeneratedCode";
 import { formatScore } from "../events/score";
 import { eventPhase, isLivePhase, isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
 import { useEffect, useState, type ReactNode } from "react";
@@ -274,6 +275,13 @@ export default function EventDetailScreen({
               </Box>
             </Box>
           </GlassCard>
+
+          {/* The organizer's 24-hour event code (EWT-…): whoever enters it in the app opens this event as a guest. */}
+          {event.host.id === store.user.id && !["cancelled", "closed"].includes(event.status ?? "") && <GlassCard style={[[ui.p5]]}>
+            <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider, ui.mb3]]}>Etkinlik kodu</Label>
+            <GeneratedCode label="Etkinlik kodu oluştur" storageKey={`event-app:event-code:${event.id}`} create={() => createEventCode(event.id).then(link => ({ code: link.code, expiresAt: link.expiresAt }))}
+              hint="Kod 24 saat geçerli. Kodu kullanan misafirlerin sorumluluğu sende; katıldıkları etkinliklerde aldıkları puanlar senin referans puanına yansır." />
+          </GlassCard>}
 
         </Box>
       </Scroll>

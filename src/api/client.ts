@@ -308,6 +308,9 @@ export function getReferenceRequests() {
 export function sendReferenceRequest(recipientId: string) {
   return request<ReferenceRequest>("/references/requests", { method: "POST", body: JSON.stringify({ recipientId }) })
 }
+export function deleteReferenceRequest(id: string) {
+  return request<{ id: string }>(`/references/requests/${id}`, { method: "DELETE" })
+}
 export function respondToReference(id: string, decision: "approved" | "declined") {
   return request<{ status: "approved" | "declined" }>(`/references/requests/${id}/respond`, { method: "POST", body: JSON.stringify({ decision }) })
 }
@@ -357,6 +360,8 @@ export interface AdminStats {
   moderation: { reports: Counts; reportTargets: Counts; references: Counts; interestProposals: number; interests: number }
   series: { days: string[]; registrations: number[]; events: number[]; messages: number[] }
 }
+/** Seasonal access code (e.g. EVENT2026): the screen to open, and the account status afterwards (it may approve). */
+export const redeemAccessCode = (code: string) => request<{ target: string; status: string }>("/access-codes/redeem", { method: "POST", body: JSON.stringify({ code }) })
 export const getAdminStats = () => request<AdminStats>("/admin/stats", { background: true })
 export const getApplications = (params: { status: ApplicationFilter; q?: string; page?: number }, signal?: AbortSignal) =>
   request<ApplicationsPage>(`/admin/applications?${new URLSearchParams({ status: params.status, page: String(params.page || 1), limit: '20', ...(params.q?.trim() ? { q: params.q.trim() } : {}) })}`, { signal, background: true })
@@ -400,7 +405,10 @@ export const setMarketingConsent = (granted: boolean) => request<LegalConsentSta
 
 export interface ApiUser { id: string; firstName: string; lastName: string; status?: { enum: string }; role?: 'member' | 'admin'; email?: string; phoneNumber?: string; birthDate?: string; city?: string; bio?: string; instagramUsername?: string; profilePhoto?: string | null; rank?: number; scores?: RatingScores | null }
 /** Per-question averages of the post-event ratings a member received (null until someone rates them). */
-export interface RatingScores { punctuality: number | null; communication: number | null; community: number | null; count: number }
+export interface RatingScores {
+  /** How the members this one brought in (references, reference and event codes) are rated. */
+  referrals?: { members: number; average: number | null; count: number }
+  punctuality: number | null; communication: number | null; community: number | null; count: number }
 export const getUserProfile = (userId: string) => request<ApiUser & { interests: Array<{ id: string; name: string }> }>(`/users/${encodeURIComponent(userId)}/profile`)
 export interface NotificationPreferences { invites?: boolean; messages?: boolean; reminders?: boolean }
 export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; notifications?: NotificationPreferences; mutedRooms?: { ids: string[] } }
@@ -574,6 +582,10 @@ export const deleteAllNotifications = () => request<{ deleted: number }>('/notif
 
 export interface EventShareLink { url: string; code: string; expiresAt: string; responsibilityAcceptedAt: string }
 export const createEventShare = (eventId: string) => request<EventShareLink>(`/events/${encodeURIComponent(eventId)}/share`, { method: 'POST', body: JSON.stringify({ acceptResponsibility: true }) })
+/** The organizer's 24-hour event code (EWT-…); accepting guest responsibility is part of creating it. */
+export const createEventCode = (eventId: string) => request<EventShareLink>(`/events/${encodeURIComponent(eventId)}/share`, { method: 'POST', body: JSON.stringify({ acceptResponsibility: true, kind: 'code' }) })
+export const createReferenceCode = () => request<{ code: string; expiresAt: string }>('/references/codes', { method: 'POST' })
+export const getActiveReferenceCode = () => request<{ code: { code: string; expiresAt: string } | null }>('/references/codes/active').then(result => result.code)
 export const revokeEventShare = (code: string) => request(`/sharing/links/${encodeURIComponent(code)}`, { method: 'DELETE' })
 export interface GuestEvent {
   id: string; title: string; category: string; date: string; time: string; location: string;

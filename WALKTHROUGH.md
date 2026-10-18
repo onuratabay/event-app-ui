@@ -2,7 +2,7 @@
 
 ## Davranış sözleşmesi
 
-- Her önemli ekran için 2–3 kısa adım vardır. Ekran ilk kez açılıp uygun hale geldiğinde rehber otomatik başlar.
+- Her önemli ekran için 2–3 kısa not vardır. Ekran ilk kez açılıp uygun hale geldiğinde rehber otomatik açılır: ekran hafif blurlu bir panelin altında kalır, kısa notların hepsi aynı anda el yazısıyla (Caveat) yazılır ve her biri okla kendi alanını gösterir. Tek bir "Anladım" kapatır.
 - **Otomatik rehber, görünmeden önce hesapta atomik olarak ayrılır ve `skippedGuides` listesine yazılır.** Tamamlanırsa `completedGuides` listesine taşınır. Geçme, dışarı dokunma, Android geri tuşu, sayfadan ayrılma veya uygulamanın kapanması tekrar gösterime yol açmaz.
 - İkinci ziyarette, oturum yeniden açıldığında ve başka cihazda aynı rehber otomatik açılmaz. Aynı anda iki cihaz isterse yalnızca birine gösterim izni verilir.
 - **Ayarlar → Uygulama Rehberi** kullanıcının seçtiği rehberi yeniden açar. Tüm geçmişi sıfırlayan veya bütün rehberleri tekrar açan bir işlem yoktur.
@@ -49,16 +49,16 @@ Hesap oluşturulmadan önceki ilk başvuru rehberinin geçmişi kimliği bilinme
 ## Mimari
 
 - `walkthrough/config.ts`: kalıcı kimlikler, kısa Türkçe metinler, ekran eşleştirmesi ve rehber listesi.
-- `walkthrough/model.ts`: sürüm, monotonic birleştirme, kayıt türleri, güvenli kart yerleşimi.
+- `walkthrough/model.ts`: sürüm, monotonic birleştirme, kayıt türleri, güvenli kart yerleşimi ve el yazısı notların yerleşimi (`layoutNotes`: boş alanda, üst üste binmeden, hedef üst yarıdaysa altında, alt yarıdaysa üstünde).
 - `walkthrough/repository.ts`: her hesap/oturum için ayrı repository, sunucu kontrolü, hesap bazlı AsyncStorage önbelleği ve kalıcı sonuç kuyruğu.
 - `walkthrough/targets.tsx`: yalnızca odaktaki native ekranın hedef kaydı, `measureInWindow`, sınırlı ölçüm zaman aşımı ve Scroll entegrasyonu.
 - `walkthrough/activity.ts`: native modal, klavye, yasal onay ve kritik işlemlere erteleme. Ekran bloklayıcıları native stack içinde arka planda kalan ekranlardan etkilenmez.
 - Başlanmış başvuru, etkinlik veya müsaitlik formu geç yüklenen bir ekran tanıtımıyla kesilmez. Bu otomatik başlangıç engeli, kullanıma bağlı küçük ipuçlarını kapatmaz.
 - `WalkthroughProvider`: oturum/route yaşam döngüsü, ilk gösterim rezervasyonu, geçiş iptali ve yeniden başlatma.
-- `WalkthroughOverlay`: native Modal, yuvarlatılmış SVG spotlight, mevcut cam yüzeyler, güvenli alanlar, adım göstergesi, Geri/İleri/Geç/Bitir, ekran okuyucu odağı ve reduced-motion.
+- `WalkthroughOverlay`: uygulamanın kendi penceresinde en üst katman (hedeflerle aynı koordinat sistemi; Android geri tuşu kapatır), blur ve koyu karartma, hedeflerin çevresinde kesik çizgili çerçeve, kısa el yazısı başlıklar ve hedefin çerçevesine değen eğri oklar, ekranda görünmeyen hedefler için ortada sıralı liste, Geç ve Anladım, ekran okuyucu duyurusu ve reduced-motion.
 - `ContextualTip`: ekran içinde, erişilebilir ve kapatılabilir ilk kullanım açıklaması. Görünürlük kaydırma bitince tekrar kontrol edilir; sürekli ölçüm döngüsü yoktur.
 
-Kaydırma hedefi mevcut `Scroll` bileşeni tarafından en az gereken mesafeye taşınır. Rehber kaydırması animasyonsuzdur; kart geçişi sistemin azaltılmış hareket tercihine uyar. Eksik, sıfır boyutlu, ayrılmış veya ekran dışında kalan hedefler atlanır. Kart dar ekran ve büyük yazı boyutunda kaydırılabilir, ekran sınırları içinde kalır. Cam kart mevcut saydamlığı azalt tercihini izler.
+Rehber ekranı kaydırmaz; hedefler o anki konumlarıyla ölçülür. Eksik, sıfır boyutlu veya ekran dışında kalan hedeflerin notları okla değil ortadaki listede gösterilir. Açılış sistemin azaltılmış hareket tercihine uyar; blur saydamlığı azalt tercihini izler.
 
 ### Sunucu
 

@@ -1,4 +1,5 @@
 import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
+import { walkthroughFlags } from "../walkthrough/config"
 import { useEffect, useState, type ReactNode } from "react"
 import { Alert, Linking, StyleSheet, Switch } from "react-native"
 import Constants from "expo-constants"
@@ -178,9 +179,10 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
         <Row title={LEGAL_TITLES.marketing} detail="Kampanya ve duyuru izninin metni" onPress={() => openLegal("marketing")} />
       </Section>
 
-      <Box walkthroughId="settings-guide"><Section title="Uygulama Rehberi">
+      {/* Hidden while the walkthrough is switched off (walkthroughFlags). */}
+      {walkthroughFlags.enabled && <Box walkthroughId="settings-guide"><Section title="Uygulama Rehberi">
         <Row title="Uygulama Rehberi" detail="Her ekranı kendi hızında keşfet; istediğin rehberi yeniden aç" onPress={() => navigate("app-guide")} />
-      </Section></Box>
+      </Section></Box>}
 
       <Section title="Yardım ve hakkında">
         <Row title="Nasıl çalışır?" detail="Keşfet, katıl ve birlikte plan yap" onPress={() => Alert.alert("İlk buluşmana doğru", "Keşfet veya Harita’dan bir etkinlik seç. Ayrıntılardan katılım durumunu takip et. Katıldığın etkinliğin odası açıldığında katılımcılarla sohbet edebilirsin. Kendi planını paylaşmak için Oluştur’u kullan.")} />

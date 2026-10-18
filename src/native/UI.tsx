@@ -40,7 +40,7 @@ import {
   type ViewProps,
   type ViewStyle,
 } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import Svg, { type SvgProps } from "react-native-svg"
 
 export type NativeStyle = ViewStyle & TextStyle
@@ -390,6 +390,11 @@ function useFieldChain(): FieldChain {
 }
 /** A Box-sized space kept between an anchored block and the scroll area's top or bottom edge. */
 const ANCHOR_GAP = 16
+/**
+ * Whether a vertical Scroll still has to clear the home indicator itself. The app's root leaves the
+ * bottom inset to the screens (so backgrounds reach the edge); sheets and nested scrolls already did.
+ */
+const BottomInsetContext = createContext(true)
 const ScrollAnchorContext = createContext<((target: View | null) => void) | null>(null)
 /** Scrolls the nearest Scroll so `target` is in view (used when a card or section opens). */
 export const useScrollAnchor = () => useContext(ScrollAnchorContext)
@@ -483,6 +488,9 @@ export function Scroll({
   // Floating top bars and the bottom bar sit over the scroll area; its paddings mark how much.
   const insetTop = Math.min(Number(paddingTop ?? padding ?? 0) || 0, 140)
   const insetBottom = Math.min(Number(paddingBottom ?? padding ?? 0) || 0, 120)
+  const safeBottom = useSafeAreaInsets().bottom
+  const clearsInset = useContext(BottomInsetContext) && !horizontal
+  const contentBottom = clearsInset ? (Number(paddingBottom ?? padding ?? 0) || 0) + safeBottom : paddingBottom
   const anchor = (target: View | null, animated = true) => {
     const scroll = scrollRef.current as unknown as View | null
     if (!target || !scroll || horizontal) return
@@ -506,7 +514,7 @@ export function Scroll({
         contentContainerStyle={[{
           padding,
           paddingTop,
-          paddingBottom,
+          paddingBottom: contentBottom,
           paddingLeft,
           paddingRight,
           gap,
@@ -524,7 +532,7 @@ export function Scroll({
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
       >
         <KeyboardRevealContext.Provider value={reveal}><FieldChainContext.Provider value={chain}><ScrollAnchorContext.Provider value={anchor}><WalkthroughScrollContext.Provider value={anchor}>
-          <Content style={view}>{children}</Content>
+          <BottomInsetContext.Provider value={false}><Content style={view}>{children}</Content></BottomInsetContext.Provider>
         </WalkthroughScrollContext.Provider></ScrollAnchorContext.Provider></FieldChainContext.Provider></KeyboardRevealContext.Provider>
       </ScrollView>
     </Typography.Provider>
@@ -686,7 +694,7 @@ export function Sheet({
               { position: "relative", flex: 1, justifyContent: "flex-end" },
             ]}
           >
-            <FieldChainContext.Provider value={chain}>{children}</FieldChainContext.Provider>
+            <BottomInsetContext.Provider value={false}><FieldChainContext.Provider value={chain}>{children}</FieldChainContext.Provider></BottomInsetContext.Provider>
           </Box>
         </SafeAreaView>
       </Pressable>

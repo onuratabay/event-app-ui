@@ -1,4 +1,5 @@
 import ContextualTip from "../walkthrough/ContextualTip"
+import { ContinueButton } from "../components/ContinueButton";
 import { useWalkthroughAutostartBlocker, useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
@@ -40,13 +41,7 @@ function PrimaryButton({
   disabled?: boolean;
   children: React.ReactNode;
 }) {
-  return <Touch onPress={onPress} disabled={disabled} disabledOpacity={1} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
-    color: disabled ? "rgba(226,232,240,.62)" : palette.text,
-    borderWidth: 1,
-    borderColor: disabled ? "rgba(148,163,184,.22)" : "rgba(183,197,255,.24)",
-  }]} gradient={disabled ? ["#202b3d", "#182235", "#151f30"] : palette.actionGradient}>
-      {children}
-    </Touch>;
+  return <ContinueButton onPress={onPress} disabled={disabled}>{children}</ContinueButton>;
 }
 interface Props {
   navigate: NavigateFn;

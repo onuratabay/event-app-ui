@@ -1,3 +1,8 @@
+/**
+ * Walkthrough switch. Off for everyone for now: no guide or tip opens and the Settings entry is
+ * hidden, but the feature (guides, progress sync, overlay) stays in the code. Tests turn it on.
+ */
+export const walkthroughFlags = { enabled: false }
 import type { Screen } from "../types"
 export interface GuideStep { target: string; title: string; body: string }
 export interface Guide { id: string; screen: Screen; title: string; summary: string; section: "Başlarken" | "Keşfet ve planla" | "Birlikte" | "Hesabın"; steps: GuideStep[]; context?: "event" | "member" | "rating"; applicant?: boolean; admin?: boolean }

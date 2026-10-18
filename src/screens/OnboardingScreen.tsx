@@ -3,7 +3,7 @@ import { useWalkthroughAutostartBlocker } from "../walkthrough/activity";
 import CityPicker from "../components/CityPicker";
 import SignOutButton from "../components/SignOutButton";
 import { updateProfile } from "../api/client";
-import TopNavBar from "../components/TopNavBar";
+import TopNavBar, { NavAction } from "../components/TopNavBar";
 import EditorialQuote from "../components/EditorialQuote";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AccordionItem, AtmoBackground, Avatar, GlassCard, GlassInput, LockedField, ProgressStepper } from "../components/GlassUI";
@@ -12,13 +12,19 @@ import { CheckIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, InstagramIcon, ScrollI
 import { ReferencePicker } from "../components/ReferencePicker";
 import { registerForPush, type PushState } from "../services/push";
 import { updateStoreUser, useStore } from "../native/Store";
-import { RefreshControl, StyleSheet, View } from "react-native";
-import { clearSessionCache, getApiErrorMessage, getCurrentUser, getLegalDocuments, register, type ApiUser, type LegalDocumentSummary } from "../api/client";
+import { Alert, RefreshControl, StyleSheet, View } from "react-native";
+import { clearSessionCache, logout, getApiErrorMessage, getCurrentUser, getLegalDocuments, login, redeemAccessCode, register, type ApiUser, type LegalDocumentSummary } from "../api/client";
 import { useOpenLegal } from "../legal/links";
+import { gatedScreen } from "../native/access";
+import { useOptionalGuest } from "../guest/GuestSession";
+import { parseGuestCode } from "../guest/links";
+import { useRouter, type Href } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ContinueButton } from "../components/ContinueButton";
 import { formatPhone, phoneDigits, PHONE_PREFIX } from "../content/phone";
 import { Box, Label, Scroll, Touch, useScrollAnchor } from "../native/UI";
 import { ui } from "../theme/styles";
-import { NavigateFn } from "../types";
+import { NavigateFn, type Screen as AppScreen } from "../types";
 interface Props {
   step: 1 | 2 | 3;
   navigate: NavigateFn;
@@ -121,6 +127,69 @@ function ConsentCheck({ checked, onToggle, label, children }: { checked: boolean
   </Touch>;
 }
 
+/* ---------- Event invite code ---------- */
+/**
+ * One code field for both kinds of codes: an event invite (EWT-… or its link) opens that event as a guest;
+ * any other code is a seasonal access code (e.g. EVENT2026) that opens the screen it was set up for, and may
+ * approve the membership.
+ */
+/** "Çıkış" on every application step: ends the session (if any) and goes back to the welcome screen. */
+function ExitAction({ navigate }: { navigate: NavigateFn }) {
+  const { resetSession } = useStore();
+  const [busy, setBusy] = useState(false);
+  const exit = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await logout(); } catch {}
+    resetSession();
+    setBusy(false);
+    navigate("welcome", { reset: true });
+  };
+  return <NavAction label="Başvurudan çık" disabled={busy} onPress={() => Alert.alert("Çıkış yap", "Başvurundan çıkıp ilk ekrana döneceksin. Aynı e-posta ve şifreyle kaldığın yerden devam edebilirsin.", [{ text: "Vazgeç", style: "cancel" }, { text: "Çıkış yap", style: "destructive", onPress: () => void exit() }])}>Çıkış</NavAction>;
+}
+
+const INSTAGRAM_REQUIRED = "Devam etmek için Instagram kullanıcı adını yaz.";
+
+/** Where a valid code leads; "Devam Et" opens it. */
+type CodeResult = { kind: "access"; target: AppScreen };
+
+function InviteCodeField({ result, onResult }: { result: CodeResult | null; onResult: (result: CodeResult | null) => void }) {
+  const guest = useOptionalGuest();
+  const { setData: setStore } = useStore();
+  const router = useRouter();
+  const [input, setInput] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const open = async () => {
+    const code = parseGuestCode(input);
+    setBusy(true); setError("");
+    try {
+      if (code) {
+        if (!guest) return;
+        await guest.enter(code);
+        // An event code goes straight to that event; an access code waits for "Devam Et".
+        router.replace({ pathname: "/guest-event", params: { code } } as Href);
+        return;
+      }
+      const redeemed = await redeemAccessCode(input.trim());
+      setStore(current => ({ ...current, user: { ...current.user, status: redeemed.status } }));
+      onResult({ kind: "access", target: redeemed.target as AppScreen });
+    }
+    catch { setError("Geçerli bir kod gir."); }
+    finally { setBusy(false); }
+  };
+  return <Box>
+    <Box style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
+      <Box style={{ flex: 1, minWidth: 0 }}><GlassInput label="Etkinlik veya referans kodu" accessibilityLabel="Etkinlik veya referans kodu" placeholder="Örn. REF-… ya da EWT-…" value={input} onChangeText={text => { setInput(text); setError(""); if (result) onResult(null); }} autoCapitalize="none" autoCorrect={false} returnKeyType="go" onSubmitEditing={() => void open()} /></Box>
+      {/* Blurred glass like the inputs, so it stays visible over the moving background even before a code is typed. */}
+      <Box style={{ zIndex: 2, elevation: 2, flexShrink: 0 }}><Touch accessibilityLabel="Kodu ekle" disabled={busy || !input.trim()} disabledOpacity={0.7} onPress={() => void open()} glass
+        style={{ minHeight: 52, paddingHorizontal: 20, borderRadius: 16, borderWidth: 1, borderColor: input.trim() ? "rgba(105,120,255,.55)" : palette.glassBorder, backgroundColor: input.trim() ? palette.selected : palette.glass, color: input.trim() ? palette.accent : palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15 }}>{busy ? "…" : "Ekle"}</Touch></Box>
+    </Box>
+    {error ? <Label accessibilityRole="alert" style={[[ui.textXs, ui.mt15], { color: palette.error }]}>{error}</Label> : null}
+    {result && !error ? <Label accessibilityRole="alert" style={[[ui.textXs, ui.mt15], { color: palette.accent }]}>Kod geçerli. Devam edebilirsin.</Label> : null}
+  </Box>;
+}
+
 /* ---------- Community principles + agreements ---------- */
 /**
  * One card for everything to read and accept before applying: the five principles, then the legal
@@ -159,7 +228,8 @@ function StickyBar({
 }: {
   children: React.ReactNode;
 }) {
-  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pb8, ui.pt4, ui.z40], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up">
+  const safeBottom = useSafeAreaInsets().bottom;
+  return <Box style={[[ui.fixed, ui.bottom0, ui.left0, ui.right0, ui.px5, ui.pt4, ui.z40], { paddingBottom: 32 + safeBottom }]} gradient={[palette.background, "transparent"]} gradientDirection="up">
       {children}
     </Box>;
 }
@@ -278,11 +348,23 @@ function Step1({
     try {
       // Application order: account → references (step 2) → profile and interests → waiting for approval.
       if (store.onboarding.accountId || store.user.id) { navigate("onboarding-2"); return; }
-      const response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber: `+90${phoneDigits(form.telefon)}`, password: form.sifre, birthDate: form.dogum, city: form.sehir, acceptedDocuments, marketingConsent: marketing && !!marketingDocument });
+      const phoneNumber = `+90${phoneDigits(form.telefon)}`;
+      let response;
+      try {
+        response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber, password: form.sifre, birthDate: form.dogum, city: form.sehir, acceptedDocuments, marketingConsent: marketing && !!marketingDocument });
+      } catch (cause) {
+        // The account may already exist from an attempt that stopped half way (the server saved it, the
+        // app never heard back). The same phone and password prove it is theirs: continue that application.
+        if (!(cause instanceof Error && /^API 409:/.test(cause.message))) throw cause;
+        try { response = await login(phoneNumber, form.sifre); }
+        catch { throw new Error(`API 409: ${JSON.stringify({ message: "Bu e-posta veya telefonla başlamış bir başvuru var. Aynı şifreyi girersen kaldığın yerden devam edersin; şifreni hatırlamıyorsan girişteki “Şifremi unuttum” ile yenileyebilirsin." })}`); }
+      }
       const id = String((response.user as { id: string }).id);
       const status = (response.user as { status?: { enum: string } }).status?.enum;
       setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}`, status } }));
-      if (mounted.current) navigate("onboarding-2");
+      // A resumed account that is already further along goes where its status belongs.
+      const next = status && status !== "profile_incomplete" ? gatedScreen(status, response.user as { instagramUsername?: string | null }) ?? "discover" : "onboarding-2";
+      if (mounted.current) navigate(next);
     } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
     finally { if (mounted.current) setCreating(false); }
   };
@@ -291,7 +373,7 @@ function Step1({
   return <Box style={{
     flex: 1
   }}>
-      <TopNavBar navigate={navigate} fallback="welcome" onBack={() => { setStore(current => ({ ...current, onboarding: { ...current.onboarding, ...form, sifre: "" } })); navigate("welcome", { back: true }); }} title="Üyelik Başvurusu" floating />
+      <TopNavBar navigate={navigate} fallback="welcome" onBack={() => { setStore(current => ({ ...current, onboarding: { ...current.onboarding, ...form, sifre: "" } })); navigate("welcome", { back: true }); }} title="Üyelik Başvurusu" right={<ExitAction navigate={navigate} />} floating />
       {/* keyboardReveal: the field being typed in is scrolled above the keyboard. */}
       <Scroll keyboardReveal style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
         <AtmoBackground />
@@ -399,13 +481,9 @@ function Step1({
       <StickyBar>
         {waiting ? <WaitingActions label="Eklediklerimi gönder" canSend={Object.keys(additions).length > 0} sending={sending} notice={sendNotice} error={sendError} onSend={() => void sendAdditions()} onBack={() => navigate("onboarding-3", { reset: true })} /> : <>
         {createError && <ErrorNotice title="Kayıt tamamlanamadı" message={createError} onDismiss={() => setCreateError(null)} />}
-        <Touch onPress={() => void continueRegistration()} disabled={!canContinue || creating} disabledOpacity={1} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
-        color: canContinue ? palette.text : "rgba(226,232,240,.62)",
-        borderWidth: 1,
-        borderColor: canContinue ? "rgba(183,197,255,.5)" : "rgba(148,163,184,.22)",
-      }]} gradient={canContinue ? palette.actionGradient : ["#202b3d", "#182235", "#151f30"]}>
+        <ContinueButton onPress={() => void continueRegistration()} disabled={!canContinue || creating}>
           {creating ? "Hesap oluşturuluyor…" : "Devam Et"}
-        </Touch>
+        </ContinueButton>
         </>}
       </StickyBar>
     </Box>;
@@ -429,7 +507,8 @@ function Step2({
   // Instagram is required to continue: a handle already on the account (coming back to this step) counts.
   useEffect(() => { if (!waiting && me?.instagramUsername) setInstagram(current => current || `@${me.instagramUsername}`); }, [waiting, me?.instagramUsername]);
   const instagramValid = /^[a-z0-9._]{1,30}$/.test(newInstagram);
-  const canContinue = instagramLocked || instagramValid;
+  const [codeResult, setCodeResult] = useState<CodeResult | null>(null);
+  const canContinue = instagramLocked || instagramValid || !!codeResult;
   const [sendNotice, setSendNotice] = useState<string | null>(null);
   const sendInstagram = async () => {
     if (submitting || !newInstagram) return;
@@ -444,8 +523,15 @@ function Step2({
   const pull = usePullRefresh(() => new Promise<void>(resolve => { referencesDone.current = resolve; setRefreshSignal(value => value + 1); }));
   const submitApplication = async () => {
     if (submitting) return;
+    if (codeResult) {
+      if (instagramValid) await updateProfile({ instagramUsername: newInstagram }).catch(() => {});
+      // A member's reference code (REF-…) counts as their reference: the application goes on as usual.
+      if ((codeResult.target as string) === "reference") navigate(store.user.status === "profile_incomplete" ? "interests" : store.user.status === "approved" ? "discover" : "onboarding-3", store.user.status === "approved" ? { reset: true } : undefined);
+      else navigate(codeResult.target, { reset: true });
+      return;
+    }
     // Also when an approved reference moves the step on by itself: the Instagram handle comes first.
-    if (!canContinue) { setSubmitError("Devam etmek için Instagram kullanıcı adını yaz."); return; }
+    if (!canContinue) { setSubmitError(INSTAGRAM_REQUIRED); return; }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -462,7 +548,7 @@ function Step2({
   return <Box style={{
     flex: 1
   }}>
-      <TopNavBar navigate={navigate} fallback="onboarding-1" title="Üyelik Başvurusu" floating />
+      <TopNavBar navigate={navigate} fallback="onboarding-1" title="Üyelik Başvurusu" right={<ExitAction navigate={navigate} />} floating />
       <Scroll refreshControl={pull.control} style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
         <AtmoBackground />
 
@@ -500,7 +586,9 @@ function Step2({
               <Box style={[[ui.mt3]]}>
                   <GlassInput placeholder="@kullaniciadi" accessibilityLabel="Instagram kullanıcı adı" autoCapitalize="none" autoCorrect={false} autoComplete="username" value={instagram} onChangeText={value => { const username = value.replace(/[@\s]/g, "").toLowerCase(); setInstagram(username ? `@${username}` : "") }} />
                   {!!newInstagram && !instagramValid && <Label style={[[ui.textXs, ui.mt15], { color: palette.error }]}>Kullanıcı adı yalnızca harf, rakam, nokta ve alt çizgi içerebilir (en fazla 30 karakter).</Label>}
+                  {!canContinue && !newInstagram && submitError === INSTAGRAM_REQUIRED && <Label accessibilityRole="alert" style={[[ui.textXs, ui.mt15], { color: palette.error }]}>{INSTAGRAM_REQUIRED}</Label>}
                 </Box>
+                <Label style={[[ui.textXs, ui.textWhite30, ui.mt3, { fontStyle: "italic" }]]}>* Merak etme, sadece biraz dedikodu yapacağız. Profilinden kim olduğunu anlarız, gerisi aramızda. 🕵️</Label>
             </GlassCard>}
 
             {/* Reference */}
@@ -514,7 +602,7 @@ function Step2({
                     Üyeden Referans İste
                   </Label>
                   <Label style={[[ui.textXs, ui.textWhite40]]}>
-                    Tanıdığın bir üye seni önerebilir
+                    Uygulamayı kullanan arkadaşından referans istemek için onu ekle
                   </Label>
                 </Box>
               </Box>
@@ -522,12 +610,21 @@ function Step2({
               {/* A reference approved while this step is open moves the application on by itself. */}
               <ReferencePicker refreshSignal={refreshSignal} onRefreshed={() => { referencesDone.current?.(); referencesDone.current = null; }} onApproved={() => void submitApplication()} />
             </GlassCard>
+
+            <Box style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Box style={{ flex: 1, height: 1, backgroundColor: palette.glassBorder }} />
+              <Label style={[[ui.textXs, ui.textWhite40]]}>veya</Label>
+              <Box style={{ flex: 1, height: 1, backgroundColor: palette.glassBorder }} />
+            </Box>
+
+            {/* An event invite code (EWT-… or its link) opens that event as a guest, right from here. */}
+            <InviteCodeField result={codeResult} onResult={setCodeResult} />
           </Box>
         </Box>
       </Scroll>
       <StickyBar>
         {waiting ? <WaitingActions label="Eklediklerimi gönder" canSend={!!newInstagram} sending={submitting} notice={sendNotice} error={submitError} onSend={() => void sendInstagram()} onBack={() => navigate("onboarding-3", { reset: true })} /> : <>
-        {submitError && (
+        {submitError && submitError !== INSTAGRAM_REQUIRED && (
           <Box style={[[ui.mb3]]}>
             <ErrorNotice
               title="Başvuru gönderilemedi"
@@ -537,12 +634,9 @@ function Step2({
             />
           </Box>
         )}
-        {!canContinue && !submitError && <Label style={[[ui.textXs, ui.textWhite50, ui.mb3, ui.textCenter]]}>Devam etmek için Instagram kullanıcı adını yaz.</Label>}
-        <Touch onPress={() => void submitApplication()} disabled={submitting || !canContinue} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.trackingWide], {
-        color: palette.text
-      }, !canContinue && { opacity: .45 }]} gradient={palette.actionGradient}>
-          {submitting ? "Gönderiliyor..." : store.user.status === "profile_incomplete" ? "Devam Et" : "Başvuruyu Gönder"}
-        </Touch>
+        <ContinueButton onPress={() => void submitApplication()} disabled={submitting} dimmed={!canContinue}>
+          {submitting ? "Gönderiliyor..." : codeResult || store.user.status === "profile_incomplete" ? "Devam Et" : "Başvuruyu Gönder"}
+        </ContinueButton>
         </>}
       </StickyBar>
     </Box>;
@@ -584,7 +678,7 @@ function Step3({
     state: i < current ? "done" : i === current ? "current" : "future"
   }));
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
-    <TopNavBar navigate={navigate} fallback="onboarding-2" onBack={() => navigate("onboarding-2", { back: true })} title="Üyelik Başvurusu" floating />
+    <TopNavBar navigate={navigate} fallback="onboarding-2" onBack={() => navigate("onboarding-2", { back: true })} title="Üyelik Başvurusu" right={<ExitAction navigate={navigate} />} floating />
     <Scroll refreshControl={pull.control} style={[[ui.flex1, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.px6], { paddingTop: 84 }]}>
       <AtmoBackground variant="violet" />
 

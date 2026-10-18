@@ -96,8 +96,9 @@ export default function InterestsScreen({
             }]}>
                 {photo ? <Picture uri={photo} accessibilityLabel="Profil" style={[[ui.wFull, ui.hFull]]} /> : <CameraIcon size={22} style={[[ui.textWhite20]]} />}
               </Box>
-              {photo && <Touch onPress={() => setPhoto(null)} style={[[ui.fixed, ui.Top15, ui.Right15, ui.w5, ui.h5, ui.roundedFull, ui.bg06060e, ui.border, ui.borderWhite15, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite40, ui.textXs]]}>
-                  ×
+              {/* A drawn × (not the text glyph) stays centred in its circle at every font size. */}
+              {photo && <Touch accessibilityLabel="Profil fotoğrafını kaldır" hitSlop={10} onPress={() => setPhoto(null)} style={[[ui.fixed, ui.Top15, ui.Right15, ui.roundedFull, ui.bg06060e, ui.border, ui.borderWhite15, ui.flex, ui.itemsCenter, ui.justifyCenter], { width: 24, height: 24, minHeight: 24 }]}>
+                  <CloseIcon size={12} strokeWidth={2.2} style={{ color: "rgba(244,245,255,.85)" }} />
                 </Touch>}
             </Box>
 

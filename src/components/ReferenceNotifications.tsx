@@ -20,8 +20,9 @@ export function ReferenceNotifications({ onCount }: { onCount?: (count: number) 
     void refresh()
     const created = onSocket('reference:created', row => setRequests(current => [row, ...current.filter(r => r.id !== row.id)].slice(0, 100)))
     const updated = onSocket('reference:updated', patch => setRequests(current => current.map(row => row.id === patch.id ? { ...row, status: patch.status } : row)))
+    const removed = onSocket('reference:deleted', patch => setRequests(current => current.filter(row => row.id !== patch.id)))
     const sync = onSocket('sync:required', () => { void refresh() })
-    return () => { active = false; created(); updated(); sync() }
+    return () => { active = false; created(); updated(); removed(); sync() }
   }, [])
   const respond = async (request: ReferenceRequest, decision: "approved" | "declined") => {
     if (busy) return

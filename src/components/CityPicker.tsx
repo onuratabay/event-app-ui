@@ -8,7 +8,9 @@ import { palette } from "../theme/palette"
 import { GlassFill, INPUT_FROST } from "./GlassFill"
 
 // Turkish-aware lowercasing so typing "izmir" finds "İzmir".
-const normalize = (value: string) => value.toLocaleLowerCase("tr")
+// Turkish-aware lowercasing plus folded letters, so "sanliurfa" finds "Şanlıurfa" and "izmir" finds "İzmir".
+const FOLD: Record<string, string> = { ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u", â: "a", î: "i", û: "u" }
+const normalize = (value: string) => value.toLocaleLowerCase("tr").replace(/[çğıöşüâîû]/g, letter => FOLD[letter])
 
 /** Select-style city field: tapping opens a searchable list of the 81 provinces. */
 export default function CityPicker({ value, onChange, label = "Şehir", compact = false, clearable = false }: {

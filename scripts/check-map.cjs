@@ -104,10 +104,8 @@ module.exports = async function checkMap({ mount, tap, act, text, storage }) {
   assert.equal(destination[1].eventId, "one")
   await press("Seçimi kapat")
   assert(!text(tree.toJSON()).includes("Seçilen etkinlik"), "The card can be dismissed")
-  // Date is one segmented choice; the rest lives behind "Filtreler", whose badge counts active filters.
-  await press("Tarih: Bugün")
-  assert.equal(tree.root.findAllByType("Pressable").find(item => item.props.accessibilityLabel === "Tarih: Bugün").props.accessibilityState.selected, true)
-  await press("Tarih: Tümü")
+  // Only "Filtreler" sits on the map: date, activity, time and place are all chosen in its sheet.
+  assert(!tree.root.findAllByType("Pressable").some(item => /^Tarih: /.test(String(item.props.accessibilityLabel)) || text(item).trim() === "Tüm türler"), "No date or activity chips over the map")
   await press("Filtreler")
   assert.equal(tree.root.findAllByType("Modal").length, 1)
   await tap(tree, "İzmir")
