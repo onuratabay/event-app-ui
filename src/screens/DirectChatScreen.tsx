@@ -1,6 +1,7 @@
 import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, type ScrollView } from "react-native";
+import { StyleSheet, View, type ScrollView } from "react-native";
+import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { getApiErrorMessage, getDirectMessages, markDirectRead, openDirectConversation, sendDirectMessage, type DirectConversation, type DirectMessage } from "../api/client";
 import { useBottomNavInset } from "../components/BottomNav";
 import { AtmoBackground } from "../components/GlassUI";
@@ -32,6 +33,9 @@ function dayLabel(iso: string) {
  */
 export default function DirectChatScreen({ navigate, userId }: { navigate: NavigateFn; userId: string }) {
   const navInset = useBottomNavInset();
+  // Keeps the composer above the keyboard even where the root does not shrink the screen for it.
+  const screenRef = useRef<View>(null);
+  const keyboardOverlap = useKeyboardOverlap(screenRef);
   const { data: store } = useStore();
   const meId = store.user.id;
   const screenActive = useScreenActive();
@@ -124,14 +128,16 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
   };
   const seen = !!lastMine && !!otherReadAt && instant(otherReadAt) >= instant(lastMine.createdAt);
 
-  return <Box style={s.screen}>
+  return <View ref={screenRef} style={s.screen}>
     <AtmoBackground />
     <TopNavBar navigate={navigate} fallback="rooms" walkthroughId="direct-person" title={name} subtitle={conversation && !canSend ? "Artık bağlantın değil" : undefined}
       onTitlePress={conversation ? () => navigate("profile", { userId: conversation.user.id }) : undefined} titleHint="Profilini açar" />
     <Box style={s.body}>
       {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
       <Scroll ref={scrollRef} style={s.list} onScrollBeginDrag={() => { stickToEnd.current = false; }}
-        onContentSizeChange={() => { if (stickToEnd.current) requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false })); }}>
+        onContentSizeChange={() => { if (stickToEnd.current) requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false })); }}
+        // The keyboard shrinks the list: keep the newest message in view.
+        onLayout={() => { if (stickToEnd.current) requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false })); }}>
         {cursor ? <Touch disabled={loadingOlder} onPress={() => void loadOlder()} style={s.older}><Label style={s.olderLabel}>{loadingOlder ? "Yükleniyor…" : "Önceki mesajları göster"}</Label></Touch> : null}
         {conversation && !sorted.length ? <Box style={s.empty}>
           <Label style={s.emptyTitle}>{canSend ? "Sohbeti başlat" : "Mesaj yok"}</Label>
@@ -152,10 +158,10 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
           </Box>];
         })}
       </Scroll>
-      {conversation && !canSend ? <Box accessibilityRole="alert" style={[s.lockedBar, { paddingBottom: 14 + navInset }]}>
+      {conversation && !canSend ? <Box accessibilityRole="alert" style={[s.lockedBar, { paddingBottom: 14 + navInset + keyboardOverlap }]}>
         <Label style={s.lockedTitle}>Yeni mesaj gönderemezsin</Label>
         <Label style={s.lockedText}>{conversation.user.firstName} artık bağlantın değil. Eski mesajlar burada kalır; yeniden bağlantı olursanız sohbete devam edebilirsiniz.</Label>
-      </Box> : <Box style={[s.composerWrap, { paddingBottom: 12 + navInset }]}>
+      </Box> : <Box style={[s.composerWrap, { paddingBottom: 12 + navInset + keyboardOverlap }]}>
         <Box walkthroughId="direct-composer" style={s.composer} glass>
           <Field value={input} onChangeText={setInput} editable={!!conversation} placeholder="Bir mesaj yaz..." placeholderTextColor="rgba(255,255,255,.35)" multiline maxLength={MAX_MESSAGE_LENGTH} style={s.input} />
           <Touch onPress={send} accessibilityLabel="Mesaj gönder" disabled={!input.trim() || !conversation} style={s.send} gradient={["#4d5bcb", "#6651c9"]}>
@@ -164,7 +170,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
         </Box>
       </Box>}
     </Box>
-  </Box>;
+  </View>;
 }
 
 const s = StyleSheet.create({

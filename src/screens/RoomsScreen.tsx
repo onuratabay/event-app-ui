@@ -8,7 +8,7 @@ import { byLatestMessage, isEventMember, isRoomReady, roomTitle, useStore } from
 import { Box, Label, Picture, Scroll, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getDirectConversations, type DirectConversation } from "../api/client";
 import { Avatar } from "../components/GlassUI";
 import { onSocket } from "../services/socket";
@@ -23,6 +23,8 @@ function lastMessageLabel(at: string) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return date.toDateString() === now.toDateString() ? `${pad(date.getHours())}:${pad(date.getMinutes())}` : `${pad(date.getDate())}/${pad(date.getMonth() + 1)}`;
 }
+/** Last one-to-one chat list per account (this app session), shown at once while /direct refreshes it. */
+const chatCache = new Map<string, DirectConversation[]>();
 export default function RoomsScreen({
   navigate
 }: Props) {
@@ -31,23 +33,30 @@ export default function RoomsScreen({
   } = useStore();
   // The list is built from cached events: /events/rooms runs once per session (and on pull-to-refresh);
   // socket events add new rooms, open them, and update last messages and unread counts.
+  // One-to-one chats show the last known list at once (kept per account for this app session); /direct
+  // then refreshes it in the background and the screen updates only if something changed.
+  const cacheKey = store.user.id;
+  const [chats, setChats] = useState<DirectConversation[]>(() => (cacheKey && chatCache.get(cacheKey)) || []);
+  const loadChats = () => getDirectConversations().then(result => {
+    if (cacheKey) chatCache.set(cacheKey, result.items);
+    setChats(current => JSON.stringify(current) === JSON.stringify(result.items) ? current : result.items);
+  }).catch(() => {});
   const [refreshing, setRefreshing] = useState(false);
   const reloadMine = async (pulled = false) => {
     if (pulled) setRefreshing(true);
-    try { await refreshRooms(pulled); } catch { /* The store shows a retryable error notice. */ }
+    // Rooms and chats load together; pulling down refreshes both.
+    try { await Promise.all([refreshRooms(pulled).catch(() => { /* The store shows a retryable error notice. */ }), loadChats()]); }
     finally { if (pulled) setRefreshing(false); }
   };
   useEffect(() => { void reloadMine(); }, []);
-  // One-to-one chats with connections: reloaded when shown and whenever a message arrives or is read.
-  const [chats, setChats] = useState<DirectConversation[]>([]);
+  // Coming back to the page, a new message, a friendship change or a reconnect refreshes the chats.
   const screenActive = useScreenActive();
+  const firstFocus = useRef(true);
   useEffect(() => {
     if (!screenActive) return;
-    let active = true;
-    const load = () => { void getDirectConversations().then(result => { if (active) setChats(result.items); }).catch(() => {}); };
-    load();
-    const stops = ["dm:message", "friend:changed", "sync:required"].map(name => onSocket(name, load));
-    return () => { active = false; stops.forEach(stop => stop()); };
+    if (firstFocus.current) firstFocus.current = false; else void loadChats();
+    const stops = ["dm:message", "friend:changed", "sync:required"].map(name => onSocket(name, () => { void loadChats(); }));
+    return () => { stops.forEach(stop => stop()); };
   }, [screenActive]);
   const EVENTS = store.events;
   // Each event whose room is open appears as a chat named after the event.

@@ -7,7 +7,8 @@ import { useScreenActive } from '../native/useScreenActive';
 import { onSocket, retainEvent, socketAction, socketConnected } from '../services/socket';
 import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import { AtmoBackground, GlassFill } from "../components/GlassUI";
@@ -28,6 +29,8 @@ const REPORT_REASONS = ["Taciz veya hakaret", "Spam veya reklam", "Uygunsuz içe
 // system: a WhatsApp-style info line (e.g. the organizer renamed the room), not a chat bubble.
 type RoomMessage = ChatMessage & { system?: boolean; announcement?: boolean; deleted?: boolean; edited?: boolean; pending?: boolean; failed?: boolean };
 type SheetOption = { label: string; onPress: () => void; danger?: boolean };
+/** Last messages per room for this app session, so reopening a room shows them without waiting. */
+const roomCache = new Map<string, { messages: RoomMessage[]; cursor: string | null }>();
 // Times arrive as "+03:00" from REST but "Z" from the device (pending sends), so compare instants,
 // never the strings: as text, "09:31Z" sorted before "12:30+03:00" and a new message jumped to the top.
 const instant = (iso?: string) => Date.parse(iso || "") || 0;
@@ -68,6 +71,9 @@ export default function EventRoomScreen({
   eventId
 }: Props) {
   const navInset = useBottomNavInset();
+  // Keeps the composer above the keyboard even where the root does not shrink the screen for it.
+  const screenRef = useRef<View>(null);
+  const keyboardOverlap = useKeyboardOverlap(screenRef);
   const {
     data: store,
     setData: setStore
@@ -75,7 +81,10 @@ export default function EventRoomScreen({
   const screenActive = useScreenActive();
   const ME = store.user;
   const event = store.events.find(e => e.id === eventId);
-  const [messages, setMessages] = useState<RoomMessage[]>([]);
+  // A room opened before shows its last messages at once; the fresh page then merges in.
+  // Per account: another account signing in on this phone never sees these.
+  const cacheKey = eventId && store.user.id ? `${store.user.id}:${eventId}` : "";
+  const [messages, setMessages] = useState<RoomMessage[]>(() => (cacheKey && roomCache.get(cacheKey)?.messages) || []);
   const messagesRef = useRef<RoomMessage[]>([]);
   messagesRef.current = messages;
   const [sending, setSending] = useState(false);
@@ -87,7 +96,13 @@ export default function EventRoomScreen({
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const typingExpiry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTyping = useRef(0);
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(() => (cacheKey && roomCache.get(cacheKey)?.cursor) || null);
+  // Remember what this room showed (sent messages only, newest 100) for the next time it opens.
+  useEffect(() => {
+    if (!cacheKey || !messages.length) return;
+    const kept = messages.filter(m => !m.pending && !m.failed).sort((a, b) => instant(a.createdAt) - instant(b.createdAt)).slice(-100);
+    roomCache.set(cacheKey, { messages: kept, cursor });
+  }, [cacheKey, messages, cursor]);
   const [loading, setLoading] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const { height: windowHeight } = useWindowDimensions();
@@ -141,7 +156,7 @@ export default function EventRoomScreen({
       try {
         const result = await getMessages(eventId, controller.signal);
         if (!active) return;
-        upsert(result.items.map(mapMessage)); setCursor(result.nextCursor || null); setError(''); setClosedReason(null);
+        upsert(result.items.map(mapMessage)); setCursor(current => current && roomCache.has(cacheKey) && messagesRef.current.length > result.items.length ? current : result.nextCursor || null); setError(''); setClosedReason(null);
         // Opening a room shows the newest message; a late second pass covers rows that render after layout.
         if (stickToEnd.current) setTimeout(() => { if (stickToEnd.current) scrollRef.current?.scrollToEnd({ animated: false }); }, 80);
       }
@@ -324,7 +339,7 @@ export default function EventRoomScreen({
   const roster = [...people.values()].sort((a, b) => a.name.localeCompare(b.name, "tr"));
   const seenBy = lastMine ? Object.entries(reads).filter(([userId, at]) => userId !== ME.id && Date.parse(at) >= Date.parse(lastMine.createdAt || "")).map(([userId]) => firstName(userId)) : [];
   const subtitle = `${muted ? "🔕 " : ""}${event.location ? `${event.time} · ${event.location}` : event.time}`;
-  return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
+  return <View ref={screenRef} style={StyleSheet.absoluteFill}><Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} walkthroughId="room-info" title={roomTitle(event)} subtitle={subtitle}
         onTitlePress={() => setInfoOpen(true)} titleHint="Oda bilgisini ve katılımcıları gösterir"
@@ -465,12 +480,12 @@ export default function EventRoomScreen({
             })}
           </Scroll>
 
-          {cancelled ? <Box accessibilityRole="alert" style={[s.cancelledBar, { paddingBottom: 14 + navInset }]}>
+          {cancelled ? <Box accessibilityRole="alert" style={[s.cancelledBar, { paddingBottom: 14 + navInset + keyboardOverlap }]}>
             <Label style={s.cancelledTitle}>Etkinlik iptal edildi</Label>
             <Label style={s.cancelledText}>Etkinlik sahibi etkinliği iptal etti; bu odada artık mesaj gönderilemez.</Label>
           </Box> : <>
           {typingName && <Label style={s.typing}>{typingName} yazıyor…</Label>}
-          <Box style={[s.composerWrap, { paddingBottom: 12 + navInset }]}>
+          <Box style={[s.composerWrap, { paddingBottom: 12 + navInset + keyboardOverlap }]}>
             {editing ? <Box style={s.editBar}>
               <Label style={s.editLabel} numberOfLines={1}>✎ Mesajı düzenliyorsun</Label>
               <Touch accessibilityLabel="Düzenlemeyi iptal et" onPress={() => { setEditing(null); setInput(''); }} style={s.editCancel}><Label style={s.editCancelLabel}>Vazgeç</Label></Touch>
@@ -492,7 +507,7 @@ export default function EventRoomScreen({
         </>}
       </Box>
       {sheet ? <ActionSheet title={sheet.title} options={sheet.options} onClose={() => setSheet(null)} /> : null}
-    </Box>;
+    </Box></View>;
 }
 const s = StyleSheet.create({
   body: { flex: 1, paddingTop: 68 },

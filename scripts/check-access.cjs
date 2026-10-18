@@ -985,14 +985,15 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     global.fetch = previousFetch
   }
 
-  // Rooms reloads only the user's own, joined and favourite events (on open and on pull).
+  // Rooms reloads only the user's own, joined and favourite events and the one-to-one chats (on open and on pull).
   storage.set("event-app:access-token", "a"); current = "approved"
   const roomsTree = await mount("Rooms")
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   calls.length = 0
   await act(async () => { roomsTree.root.findAll(n => n.props.refreshControl)[0].props.refreshControl.props.onRefresh() })
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
-  assert.deepEqual(calls, ["/events/rooms"], "Rooms refresh is a single light request")
+  // Pulling down refreshes the rooms and the one-to-one chats together, nothing heavier.
+  assert.deepEqual([...calls].sort(), ["/direct", "/events/rooms"], "Rooms refresh reloads only the rooms and the chats")
   await act(async () => roomsTree.unmount())
 
   // A room only known from /events/rooms is listed; a summary never wipes details already loaded.
