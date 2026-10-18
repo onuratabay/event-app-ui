@@ -24,6 +24,7 @@ import AccessGuard from "../src/components/AccessGuard"
 import LegalConsentGate from "../src/components/LegalConsentGate"
 import PushOpenHandler from "../src/components/PushOpenHandler"
 import HardwareBack from "../src/components/HardwareBack"
+import { WalkthroughProvider } from "../src/walkthrough/WalkthroughProvider"
 void SplashScreen.preventAutoHideAsync()
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -54,7 +55,7 @@ export default function RootLayout() {
             style={s.root}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
-            <BlurSurface overlay={<ApiLoadingOverlay />}><GuestProvider><StoreProvider><GuestRouteBoundary>
+            <BlurSurface overlay={<ApiLoadingOverlay />}><GuestProvider><StoreProvider><GuestRouteBoundary><WalkthroughProvider>
               <Stack
                 screenOptions={{
                   headerShown: false,
@@ -68,7 +69,7 @@ export default function RootLayout() {
               <LegalConsentGate />
               <PushOpenHandler />
               <HardwareBack />
-            </GuestRouteBoundary></StoreProvider></GuestProvider></BlurSurface>
+            </WalkthroughProvider></GuestRouteBoundary></StoreProvider></GuestProvider></BlurSurface>
           </KeyboardAvoidingView>
         </ErrorNoticeProvider>
       </SafeAreaView>

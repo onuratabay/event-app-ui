@@ -1,3 +1,4 @@
+import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, type ScrollView } from "react-native";
 import { getApiErrorMessage, getDirectMessages, markDirectRead, openDirectConversation, sendDirectMessage, type DirectConversation, type DirectMessage } from "../api/client";
@@ -39,6 +40,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
   const [cursor, setCursor] = useState<string | null>(null);
   const [otherReadAt, setOtherReadAt] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  useWalkthroughScreenBlocker(!!input.trim());
   const [error, setError] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -124,7 +126,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
 
   return <Box style={s.screen}>
     <AtmoBackground />
-    <TopNavBar navigate={navigate} fallback="rooms" title={name} subtitle={conversation && !canSend ? "Artık bağlantın değil" : undefined}
+    <TopNavBar navigate={navigate} fallback="rooms" walkthroughId="direct-person" title={name} subtitle={conversation && !canSend ? "Artık bağlantın değil" : undefined}
       onTitlePress={conversation ? () => navigate("profile", { userId: conversation.user.id }) : undefined} titleHint="Profilini açar" />
     <Box style={s.body}>
       {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
@@ -154,7 +156,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
         <Label style={s.lockedTitle}>Yeni mesaj gönderemezsin</Label>
         <Label style={s.lockedText}>{conversation.user.firstName} artık bağlantın değil. Eski mesajlar burada kalır; yeniden bağlantı olursanız sohbete devam edebilirsiniz.</Label>
       </Box> : <Box style={[s.composerWrap, { paddingBottom: 12 + navInset }]}>
-        <Box style={s.composer} glass>
+        <Box walkthroughId="direct-composer" style={s.composer} glass>
           <Field value={input} onChangeText={setInput} editable={!!conversation} placeholder="Bir mesaj yaz..." placeholderTextColor="rgba(255,255,255,.35)" multiline maxLength={MAX_MESSAGE_LENGTH} style={s.input} />
           <Touch onPress={send} accessibilityLabel="Mesaj gönder" disabled={!input.trim() || !conversation} style={s.send} gradient={["#4d5bcb", "#6651c9"]}>
             <SendIcon size={20} style={{ color: palette.text }} />

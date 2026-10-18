@@ -235,7 +235,7 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
     <TopNavBar navigate={navigate} fallback="settings" title="Yönetim" subtitle={page && !blocked ? `${page.counts.pending} onay bekliyor` : undefined} />
     {blocked ? <Box style={s.center}><Label style={s.title}>Bu sayfaya erişim yetkin yok</Label><Label style={s.muted}>Üyelik başvurularını yalnızca yöneticiler yönetebilir.</Label></Box> : <Scroll style={s.page} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={pulling} onRefresh={() => { void pullRefresh() }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={84} />}>
       <Box style={s.tabs} accessibilityRole="tablist">
-        {([["overview", "Genel bakış"], ["applications", "Başvurular"]] as const).map(([id, label]) => <Touch key={id} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === id }} onPress={() => setTab(id)} style={[s.tab, tab === id && s.tabOn]}>
+        {([["overview", "Genel bakış"], ["applications", "Başvurular"]] as const).map(([id, label]) => <Touch walkthroughId={id === "overview" ? "admin-overview" : "admin-applications"} key={id} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === id }} onPress={() => setTab(id)} style={[s.tab, tab === id && s.tabOn]}>
           <Box style={s.tabLabel}>
             <Label style={[s.chipText, tab === id && s.chipTextOn]}>{label}</Label>
             {id === "applications" && <CountBadge count={page?.counts.pending ?? 0} />}

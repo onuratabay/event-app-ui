@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import { useWalkthroughAutostartBlocker } from "../walkthrough/activity";
 import CityPicker from "../components/CityPicker";
 import SignOutButton from "../components/SignOutButton";
 import { updateProfile } from "../api/client";
@@ -219,6 +220,7 @@ function Step1({
     sifre: store.onboarding.sifre || ""
   });
   const mounted = useRef(true);
+  useWalkthroughAutostartBlocker(Object.values(form).some(value => !!value));
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const { waiting, me, setMe } = useApplicant();
   const submitted = { ad: me?.firstName || "", soyad: me?.lastName || "", email: me?.email || "", telefon: me?.phoneNumber ? formatPhone(me.phoneNumber) : "", dogum: me?.birthDate || "", sehir: me?.city || "" };
@@ -312,7 +314,7 @@ function Step1({
           {/* Form */}
           <Box style={[[ui.spaceY3]]} enter>
             {waiting && !me && <Label style={[[ui.textXs, ui.textWhite40]]}>Başvuru bilgilerin yükleniyor…</Label>}
-            <Box style={[[ui.grid, ui.gap3]]} columns={2}>
+            <Box walkthroughId="application-fields" style={[[ui.grid, ui.gap3]]} columns={2}>
               {locked("ad") ? <LockedField label="Ad" value={submitted.ad} /> : <GlassInput label="Ad" placeholder="Adın" autoCapitalize="words" autoCorrect={false} textContentType="givenName" autoComplete="given-name" value={form.ad} onChangeText={e => setForm(p => ({
               ...p,
               ad: e
@@ -359,7 +361,7 @@ function Step1({
           </Box>
 
           {/* Principles and every consent live in one card; it opens by itself once the password is in. */}
-          <Box enter>
+          <Box walkthroughId="application-consent" enter>
             <AgreementsCard open={principlesOpen} onToggle={() => setPrinciplesOpen(!principlesOpen)} done={waiting || accepted}
               status={waiting ? "Sözleşmeleri başvururken onayladın." : accepted ? "Onaylandı ✓" : `${PRINCIPLES.length} ilke · 2 zorunlu onay`}>
               <SectionLabel>İlkeler</SectionLabel>
@@ -481,7 +483,7 @@ function Step2({
           <Box style={[[ui.spaceY3]]} enter>
             {/* Instagram */}
             {/* Required, so it is always open with the field shown (a closed card was easy to miss). */}
-            {instagramLocked ? <GlassCard style={[[ui.p4]]}><LockedField label="Instagram" value={`@${me?.instagramUsername}`} /></GlassCard> : <GlassCard style={[[ui.p4, ui.borderC8a44a35]]}>
+            {instagramLocked ? <GlassCard walkthroughId="reference-instagram" style={[[ui.p4]]}><LockedField label="Instagram" value={`@${me?.instagramUsername}`} /></GlassCard> : <GlassCard walkthroughId="reference-instagram" style={[[ui.p4, ui.borderC8a44a35]]}>
               <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
                 <IconBadge color="violet">
                   <InstagramIcon size={18} />
@@ -605,7 +607,7 @@ function Step3({
         </Box>
 
         {/* Text */}
-        <Box style={[[ui.textCenter, ui.spaceY3]]} enter>
+        <Box walkthroughId="application-status" style={[[ui.textCenter, ui.spaceY3]]} enter>
           <Label style={[[ui.fontDisplay, ui.text4xl, ui.textWhite], { fontStyle: "italic" }]}>
             {passive ? "Hesabın\nincelemede." : "Başvurunu\ninceliyoruz."}
           </Label>
@@ -619,11 +621,11 @@ function Step3({
         </Box>
 
         {/* Passive: what the review means; otherwise the application timeline */}
-        {passive ? <GlassCard style={[[ui.p5, ui.spaceY3]]} enter>
+        {passive ? <GlassCard walkthroughId="application-progress" style={[[ui.p5, ui.spaceY3]]} enter>
             <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite]]}>{takenPassive ? "Hesabın şu an pasif" : "Hesabını inceliyoruz"}</Label>
             <Label style={[[ui.textXs, ui.textWhite55, ui.leadingRelaxed]]}>İnceleme sürerken etkinliklere katılamaz, etkinlik oluşturamaz ve mesaj gönderemezsin.</Label>
             <Label style={[[ui.textXs, ui.textWhite55, ui.leadingRelaxed]]}>Hesabın yeniden aktifleştirildiğinde uygulama kendiliğinden açılır; tekrar giriş yapman gerekmez.</Label>
-          </GlassCard> : <GlassCard style={[[ui.p5]]} enter>
+          </GlassCard> : <GlassCard walkthroughId="application-progress" style={[[ui.p5]]} enter>
           <Box style={[[ui.spaceY0]]}>
             {stages.map((s, i) => <Box key={i} style={[[ui.flex, ui.itemsStart, ui.gap3]]}>
                 <Box style={[[ui.flex, ui.flexCol, ui.itemsCenter]]}>

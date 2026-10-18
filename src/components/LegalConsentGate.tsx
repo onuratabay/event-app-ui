@@ -1,3 +1,4 @@
+import { useWalkthroughBlocker } from "../walkthrough/activity"
 import { usePathname } from "expo-router"
 import { useEffect, useState } from "react"
 import { StyleSheet } from "react-native"
@@ -25,14 +26,16 @@ export default function LegalConsentGate() {
   const userId = guest?.guest ? "" : data.user.id
   const [pending, setPending] = useState<Pending>([])
   const [busy, setBusy] = useState(false)
+  const [checking, setChecking] = useState(true)
+  useWalkthroughBlocker(!!userId && (checking || pending.length > 0) && pathname !== "/legal")
   const [error, setError] = useState<string | null>(null)
   const apply = (status: LegalConsentStatus) => setPending(status.documents.filter(doc => status.pending.includes(doc.type)))
   useEffect(() => {
-    setPending([]); setError(null)
+    setPending([]); setError(null); setChecking(true)
     if (!userId) return
     let active = true
     // A failed check never blocks the app; the server still records the versions accepted at sign-up.
-    getLegalConsents().then(status => { if (active) apply(status) }).catch(() => {})
+    getLegalConsents().then(status => { if (active) apply(status) }).catch(() => {}).finally(() => { if (active) setChecking(false) })
     return () => { active = false }
   }, [userId])
   if (!userId || !pending.length || pathname === "/legal") return null

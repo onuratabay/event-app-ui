@@ -16,7 +16,8 @@ const TONES = { default: palette.text, accent: palette.accent, muted: "rgba(226,
  * A top-bar action: pass a short text ("Ayarlar") or an icon drawn at NAV_ICON_SIZE. Every action
  * has the same touch size and text style, so the bars look alike across pages.
  */
-export function NavAction({ label, onPress, disabled, tone = "default", children }: {
+export function NavAction({ label, onPress, disabled, tone = "default", children, walkthroughId }: {
+  walkthroughId?: string
   label: string
   onPress: () => void
   disabled?: boolean
@@ -24,7 +25,7 @@ export function NavAction({ label, onPress, disabled, tone = "default", children
   children: ReactNode
 }) {
   const textual = typeof children === "string"
-  return <Touch accessibilityLabel={label} disabled={disabled} onPress={onPress} style={[s.action, textual && s.actionText]}>
+  return <Touch walkthroughId={walkthroughId} accessibilityLabel={label} disabled={disabled} onPress={onPress} style={[s.action, textual && s.actionText]}>
     {textual ? <Label style={[s.navText, { color: TONES[tone] }]} numberOfLines={1}>{children}</Label> : children}
   </Touch>
 }
@@ -41,7 +42,9 @@ export default function TopNavBar({
   onTitlePress,
   titleHint,
   hideBack = false,
+  walkthroughId,
 }: {
+  walkthroughId?: string
   navigate: NavigateFn
   fallback: Screen
   onBack?: () => void
@@ -68,12 +71,12 @@ export default function TopNavBar({
           {backLabel ? <Label style={s.backLabel}>{backLabel}</Label> : null}
         </Touch>}
         {onTitlePress ? (
-          <Touch accessibilityLabel={title} accessibilityHint={titleHint} onPress={onTitlePress} style={[s.copy, hideBack && s.copyFlush]}>
+          <Touch walkthroughId={walkthroughId} accessibilityLabel={title} accessibilityHint={titleHint} onPress={onTitlePress} style={[s.copy, hideBack && s.copyFlush]}>
             <Label style={s.title} numberOfLines={1}>{title}</Label>
             {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
           </Touch>
         ) : (
-          <Box style={[s.copy, hideBack && s.copyFlush]}>
+          <Box walkthroughId={walkthroughId} style={[s.copy, hideBack && s.copyFlush]}>
             <Label style={s.title} numberOfLines={1}>{title}</Label>
             {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
           </Box>

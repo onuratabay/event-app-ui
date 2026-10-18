@@ -1,3 +1,5 @@
+import ContextualTip from "../walkthrough/ContextualTip"
+import { useWalkthroughAutostartBlocker, useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import ActivityIndicator from "../components/LoadingSpinner";
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Alert, Platform, StyleSheet, View } from "react-native"
@@ -44,7 +46,7 @@ function Accordion({ title, summary, open, onToggle, invalid, children }: { titl
   const ref = useRef<View | null>(null)
   useEffect(() => { if (open) anchor?.(ref.current) }, [open])
   return <View ref={ref} collapsable={false}><GlassCard style={s.section}>
-    <Touch accessibilityLabel={`${title}: ${summary}`} accessibilityState={{ expanded: open }} onPress={onToggle} style={s.sectionHeader} haptic={false}>
+    <Touch walkthroughId={title === "Tarihler" ? "availability-dates" : undefined} accessibilityLabel={`${title}: ${summary}`} accessibilityState={{ expanded: open }} onPress={onToggle} style={s.sectionHeader} haptic={false}>
       <Box style={{ flex: 1, minWidth: 0 }}>
         <Label style={s.sectionTitle}>{title}</Label>
         <Label style={[s.sectionSummary, invalid && !open && { color: palette.error }]} numberOfLines={2}>{summary}</Label>
@@ -60,6 +62,7 @@ const Issues = ({ messages }: { messages: string[] }) => messages.length ? <Box 
 export default function AvailabilityScreen({ navigate, now }: { navigate: NavigateFn; now?: Date }) {
   const inset = useBottomNavInset()
   const [draft, setDraft] = useState<AvailabilityDraft>(emptyDraft)
+  useWalkthroughAutostartBlocker(!!draft.startDate || draft.activities.length > 0)
   const [open, setOpen] = useState<Section | null>("dates")
   // Two tabs keep the calendar at the top: the form, and the saved records.
   const [tab, setTab] = useState<"new" | "records">("new")
@@ -80,6 +83,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
   const [showIssues, setShowIssues] = useState(false)
   const [busyRecord, setBusyRecord] = useState<string | null>(null)
   const map = useRef<MapView>(null)
+  useWalkthroughScreenBlocker(saving || !!busyRecord || reviewing || searching || locating)
 
   const loadCatalog = () => {
     setCatalogError(null)
@@ -269,7 +273,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
     <AtmoBackground />
     <TopNavBar navigate={navigate} fallback="discover" title="Etkinlik Takvimim" subtitle="Özel eşleşme havuzu" />
     <Scroll style={[s.scroll, { paddingBottom: (tab === "new" ? 148 : 40) + inset }]} enter>
-      <Box style={s.segment} accessibilityRole="tablist">
+      <Box walkthroughId="availability-tabs" style={s.segment} accessibilityRole="tablist">
         {([["new", editingId ? "Kaydı düzenle" : "Yeni müsaitlik"], ["records", "Kayıtlarım"]] as const).map(([id, label]) => {
           // The records tab carries the count of current records in a badge beside its label.
           const count = id === "records" ? current.length : 0
@@ -281,6 +285,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
           </Touch>
         })}
       </Box>
+      <ContextualTip id="availability" when={!!notice} />
       {notice && <Box style={s.success} accessibilityLiveRegion="polite"><CheckIcon size={16} style={{ color: palette.success }} /><Label style={s.successText}>{notice}</Label></Box>}
       {!AVAILABILITY_SERVER_READY && <Box style={s.pending} accessibilityRole="alert">
         <Label style={s.pendingTitle}>Kaydetme henüz açık değil</Label>

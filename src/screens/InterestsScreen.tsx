@@ -81,7 +81,7 @@ export default function InterestsScreen({
         </Box>
 
         {/* Profile photo section */}
-        <Box style={[[ui.px6, ui.pb5, ui.flexShrink0]]} enter>
+        <Box walkthroughId="interests-photo" style={[[ui.px6, ui.pb5, ui.flexShrink0]]} enter>
           <Box style={[[ui.rounded2xl, ui.p4, ui.flex, ui.itemsCenter, ui.gap4], {
           backgroundColor: "rgba(255,255,255,0.05)",
           borderWidth: 1,
@@ -140,7 +140,7 @@ export default function InterestsScreen({
         </Box>
 
         {/* Divider */}
-        <Box style={[[ui.mx6, ui.mb4, ui.flex, ui.itemsCenter, ui.gap3, ui.flexShrink0]]}>
+        <Box walkthroughId="interests-categories" style={[[ui.mx6, ui.mb4, ui.flex, ui.itemsCenter, ui.gap3, ui.flexShrink0]]}>
           <Box style={[[ui.flex1, ui.hPx], {
           backgroundColor: "rgba(255,255,255,0.07)"
         }]} />

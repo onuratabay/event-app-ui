@@ -1,3 +1,5 @@
+import ContextualTip from "../walkthrough/ContextualTip"
+import { useWalkthroughAutostartBlocker, useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
 import { Alert } from "react-native";
@@ -111,6 +113,7 @@ export default function CreateEventScreen({
   // The meeting point is picked on the map; `data.location` is the optional venue name typed next to it.
   const [place, setPlace] = useState<PickedPlace | null>(null);
   const [mapTouched, setMapTouched] = useState(false);
+  useWalkthroughScreenBlocker(creating || mapTouched);
   // The shared list plus your own proposals still waiting for an admin (usable only in your events).
   const loadCatalog = () => Promise.all([getMapInterests(), getEnums('event_visibility'), getMyProposedInterests().catch(() => [])]).then(([a, v, mine]) => { const own = Array.isArray(mine) ? mine : []; setActivities([...a, ...own.filter(item => !a.some(row => row.id === item.id))]); setVisibilities(v); }).catch(error => Alert.alert('Seçenekler yüklenemedi', getApiErrorMessage(error)));
   // Personal suggestions are optional; the category defaults remain if they cannot load.
@@ -136,6 +139,7 @@ export default function CreateEventScreen({
   };
   const toggleInvite = (id: string) => setInvitedIds(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
   const [step, setStep] = useState(0);
+  useWalkthroughAutostartBlocker(step > 0);
   const [customDurationOpen, setCustomDurationOpen] = useState(false);
   const [customDuration, setCustomDuration] = useState({ hours: "", minutes: "" });
   const [data, setData] = useState(() => ({
@@ -345,7 +349,7 @@ export default function CreateEventScreen({
   }
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
-      <TopNavBar navigate={navigate} fallback="discover" onBack={back} title="Etkinlik Oluştur" subtitle={`${step + 1}/8`} />
+      <TopNavBar navigate={navigate} fallback="discover" onBack={back} walkthroughId="create-progress" title="Etkinlik Oluştur" subtitle={`${step + 1}/8`} />
 
       {/* Progress bar */}
       <Box style={[[ui.fixed, ui.top0, ui.left0, ui.right0, ui.h05, ui.bgWhite8]]}>
@@ -361,13 +365,13 @@ export default function CreateEventScreen({
             </Box>}
 
           {/* Step 0 - Activity */}
-          {step === 0 && <Box style={[[]]} enter>
+          {step === 0 && <Box style={[[]]} enter><Box walkthroughId="create-activity">
               <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
                 Ne yapmak{"\n"}istiyorsun?
               </Label>
               <Label style={[[ui.textSm, ui.textWhite40, ui.mb6]]}>
                 Seninle birlikte ne yapacağımızı anlat.
-              </Label>
+              </Label></Box>
               <Box style={[[ui.grid, ui.gap3]]} columns={2}>
                 {!activities.length && <Touch onPress={loadCatalog}>Seçenekleri yeniden yükle</Touch>}
               {ACTIVITIES.map(a => <Touch key={a.label} onPress={() => chooseActivity(a.label)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, data.activity === a.label ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={data.activity === a.label ? "rgba(105,120,255,.16)" : undefined} />
@@ -608,6 +612,7 @@ export default function CreateEventScreen({
 
           {/* Step 6 - Privacy */}
           {step === 6 && <Box style={[[]]} enter>
+              <ContextualTip id="privacy" />
               <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
                 Bu etkinlik{"\n"}kime açık?
               </Label>

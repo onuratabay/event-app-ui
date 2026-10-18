@@ -119,7 +119,7 @@ Module._load = function (id, parent, isMain) {
   if (id === "expo-image") return { Image: "Image" }
   if (id === "expo-linear-gradient") return { LinearGradient: "LinearGradient" }
   if (id === "expo-blur") return { BlurView: "BlurView", BlurTargetView: "BlurTargetView" }
-  if (id === "react-native-safe-area-context") return { SafeAreaView: "View" }
+  if (id === "react-native-safe-area-context") return { SafeAreaView: "View", useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }) }
   if (id === "@react-native-community/datetimepicker")
     return { __esModule: true, default: "DateTimePicker" }
   if (id === "@react-native-async-storage/async-storage")
@@ -195,6 +195,11 @@ async function tap(tree, label) {
   audit(tree.toJSON())
 }
 ;(async () => {
+  if (process.env.TEST_WALKTHROUGH_ONLY === "1") {
+    await require("./check-walkthrough.cjs")({ act, text, audit, storage })
+    assert.equal(errors.length, 0, errors.join("\n"))
+    return
+  }
   // Selection behavior must remain identical on both platform hosts, including leap-day clamping.
   const Wheel = require("../src/components/DateTimeWheel.tsx").default
   let wheel, result, closed = 0
@@ -390,6 +395,7 @@ async function tap(tree, label) {
   await require("./check-admin.cjs")({ mount, tap, act, text, storage })
   await require("./check-places.cjs")({ act, text, storage })
   await require("./check-forms.cjs")({ act })
+  await require("./check-walkthrough.cjs")({ act, text, audit, storage })
   const names = [
     "Splash",
     "Welcome",
@@ -405,6 +411,7 @@ async function tap(tree, label) {
     "Search",
     "Notifications",
     "Availability",
+    "AppGuide",
   ]
   for (const name of names) {
     const tree = await mount(name, { eventId: EVENTS[0].id })

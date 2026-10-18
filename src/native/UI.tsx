@@ -2,6 +2,8 @@ import { palette } from "../theme/palette";
 import DateTimeWheel from "../components/DateTimeWheel"
 import { SharedBlur } from "./SharedBlur"
 import { usePreferences } from "./preferences"
+import { notifyWalkthroughScroll, TargetRegistration, WalkthroughScrollContext } from "../walkthrough/targets"
+import { useWalkthroughBlocker } from "../walkthrough/activity"
 import { photoUri } from "../api/client"
 import * as Haptics from "expo-haptics"
 import { Image } from "expo-image"
@@ -91,6 +93,7 @@ function font(style: TextStyle): TextStyle {
   }
 }
 interface LayoutProps extends Omit<ViewProps, "style"> {
+  walkthroughId?: string
   style?: NativeStyleProp
   children?: ReactNode
   columns?: number
@@ -200,6 +203,7 @@ function useEntrance(enter?: boolean) {
   return a
 }
 export function Box({
+  walkthroughId,
   style,
   children,
   columns,
@@ -209,12 +213,14 @@ export function Box({
   enter,
   ...props
 }: LayoutProps) {
+  const targetRef = useRef<View | null>(null)
   const inherited = useContext(Typography),
     { text, view } = split(style),
     a = useEntrance(enter)
   return (
     <Typography.Provider value={{ ...inherited, ...text }}>
-      <Animated.View {...props} style={[view, enter && { opacity: a }]}>
+      <Animated.View {...props} ref={targetRef} collapsable={walkthroughId ? false : props.collapsable} style={[view, enter && { opacity: a }]}>
+        {walkthroughId && <TargetRegistration id={walkthroughId} node={targetRef} />}
         <Paint
           glass={glass}
           gradient={gradient}
@@ -271,6 +277,7 @@ export interface TouchProps extends LayoutProps {
 let lastHapticAt = 0
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 export function Touch({
+  walkthroughId,
   style,
   children,
   onPress,
@@ -285,6 +292,7 @@ export function Touch({
   disabledOpacity = 0.35,
   ...props
 }: TouchProps) {
+  const targetRef = useRef<View | null>(null)
   const inherited = useContext(Typography),
     { text, view } = split(style)
   const { values: preferences } = usePreferences()
@@ -308,6 +316,8 @@ export function Touch({
     >
       <AnimatedPressable
         {...props}
+        ref={targetRef}
+        collapsable={walkthroughId ? false : props.collapsable}
         accessibilityRole={props.accessibilityRole || "button"}
         accessibilityState={{ ...props.accessibilityState, disabled }}
         disabled={disabled}
@@ -336,6 +346,7 @@ export function Touch({
           },
         ]}
       >
+        {walkthroughId && <TargetRegistration id={walkthroughId} node={targetRef} />}
         <Paint
           glass={glass}
           gradient={gradient}
@@ -472,14 +483,14 @@ export function Scroll({
   // Floating top bars and the bottom bar sit over the scroll area; its paddings mark how much.
   const insetTop = Math.min(Number(paddingTop ?? padding ?? 0) || 0, 140)
   const insetBottom = Math.min(Number(paddingBottom ?? padding ?? 0) || 0, 120)
-  const anchor = (target: View | null) => {
+  const anchor = (target: View | null, animated = true) => {
     const scroll = scrollRef.current as unknown as View | null
     if (!target || !scroll || horizontal) return
     // After the opened content has laid out: scroll the least needed to show it, top edge first.
     setTimeout(() => scroll.measureInWindow?.((_sx, sy, _sw, sh) => target.measureInWindow((_x, y, _w, h) => {
       const top = sy + insetTop + ANCHOR_GAP, bottom = sy + sh - insetBottom - ANCHOR_GAP
       const delta = y < top ? y - top : y + h > bottom ? Math.min(y + h - bottom, y - top) : 0
-      if (delta) scrollRef.current?.scrollTo({ y: Math.max(0, offset.current + delta), animated: true })
+      if (delta) scrollRef.current?.scrollTo({ y: Math.max(0, offset.current + delta), animated })
     })), 120)
   }
   return (
@@ -487,11 +498,12 @@ export function Scroll({
       <ScrollView
         {...props}
         ref={node => { scrollRef.current = node; assignRef(ref, node) }}
-        onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; onScroll?.(event) }}
+        onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; onScroll?.(event); notifyWalkthroughScroll() }}
         scrollEventThrottle={props.scrollEventThrottle ?? 16}
         horizontal={horizontal}
         style={[frame, horizontal ? { flexGrow: 0 } : { flex: 1 }]}
-        contentContainerStyle={{
+        // Paddings and gaps given in `style` go to the content; an explicit contentContainerStyle adds to them.
+        contentContainerStyle={[{
           padding,
           paddingTop,
           paddingBottom,
@@ -504,16 +516,16 @@ export function Scroll({
           alignItems,
           flexDirection: horizontal ? "row" : flexDirection || "column",
           flexGrow: horizontal ? 0 : 1,
-        }}
+        }, props.contentContainerStyle]}
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
       >
-        <KeyboardRevealContext.Provider value={reveal}><FieldChainContext.Provider value={chain}><ScrollAnchorContext.Provider value={anchor}>
+        <KeyboardRevealContext.Provider value={reveal}><FieldChainContext.Provider value={chain}><ScrollAnchorContext.Provider value={anchor}><WalkthroughScrollContext.Provider value={anchor}>
           <Content style={view}>{children}</Content>
-        </ScrollAnchorContext.Provider></FieldChainContext.Provider></KeyboardRevealContext.Provider>
+        </WalkthroughScrollContext.Provider></ScrollAnchorContext.Provider></FieldChainContext.Provider></KeyboardRevealContext.Provider>
       </ScrollView>
     </Typography.Provider>
   )
@@ -653,6 +665,7 @@ export function Sheet({
   children,
   style,
 }: LayoutProps & { onClose: () => void }) {
+  useWalkthroughBlocker(true)
   const chain = useFieldChain()
   return (
     <Modal

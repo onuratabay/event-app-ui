@@ -1,3 +1,4 @@
+import { useWalkthroughBlocker } from "../walkthrough/activity"
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useEffect, useState } from "react"
@@ -35,6 +36,7 @@ export default function ConnectionsSheet({ userId, title, canRemove, onClose, on
       removeFriend(person.id).catch(cause => { setPeople(previous); Alert.alert("Çıkarılamadı", getApiErrorMessage(cause)) })
     } },
   ])
+  useWalkthroughBlocker(true)
   return <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
     <Box style={s.backdrop}>
       <Pressable accessibilityLabel="Bağlantıları kapat" onPress={onClose} style={StyleSheet.absoluteFill} />

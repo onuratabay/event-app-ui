@@ -1,3 +1,4 @@
+import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { useEffect, useState, type ReactNode } from "react"
 import { Alert, Linking, StyleSheet, Switch } from "react-native"
 import Constants from "expo-constants"
@@ -50,6 +51,7 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
   const openLegal = useOpenLegal()
   const [marketing, setMarketing] = useState(false)
   const [marketingReady, setMarketingReady] = useState(false)
+  useWalkthroughScreenBlocker(busy || passwordOpen || deleteOpen)
 
   useEffect(() => {
     let active = true
@@ -143,7 +145,7 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
         </Box></Reveal>}
       </Section>
 
-      <Section title="Bildirimler">
+      <Box walkthroughId="settings-notifications"><Section title="Bildirimler">
         <Toggle title="Etkinlik davetleri" detail="Biri seni bir etkinliğe davet ettiğinde" value={notifications.invites} disabled={!notificationsReady} onChange={v => void saveNotification("invites", v)} />
         <Toggle title="Yeni mesajlar" detail="Katıldığın etkinlik odalarındaki mesajlar" value={notifications.messages} disabled={!notificationsReady} onChange={v => void saveNotification("messages", v)} />
         <Toggle title="Etkinlik hatırlatmaları" detail="Katılacağın etkinlik yaklaştığında" value={notifications.reminders} disabled={!notificationsReady} onChange={v => void saveNotification("reminders", v)} />
@@ -151,6 +153,7 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
         <Row title="Telefon bildirim izinleri" detail="Sistem bildirim iznini telefon ayarlarından yönet" onPress={openSystemSettings} />
       </Section>
 
+      </Box>
       <Section title="Görünüm ve etkileşim">
         <Toggle title="Dokunsal geri bildirim" detail="Butonlara dokunduğunda hafif titreşim" value={values.haptics} disabled={!ready} onChange={v => void savePreference({ haptics: v })} />
         <Toggle title="Saydamlığı azalt" detail="Cam ve bulanıklık efektleri yerine düz zeminler kullan" value={values.reduceTransparency} disabled={!ready} onChange={v => void savePreference({ reduceTransparency: v })} />
@@ -159,13 +162,14 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
         <Row title="Metin boyutu" detail="Uygulama her cihazda aynı görünmesi için sabit yazı boyutu kullanır." />
       </Section>
 
-      <Section title="Gizlilik ve izinler">
+      <Box walkthroughId="settings-privacy"><Section title="Gizlilik ve izinler">
         <Toggle title="Kampanya ve duyurular" detail="E-posta ve SMS ile ticari ileti izni · İstediğin zaman geri çekebilirsin" value={marketing} disabled={!marketingReady} onChange={v => void saveMarketing(v)} />
         <Row title="Konum erişimi" detail="Yakındaki etkinlikler ve harita için" onPress={openSystemSettings} />
         <Row title="Kamera ve fotoğraflar" detail="Profil ve etkinlik görselleri için" onPress={openSystemSettings} />
         <Row title="Kişiler" detail="Referans seçimi için rehber erişimi" onPress={openSystemSettings} />
       </Section>
 
+      </Box>
       <Section title="Sözleşmeler ve politikalar">
         <Row title={LEGAL_TITLES.terms} detail="Üyelik, etkinlikler ve sorumluluklar" onPress={() => openLegal("terms")} />
         <Row title={LEGAL_TITLES.community} detail="Üyelik onayı, etkinlik oluşturma ve davranış kuralları" onPress={() => openLegal("community")} />
@@ -173,6 +177,10 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
         <Row title={LEGAL_TITLES.kvkk} detail="Kişisel verilerin korunması ve başvuru hakların" onPress={() => openLegal("kvkk")} />
         <Row title={LEGAL_TITLES.marketing} detail="Kampanya ve duyuru izninin metni" onPress={() => openLegal("marketing")} />
       </Section>
+
+      <Box walkthroughId="settings-guide"><Section title="Uygulama Rehberi">
+        <Row title="Uygulama Rehberi" detail="Her ekranı kendi hızında keşfet; istediğin rehberi yeniden aç" onPress={() => navigate("app-guide")} />
+      </Section></Box>
 
       <Section title="Yardım ve hakkında">
         <Row title="Nasıl çalışır?" detail="Keşfet, katıl ve birlikte plan yap" onPress={() => Alert.alert("İlk buluşmana doğru", "Keşfet veya Harita’dan bir etkinlik seç. Ayrıntılardan katılım durumunu takip et. Katıldığın etkinliğin odası açıldığında katılımcılarla sohbet edebilirsin. Kendi planını paylaşmak için Oluştur’u kullan.")} />

@@ -372,7 +372,7 @@ export default function DiscoverScreen({
         <Box style={{ height: 68, paddingHorizontal: 12, flexDirection: "row", alignItems: "center" }} enter>
           <Box style={{ width: 132, flexDirection: "row" }}>
             <HeaderIconButton plain label="Ara" onPress={() => navigate("search")}><SearchIcon size={20} strokeWidth={1.8} style={{ color: "#f4f5ff" }} /></HeaderIconButton>
-            <HeaderIconButton plain label="Sıralama ve filtre" selected={isCustomSort} onPress={() => setSortOpen(true)}>
+            <HeaderIconButton walkthroughId="discover-sort" plain label="Sıralama ve filtre" selected={isCustomSort} onPress={() => setSortOpen(true)}>
               <Box style={{ color: isCustomSort ? "#c7ceff" : "#f4f5ff" }}><SortIcon active={isCustomSort} /></Box>
             </HeaderIconButton>
           </Box>
@@ -380,13 +380,13 @@ export default function DiscoverScreen({
             <BrandWordmark width={wordmarkWidth} />
           </Box>
           <Box style={{ width: 132, flexDirection: "row", justifyContent: "flex-end" }}>
-            <HeaderIconButton plain label="Etkinlik Takvimim" onPress={() => navigate("availability")}><CalendarIcon size={20} strokeWidth={1.8} style={{ color: "#f4f5ff" }} /></HeaderIconButton>
+            <HeaderIconButton walkthroughId="discover-calendar" plain label="Etkinlik Takvimim" onPress={() => navigate("availability")}><CalendarIcon size={20} strokeWidth={1.8} style={{ color: "#f4f5ff" }} /></HeaderIconButton>
             <NotificationButton onPress={() => navigate("notifications")} />
           </Box>
         </Box>
 
         {/* Filter row */}
-        <Box style={[[ui.px5, ui.pb3]]} enter>
+        <Box walkthroughId="discover-filters" style={[[ui.px5, ui.pb3]]} enter>
           <Box style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>
             {/* Scrollable filters */}
             <Scroll style={[[ui.flex, ui.gap2, ui.pb05, ui.flex1, ui.minW0]]} horizontal>

@@ -1,3 +1,5 @@
+import ContextualTip from "../walkthrough/ContextualTip"
+import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
 import { ArrowLeftIcon, UsersIcon, LocationIcon, ClockIcon, StarIcon, SendIcon } from "../components/Icons";
@@ -113,6 +115,7 @@ export default function EventRoomScreen({
   };
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  useWalkthroughScreenBlocker(infoOpen || !!sheet || busy || renaming || sending || !!editing || !!input.trim());
   const scrollRef = useRef<ScrollView>(null);
   const nearBottom = useRef(true);
   const stickToEnd = useRef(true);
@@ -323,7 +326,7 @@ export default function EventRoomScreen({
   const subtitle = `${muted ? "🔕 " : ""}${event.location ? `${event.time} · ${event.location}` : event.time}`;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
-      <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} title={roomTitle(event)} subtitle={subtitle}
+      <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} walkthroughId="room-info" title={roomTitle(event)} subtitle={subtitle}
         onTitlePress={() => setInfoOpen(true)} titleHint="Oda bilgisini ve katılımcıları gösterir"
         right={<NavAction label="Etkinlik detayına git" onPress={() => navigate("event-detail", { eventId: event.id })}>
           <ArrowLeftIcon size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} style={{ color: palette.accent, transform: [{ rotate: "180deg" }] }} />
@@ -410,6 +413,7 @@ export default function EventRoomScreen({
           {event.status !== "cancelled" && <Label style={s.closedText}>Onaylı katılımcı: {event.currentParticipants}/{event.minParticipants}</Label>}
           <Touch onPress={() => navigate("event-detail", { eventId: event.id })} style={s.closedButton}><Label style={s.closedButtonLabel}>Etkinlik detayına dön</Label></Touch>
         </Box> : <>
+          <Box style={{ paddingHorizontal: 20 }}><ContextualTip id="checkin" when={!!event.isActive && !infoOpen} /></Box>
           {pinned ? <Touch accessibilityLabel="Sabitlenmiş duyuru" onPress={() => setPinnedOpen(open => !open)} style={s.pinned}>
             <Label style={s.pinnedTitle}>📌 Organizatör duyurusu · {pinned.time}</Label>
             <Label style={s.pinnedText} numberOfLines={pinnedOpen ? undefined : 2}>{pinned.text}</Label>
@@ -473,7 +477,7 @@ export default function EventRoomScreen({
             </Box> : <Scroll horizontal style={s.quickRow}>
               {QUICK_REPLIES.map(reply => <Touch key={reply} accessibilityLabel={`Hızlı mesaj: ${reply}`} onPress={() => void sendText(reply)} style={s.quick}><Label style={s.quickLabel}>{reply}</Label></Touch>)}
             </Scroll>}
-            <Box style={s.composer} glass>
+            <Box walkthroughId="room-composer" style={s.composer} glass>
               <Field value={input} onChangeText={value => {
                 setInput(value);
                 if (eventId && !editing && Date.now() - lastTyping.current > 1000) { lastTyping.current = Date.now(); void socketAction('chat:typing', { eventId, typing: Boolean(value) }).catch(() => {}); }

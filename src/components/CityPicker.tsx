@@ -1,3 +1,4 @@
+import { useWalkthroughBlocker } from "../walkthrough/activity"
 import { useEffect, useState } from "react"
 import { Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
@@ -25,6 +26,7 @@ export default function CityPicker({ value, onChange, label = "Şehir", compact 
   const close = () => { setOpen(false); setQuery("") }
   // iOS lays the keyboard over the sheet; padding the list by its height keeps every city reachable.
   // Android resizes the window itself, so it needs nothing.
+  useWalkthroughBlocker(open)
   const [keyboard, setKeyboard] = useState(0)
   useEffect(() => {
     if (!open || Platform.OS !== "ios") return

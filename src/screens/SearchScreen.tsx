@@ -112,7 +112,7 @@ export default function SearchScreen({
       <TopNavBar navigate={navigate} fallback="discover" title="Ara" />
 
       {/* Search bar */}
-      <Box style={[[ui.relative, ui.px5, ui.pb3, ui.flexShrink0], { paddingTop: 80 }]} enter>
+      <Box walkthroughId="search-query" style={[[ui.relative, ui.px5, ui.pb3, ui.flexShrink0], { paddingTop: 80 }]} enter>
         <Box style={[[ui.flex, ui.itemsCenter, ui.gap3, ui.rounded2xl, ui.px4, ui.py35], {
         backgroundColor: "rgba(255,255,255,0.07)",
         borderWidth: 1,
@@ -129,7 +129,7 @@ export default function SearchScreen({
       </Box>
 
       {/* Date range */}
-      <Box style={[[ui.px5, ui.pb3, ui.flexShrink0]]}>
+      <Box walkthroughId="search-dates" style={[[ui.px5, ui.pb3, ui.flexShrink0]]}>
         <Box style={[[ui.flex, ui.gap3]]}>
           <GlassInput label="Başlangıç" mode="date" value={dateFrom} defaultValue={today} onChangeText={chooseFrom} />
           <GlassInput label="Bitiş" mode="date" value={dateTo} defaultValue={dateFrom || today} onChangeText={chooseTo} />

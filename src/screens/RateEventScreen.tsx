@@ -89,7 +89,7 @@ export default function RateEventScreen({ navigate, eventId }: { navigate: Navig
           <Label style={s.title}>Etkinliği genel olarak nasıl buldun?</Label>
           <StarRating label="Etkinlik puanı" value={eventScore} onChange={setEventScore} size={34} />
         </Box>}
-        <Box style={s.section}>
+        <Box walkthroughId="rating-people" style={s.section}>
           <Label style={s.heading}>Katılımcılar</Label>
           <Label style={s.muted}>İstediğin katılımcıları puanlayabilirsin. Puanlamaya başladığın her kişi için üç sorunun hepsini yanıtlaman gerekir.</Label>
         </Box>
@@ -116,7 +116,7 @@ export default function RateEventScreen({ navigate, eventId }: { navigate: Navig
         })}
         {sendError && <ErrorNotice title="Gönderilemedi" message={sendError} onDismiss={() => setSendError(null)} />}
         {!!missing.length && <Label style={s.hint}>Göndermeden önce: {missing.join(", ")}.</Label>}
-        <Touch disabled={sending || !!missing.length} onPress={() => void send()} gradient={["#4d5bcb", "#6651c9"]} style={[s.primary, (sending || !!missing.length) && { opacity: .45 }]}>{sending ? "Gönderiliyor…" : "Puanlamayı gönder"}</Touch>
+        <Touch walkthroughId="rating-submit" disabled={sending || !!missing.length} onPress={() => void send()} gradient={["#4d5bcb", "#6651c9"]} style={[s.primary, (sending || !!missing.length) && { opacity: .45 }]}>{sending ? "Gönderiliyor…" : "Puanlamayı gönder"}</Touch>
       </>}
     </Scroll>
   </Box>;

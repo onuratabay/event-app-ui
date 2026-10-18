@@ -1,3 +1,5 @@
+import ContextualTip from "../walkthrough/ContextualTip"
+import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { onSocket } from '../services/socket'
 import { useEffect, useRef, useState } from "react"
 import { Linking, Platform } from "react-native"
@@ -28,6 +30,7 @@ export function ReferencePicker({ onApproved, refreshSignal = 0, onRefreshed }: 
   const [busy, setBusy] = useState(false)
   const [sending, setSending] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
+  useWalkthroughScreenBlocker(busy || !!sending)
   const [limited, setLimited] = useState(false)
   const [denied, setDenied] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -80,7 +83,8 @@ export function ReferencePicker({ onApproved, refreshSignal = 0, onRefreshed }: 
     finally { setSending(null) }
   }
   const statusText = (status: ReferenceRequest["status"]) => status === "approved" ? "Referans onaylandı" : status === "declined" ? "İstek kabul edilmedi" : "Onay bekleniyor"
-  return <Box style={{ gap: 12, marginTop: 14 }}>
+  return <Box walkthroughId="reference-picker" style={{ gap: 12, marginTop: 14 }}>
+    <ContextualTip id="references" when={loaded || requests.length > 0} />
     <Label style={[[ui.textXs, ui.textWhite45]]}>Paylaşmayı seçtiğin kişiler arasındaki topluluk üyelerinden referans iste. Eşleştirme için yalnızca telefon numaraları kullanılır.</Label>
     <Touch onPress={() => void loadContacts(limited)} disabled={busy} style={[[ui.py3, ui.roundedXl, ui.textSm, ui.textWhite80], { backgroundColor: "rgba(105,120,255,0.08)", borderWidth: 1, borderColor: "rgba(105,120,255,0.2)" }]}>
       {busy ? "Üyeler aranıyor…" : loaded ? limited ? "Paylaşılan kişileri değiştir" : "Rehberi yenile" : "Rehberden üye bul"}

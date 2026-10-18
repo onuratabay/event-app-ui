@@ -1,3 +1,4 @@
+import { useWalkthroughBlocker } from "../walkthrough/activity"
 import { palette } from "../theme/palette";
 import { useRef, useState } from "react"
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native"
@@ -57,6 +58,7 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
     searchVersion.current++
     setDraft(previous => ({ ...previous, place, radiusKm })); setQuery(place.name); setResults([]); setError(null)
   }
+  useWalkthroughBlocker(true)
   return <Modal transparent visible animationType="slide" onRequestClose={onClose}>
     <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "#00000088", paddingTop: 48 }}><Pressable accessibilityLabel="Filtreyi kapat" style={StyleSheet.absoluteFill} onPress={onClose} />
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.keyboard}>
@@ -64,7 +66,7 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
         <Box style={s.heading}><Box><Label style={s.eyebrow}>PLANIN NEREDEYSE</Label><Label style={s.title}>Filtreler</Label></Box><Touch accessibilityLabel="Filtreyi kapat" onPress={onClose} style={s.close}><Label style={s.text}>✕</Label></Touch></Box>
         <Scroll style={s.scroll} keyboardShouldPersistTaps="handled">
           <Label style={s.section}>Ne zaman uygunsun?</Label>
-          <Box style={s.wrap}>{([["all", "Yaklaşan"], ["today", "Bugün"], ["tomorrow", "Yarın"], ["week", "Haftaya"], ["custom", "Tarih seç"]] as const).map(([id, label]) => <FilterChip solid key={id} label={label} selected={draft.datePreset === id} onPress={() => setDraft(previous => ({ ...previous, datePreset: id, dateFrom: previous.dateFrom || localDate(new Date()), dateTo: previous.dateTo || localDate(new Date()) }))} />)}</Box>
+          <Box style={s.wrap}>{([["all", "Yaklaşan"], ["today", "Bugün"], ["tomorrow", "Yarın"], ["week", "Haftaya"], ["custom", "Tarih seç"]] as const).map(([id, label]) => <FilterChip key={id} label={label} selected={draft.datePreset === id} onPress={() => setDraft(previous => ({ ...previous, datePreset: id, dateFrom: previous.dateFrom || localDate(new Date()), dateTo: previous.dateTo || localDate(new Date()) }))} />)}</Box>
           {draft.datePreset === "custom" && <Box style={s.row}><Box style={s.grow}><GlassInput label="Başlangıç tarihi" mode="date" value={draft.dateFrom} onChangeText={dateFrom => setDraft(previous => ({ ...previous, dateFrom }))} /></Box><Box style={s.grow}><GlassInput label="Bitiş tarihi" mode="date" value={draft.dateTo} onChangeText={dateTo => setDraft(previous => ({ ...previous, dateTo }))} /></Box></Box>}
           <Box style={s.row}><Box style={s.grow}><GlassInput label="Uygun olduğun saat" mode="time" value={draft.timeFrom} onChangeText={timeFrom => setDraft(previous => ({ ...previous, timeFrom }))} /></Box><Box style={s.grow}><GlassInput label="Bitiş saati" mode="time" value={draft.timeTo} onChangeText={timeTo => setDraft(previous => ({ ...previous, timeTo }))} /></Box></Box>
           <Touch onPress={() => setDraft(previous => ({ ...previous, timeFrom: "", timeTo: "" }))}><Label style={s.link}>Saat sınırı olmasın</Label></Touch>
@@ -74,10 +76,10 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
           <PlaceSuggestionList items={suggestions.items} onPick={item => void pickSuggestion(item)} />
           <Touch style={s.search} onPress={() => void search()} disabled={busy || !query.trim()}><Label style={s.text}>{busy ? "Konum aranıyor…" : "Konumu bul"}</Label></Touch>
           {results.map((place, index) => <Touch key={index} style={s.result} onPress={() => choosePlace(place, 1)}><Label style={s.text}>⌖ {place.name}</Label><Label style={s.hint}>Bu konumu seç</Label></Touch>)}
-          <Box style={s.wrap}>{CITY_PRESETS.map(place => <FilterChip solid key={place.name} label={place.name} selected={draft.place?.name === place.name} onPress={() => choosePlace(place)} />)}<FilterChip solid label="Her yerde" selected={!draft.place && !query} onPress={() => { searchVersion.current++; setQuery(""); setResults([]); setDraft(previous => ({ ...previous, place: null })) }} /></Box>
-          {draft.place && <><Label style={s.hint}>⌖ {draft.place.name} çevresinde</Label><Box style={s.wrap}>{[1, 5, 15, 30, 75].map(radiusKm => <FilterChip solid key={radiusKm} label={`${radiusKm} km`} selected={draft.radiusKm === radiusKm} onPress={() => setDraft(previous => ({ ...previous, radiusKm }))} />)}</Box></>}
+          <Box style={s.wrap}>{CITY_PRESETS.map(place => <FilterChip key={place.name} label={place.name} selected={draft.place?.name === place.name} onPress={() => choosePlace(place)} />)}<FilterChip label="Her yerde" selected={!draft.place && !query} onPress={() => { searchVersion.current++; setQuery(""); setResults([]); setDraft(previous => ({ ...previous, place: null })) }} /></Box>
+          {draft.place && <><Label style={s.hint}>⌖ {draft.place.name} çevresinde</Label><Box style={s.wrap}>{[1, 5, 15, 30, 75].map(radiusKm => <FilterChip key={radiusKm} label={`${radiusKm} km`} selected={draft.radiusKm === radiusKm} onPress={() => setDraft(previous => ({ ...previous, radiusKm }))} />)}</Box></>}
           <Label style={s.section}>Ne yapmak istersin?</Label>
-          <Box style={s.wrap}><FilterChip solid label="Tüm etkinlikler" selected={!draft.interestIds.length} onPress={() => setDraft(previous => ({ ...previous, interestIds: [] }))} />{categories.map(item => <FilterChip solid key={item.id} label={item.name} selected={draft.interestIds.includes(item.id)} onPress={() => setDraft(previous => ({ ...previous, interestIds: previous.interestIds.includes(item.id) ? previous.interestIds.filter(id => id !== item.id) : [...previous.interestIds, item.id] }))} />)}</Box>
+          <Box style={s.wrap}><FilterChip label="Tüm etkinlikler" selected={!draft.interestIds.length} onPress={() => setDraft(previous => ({ ...previous, interestIds: [] }))} />{categories.map(item => <FilterChip key={item.id} label={item.name} selected={draft.interestIds.includes(item.id)} onPress={() => setDraft(previous => ({ ...previous, interestIds: previous.interestIds.includes(item.id) ? previous.interestIds.filter(id => id !== item.id) : [...previous.interestIds, item.id] }))} />)}</Box>
           {!categories.length && <Label style={s.hint}>Etkinlik türleri yüklenemedi. Haritadan yenileyebilirsin.</Label>}
         </Scroll>
         {error && <Label style={s.error}>{error}</Label>}

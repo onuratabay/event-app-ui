@@ -144,12 +144,14 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
     <AtmoBackground />
     <TopNavBar navigate={navigate} fallback="discover" title="Bildirimler" subtitle={unreadCount ? `${unreadCount} yeni bildirim` : undefined} right={<>
-      <NavAction label="Tüm bildirimleri okundu işaretle" tone="muted" disabled={busy || !unreadCount} onPress={() => void markAll()}>Tümünü oku</NavAction>
+      <NavAction walkthroughId="notification-actions" label="Tüm bildirimleri okundu işaretle" tone="muted" disabled={busy || !unreadCount} onPress={() => void markAll()}>Tümünü oku</NavAction>
       <NavAction label="Tüm bildirimleri sil" tone="danger" disabled={busy || nothingToDelete} onPress={() => void removeAll()}>Tümünü sil</NavAction>
     </>} />
     <Scroll style={[[ui.flex1, ui.px5, ui.spaceY2], { paddingTop: 80, paddingBottom: 40 + navInset }]}>
+      <Box walkthroughId="notification-invites" style={{ minHeight: 44 }}>
       <EventInvitations key={`invites-${pendingVersion}`} navigate={navigate} onCount={setInviteCount} />
       <ReferenceNotifications key={`references-${pendingVersion}`} onCount={setReferenceCount} />
+      </Box>
       {error && <ErrorNotice title="Bildirimler yüklenemedi" message={error} onDismiss={() => setError(null)} />}
       {loading && <Label style={[[ui.textSm, ui.textWhite50, ui.py4]]}>Bildirimler yükleniyor…</Label>}
       {!loading && !error && !notifications.length && <Label style={[[ui.textSm, ui.textWhite50, ui.py4]]}>Henüz yeni uyarın yok.</Label>}

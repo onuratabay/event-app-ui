@@ -1,3 +1,4 @@
+import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { palette } from "../theme/palette";
 import CityPicker from "../components/CityPicker";
 import { CalendarIcon, MessageIcon, StarIcon } from "../components/Icons";
@@ -39,6 +40,7 @@ function InlineEditField({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
+  useWalkthroughScreenBlocker(editing || saving);
   const save = async () => { if (saving) return; setSaving(true); try { await onSave(draft); setEditing(false); } catch {} finally { setSaving(false); } };
   if (editing) {
     return <Box style={[[]]} enter>
@@ -67,6 +69,7 @@ function InstagramField({ handle, onSave }: { handle: string; onSave: (handle: s
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(handle);
   const [saving, setSaving] = useState(false);
+  useWalkthroughScreenBlocker(editing || saving);
   const save = async () => {
     if (saving) return;
     setSaving(true);
@@ -98,6 +101,7 @@ function AboutMe({ bio, isOwn, name, onSave }: { bio: string; isOwn: boolean; na
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(bio);
   const [saving, setSaving] = useState(false);
+  useWalkthroughScreenBlocker(editing || saving);
   const save = async () => {
     if (saving) return;
     setSaving(true);
@@ -306,7 +310,7 @@ export default function ProfileScreen({
 
       <Scroll style={[[ui.relative, ui.hFull, ui.pb28], { paddingTop: 80 }]}>
         {/* Header */}
-        <Box style={[[ui.pt4, ui.px5, ui.pb5]]}>
+        <Box walkthroughId="profile-header" style={[[ui.pt4, ui.px5, ui.pb5]]}>
           {/* Profile header */}
           <Box style={[[ui.flex, ui.itemsCenter, ui.gap4]]}>
             <Touch style={[[ui.relative]]} onPress={async () => {
@@ -346,7 +350,7 @@ export default function ProfileScreen({
             <Label style={profileInstagramStyles.external}>↗</Label>
           </Touch> : null}
 
-          {!isOwn && userId && relation ? <Box style={{ marginTop: 16, gap: 10 }}>
+          {!isOwn && userId && relation ? <Box walkthroughId="profile-relation" style={{ marginTop: 16, gap: 10 }}>
             {relation.status === "friends" ? <Touch accessibilityLabel={`${user.name} bağlantılarını göster`} onPress={() => setConnectionsOpen(true)} style={{ alignSelf: "flex-start", minHeight: 32, justifyContent: "center" }}>
                 <Label style={[[ui.textXs], { color: palette.accent }]}>{relation.friendCount} bağlantı ›</Label>
               </Touch> : <Label style={[[ui.textXs, ui.textWhite40]]}>{relation.friendCount} bağlantı</Label>}
@@ -360,7 +364,7 @@ export default function ProfileScreen({
         </Box>
 
         {/* Stats */}
-        {isOwn && <Box style={[[ui.px5, ui.mb4]]}>
+        {isOwn && <Box walkthroughId="profile-connections" style={[[ui.px5, ui.mb4]]}>
           <Box style={[[ui.grid, ui.gap3]]} columns={3}>
             {[{
             value: attendedCount ?? user.stats.attended,
@@ -389,7 +393,7 @@ export default function ProfileScreen({
         </Box>}
 
         {/* Event Score */}
-        <Box style={[[ui.px5, ui.mb4]]}>
+        <Box walkthroughId="profile-score" style={[[ui.px5, ui.mb4]]}>
           <GlassCard style={[[ui.p5]]}>
             <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb4]]}>
               <Box>

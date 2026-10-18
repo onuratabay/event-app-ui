@@ -255,24 +255,20 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     <TopNavBar navigate={navigate} fallback="discover" title="Harita" subtitle={summary} floating />
 
     {/* Filters: row 1 is the date (one choice), row 2 the sheet button with its active count and the activity types. */}
-    <Box pointerEvents="box-none" style={[s.top, { paddingTop: 66 }]}>
-      <Box style={s.segment} accessibilityRole="tablist">
-        {DATE_PRESETS.map(([id, label]) => {
-          const on = filters.datePreset === id
-          return <Touch key={id} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={`Tarih: ${label}`} onPress={() => applyFilters({ ...filters, datePreset: id, dateFrom: "", dateTo: "" })} style={[s.segmentItem, on && s.segmentOn]}>
-            <Label style={[s.segmentText, on && s.segmentTextOn]}>{label}</Label>
-          </Touch>
-        })}
-      </Box>
+    <Box walkthroughId="map-filters" pointerEvents="box-none" style={[s.top, { paddingTop: 66 }]}>
+      {/* Same chips as the search screen: date is a single choice in one scrollable row. */}
+      <Scroll horizontal showsHorizontalScrollIndicator={false} style={s.filters} accessibilityRole="tablist">
+        {DATE_PRESETS.map(([id, label]) => <FilterChip key={id} label={label} accessibilityLabel={`Tarih: ${label}`} selected={filters.datePreset === id} onPress={() => applyFilters({ ...filters, datePreset: id, dateFrom: "", dateTo: "" })} />)}
+      </Scroll>
       <Box style={s.typeRow}>
-        <Touch accessibilityLabel={advancedCount ? `Filtreler, ${advancedCount} aktif` : "Filtreler"} onPress={() => { interacted.current = true; setFilterOpen(true) }} style={[s.filterButton, advancedCount > 0 && s.filterButtonOn]}>
+        <Touch accessibilityLabel={advancedCount ? `Filtreler, ${advancedCount} aktif` : "Filtreler"} onPress={() => { interacted.current = true; setFilterOpen(true) }} glass style={[s.filterButton, advancedCount > 0 && s.filterButtonOn]}>
           <FilterIcon size={16} style={{ color: advancedCount ? palette.accent : palette.text }} />
-          <Label style={s.filterText}>Filtreler</Label>
+          <Label style={[s.filterText, advancedCount > 0 && { color: palette.accent }]}>Filtreler</Label>
           {advancedCount > 0 && <Box style={s.badge}><Label style={s.badgeText}>{String(advancedCount)}</Label></Box>}
         </Touch>
-        <Scroll horizontal showsHorizontalScrollIndicator={false} style={s.filters}>
-          <FilterChip solid label="Tüm türler" selected={!filters.interestIds.length} onPress={() => applyFilters({ ...filters, interestIds: [] })} />
-          {categories.map(item => <FilterChip solid key={item.id} label={item.name} selected={filters.interestIds.includes(item.id)} onPress={() => applyFilters({ ...filters, interestIds: filters.interestIds.includes(item.id) ? filters.interestIds.filter(id => id !== item.id) : [...filters.interestIds, item.id] })} />)}
+        <Scroll horizontal showsHorizontalScrollIndicator={false} style={[s.filters, s.typeChips]}>
+          <FilterChip label="Tüm türler" selected={!filters.interestIds.length} onPress={() => applyFilters({ ...filters, interestIds: [] })} />
+          {categories.map(item => <FilterChip key={item.id} label={item.name} selected={filters.interestIds.includes(item.id)} onPress={() => applyFilters({ ...filters, interestIds: filters.interestIds.includes(item.id) ? filters.interestIds.filter(id => id !== item.id) : [...filters.interestIds, item.id] })} />)}
         </Scroll>
       </Box>
     </Box>
@@ -281,7 +277,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     <Box style={s.controls}>
       <Touch accessibilityLabel="Yakınlaştır" onPress={() => zoomBy(0.5)} style={[s.control, s.controlTop]}><Label style={s.controlText}>+</Label></Touch>
       <Touch accessibilityLabel="Uzaklaştır" onPress={() => zoomBy(2)} style={[s.control, s.controlBottom]}><Label style={s.controlText}>−</Label></Touch>
-      <Touch accessibilityLabel="Konumuma git" disabled={locating} onPress={() => void locate(true)} style={[s.control, s.controlSolo]}>
+      <Touch walkthroughId="map-location" accessibilityLabel="Konumuma git" disabled={locating} onPress={() => void locate(true)} style={[s.control, s.controlSolo]}>
         {locating ? <ActivityIndicator color={palette.accent} /> : <LocateIcon size={20} style={{ color: showUser ? palette.accent : palette.text }} />}
       </Touch>
       <Touch accessibilityLabel="Tüm etkinlikleri göster" disabled={!filtered.length} onPress={fitAll} style={[s.control, s.controlSolo]}><ExpandIcon size={18} style={{ color: palette.text }} /></Touch>
@@ -319,19 +315,18 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
 }
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.background },
-  top: { position: "absolute", top: 16, left: 16, right: 16, gap: 8 },
-  segment: { flexDirection: "row", padding: 4, gap: 4, borderRadius: 16, backgroundColor: "rgba(12,17,34,.92)", borderWidth: 1, borderColor: palette.border },
-  segmentItem: { flex: 1, minHeight: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  segmentOn: { backgroundColor: palette.selected, borderWidth: 1, borderColor: "rgba(105,120,255,.38)" },
-  segmentText: { color: palette.muted, fontFamily: "Outfit-Medium", fontSize: 13 },
-  segmentTextOn: { color: palette.text, fontFamily: "Outfit-SemiBold" },
-  typeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  filterButton: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 38, paddingHorizontal: 12, borderRadius: 19, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border },
-  filterButtonOn: { borderColor: "rgba(105,120,255,.5)", backgroundColor: palette.selected },
+  // Full-width rows: the scrolling chips run to the screen edge; the 16 px side margin sits inside them.
+  top: { position: "absolute", top: 16, left: 0, right: 0, gap: 8 },
+  typeRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 16 },
+  // Same look as the search screen's chips (FilterChip).
+  filterButton: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: palette.glassBorder, backgroundColor: palette.glass },
+  filterButtonOn: { backgroundColor: palette.selected, borderColor: "rgba(105,120,255,.38)" },
   filterText: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 13 },
   badge: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: palette.blue, alignItems: "center", justifyContent: "center" },
   badgeText: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 11, lineHeight: 14 },
-  filters: { flexGrow: 0, flexShrink: 1, flexDirection: "row", gap: 6 },
+  filters: { flexGrow: 0, flexShrink: 1, flexDirection: "row", gap: 8, paddingHorizontal: 16 },
+  // Beside the Filtreler button the row only needs the right margin.
+  typeChips: { paddingLeft: 0 },
   controls: { position: "absolute", right: 16, top: 176, gap: 8 },
   control: { width: 44, height: 44, backgroundColor: "rgba(17,22,42,.94)", borderWidth: 1, borderColor: palette.border, alignItems: "center", justifyContent: "center" },
   controlTop: { borderTopLeftRadius: 14, borderTopRightRadius: 14, marginBottom: -8, borderBottomWidth: 0 },

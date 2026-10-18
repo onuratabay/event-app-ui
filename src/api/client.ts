@@ -404,6 +404,8 @@ export interface RatingScores { punctuality: number | null; communication: numbe
 export const getUserProfile = (userId: string) => request<ApiUser & { interests: Array<{ id: string; name: string }> }>(`/users/${encodeURIComponent(userId)}/profile`)
 export interface NotificationPreferences { invites?: boolean; messages?: boolean; reminders?: boolean }
 export interface Preferences { mapFilters?: import('../map/filters').DiscoveryFilters; notifications?: NotificationPreferences; mutedRooms?: { ids: string[] } }
+export const getWalkthroughs = () => request<{ accountId: string; state: import('../walkthrough/model').WalkthroughState }>("/users/me/walkthroughs", { background: true })
+export const updateWalkthrough = (accountId: string, value: import('../walkthrough/model').ProgressAction) => request<{ accountId: string; state: import('../walkthrough/model').WalkthroughState; granted: boolean }>("/users/me/walkthroughs", { method: "POST", body: JSON.stringify({ accountId, ...value }), background: true })
 // Startup asks for the account from several places at once; they share one request.
 // Background: startup never shows the global loader for account data; only the event feed matters there.
 export const getCurrentUser = () => shared('user:me', () => request<ApiUser>('/auth/me', { method: 'POST', background: true }))

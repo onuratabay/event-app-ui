@@ -1,3 +1,4 @@
+import { useWalkthroughBlocker } from "../walkthrough/activity"
 import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { palette } from "../theme/palette"
@@ -15,6 +16,7 @@ export default function EventsSheet({ title, events, error, emptyText, onClose, 
   onOpen: (eventId: string) => void
 }) {
   const { height } = useWindowDimensions()
+  useWalkthroughBlocker(true)
   return <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
     <Box style={s.backdrop}>
       <Pressable accessibilityLabel="Listeyi kapat" onPress={onClose} style={StyleSheet.absoluteFill} />

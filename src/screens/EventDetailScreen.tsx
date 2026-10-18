@@ -1,3 +1,5 @@
+import ContextualTip from "../walkthrough/ContextualTip"
+import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import EventShareSheet from "../components/EventShareSheet";
 import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
@@ -50,6 +52,8 @@ export default function EventDetailScreen({
   const event = EVENTS.find(e => e.id === eventId);
   const [shareOpen, setShareOpen] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [justJoined, setJustJoined] = useState(false);
+  useWalkthroughScreenBlocker(joining);
   const [loadError, setLoadError] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [actionHeight, setActionHeight] = useState(72);
@@ -92,7 +96,7 @@ export default function EventDetailScreen({
   const setJoined = async (join: boolean) => {
     if (joining) return;
     setJoining(true);
-    try { const remote = await participate(event.id, join); setStore(p => ({ ...p, events: p.events.map(e => e.id === remote.id ? mapApiEvent(remote) : e) })); }
+    try { const remote = await participate(event.id, join); if (join) setJustJoined(true); setStore(p => ({ ...p, events: p.events.map(e => e.id === remote.id ? mapApiEvent(remote) : e) })); }
     catch (error) { Alert.alert('Katılım güncellenemedi', getApiErrorMessage(error)); }
     finally { setJoining(false); }
   };
@@ -130,7 +134,7 @@ export default function EventDetailScreen({
             </Box>
 
             {/* Meta info */}
-            <Box style={[[ui.mt4, ui.grid, ui.gap3]]} columns={2}>
+            <Box walkthroughId="event-meta" style={[[ui.mt4, ui.grid, ui.gap3]]} columns={2}>
               {[{
               icon: <ClockIcon size={17} strokeWidth={1.75} />,
               label: "Tarih & Saat",
@@ -168,7 +172,7 @@ export default function EventDetailScreen({
           </Box>
 
           {/* Participants */}
-          <GlassCard style={[[ui.p4]]}>
+          <GlassCard walkthroughId="event-people" style={[[ui.p4]]}>
             <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb3]]}>
               <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite70]]}>
                 Katılımcılar
@@ -277,7 +281,9 @@ export default function EventDetailScreen({
       {shareOpen && <EventShareSheet event={event} onClose={() => setShareOpen(false)} />}
 
       {/* Compact action bar with an opaque surface so scrolling text cannot show through. */}
-      <Box onLayout={event => setActionHeight(event.nativeEvent.layout.height)} style={[actionStyles.bar, { bottom: navInset }]}>
+      <Box walkthroughId="event-action" onLayout={event => setActionHeight(event.nativeEvent.layout.height)} style={[actionStyles.bar, { bottom: navInset }]}>
+        <ContextualTip id="participation" when={justJoined} />
+        <ContextualTip id="invitations" when={!!event.invited && !joined} />
         {!participationOpen && event.host.id !== store.user.id && <Label accessibilityRole="text" style={[[ui.textXs, ui.mb2, ui.textWhite50]]}>{frozenNote}</Label>}
         {event.invited && !joined && remaining !== null && <Label accessibilityLiveRegion="polite" style={[[ui.textXs, ui.mb2], { color: remaining > 0 ? palette.accent : palette.error }]}>
             {remaining > 0 ? `Davete yanıt için ${remainingLabel(remaining)}` : "Bu davetin süresi doldu."}

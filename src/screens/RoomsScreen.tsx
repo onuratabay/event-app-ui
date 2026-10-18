@@ -94,9 +94,8 @@ export default function RoomsScreen({
 
         {/* Active rooms */}
         <Box style={[[ui.px5, ui.mb6]]}>
-          <Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-            Sohbetler
-          </Label>
+          <Box walkthroughId="rooms-active"><Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
+            Sohbetler</Label></Box>
           {activeEvents.length > 0 ? <Box style={[[ui.spaceY3]]}>
               {activeEvents.map(event => <Touch key={event.id} onPress={() => navigate("event-room", {
             eventId: event.id
@@ -151,9 +150,8 @@ export default function RoomsScreen({
 
         {/* Forming events */}
         <Box style={[[ui.px5, ui.mb6]]}>
-          <Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-            Katılımcı Bekleyenler
-          </Label>
+          <Box walkthroughId="rooms-forming"><Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
+            Katılımcı Bekleyenler</Label></Box>
 
           <Box style={[[ui.spaceY3]]}>
             {formingEvents.map(event => <Touch key={event.id} onPress={() => navigate("event-detail", {

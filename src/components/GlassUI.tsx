@@ -127,16 +127,21 @@ export function FilterChip({
   onPress,
   emoji,
   solid = false,
+  accessibilityLabel,
 }: {
   label: string
   selected: boolean
   onPress: () => void
   emoji?: string
   solid?: boolean
+  accessibilityLabel?: string
 }) {
+  // Blurred (glass) background so chips stay readable over maps, photos and the moving backdrop.
   return (
     <Touch
       onPress={onPress}
+      glass
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ selected }}
       style={[s.chip, { flexShrink: 0 }, selected && s.gold, solid && { backgroundColor: selected ? palette.selected : palette.glass, borderColor: selected ? "rgba(105,120,255,.38)" : palette.glassBorder, borderWidth: 1, minHeight: 44, paddingHorizontal: 15, paddingVertical: 11 }]}
     >

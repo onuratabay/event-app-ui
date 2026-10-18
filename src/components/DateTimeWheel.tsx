@@ -1,3 +1,4 @@
+import { useWalkthroughBlocker } from "../walkthrough/activity"
 import { useEffect, useRef, useState } from "react"
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
@@ -54,6 +55,7 @@ export default function DateTimeWheel({ mode, value, onConfirm, onClose }: { mod
   const currentYear = new Date().getFullYear()
   const firstYear = Math.min(currentYear - 100, initial.getFullYear())
   const lastYear = Math.max(currentYear + 10, initial.getFullYear())
+  useWalkthroughBlocker(true)
   return <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
     <View style={s.backdrop}>
       <Pressable accessibilityLabel="Seçimi kapat" onPress={onClose} style={StyleSheet.absoluteFill} />
