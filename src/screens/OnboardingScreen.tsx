@@ -21,7 +21,8 @@ import { parseGuestCode } from "../guest/links";
 import { useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ContinueButton } from "../components/ContinueButton";
-import { formatPhone, phoneDigits, PHONE_PREFIX } from "../content/phone";
+import { formatLocalPhone, formatPhone, PHONE_COUNTRY_CODE, phoneDigits } from "../content/phone";
+import { GlassFill, INPUT_FROST } from "../components/GlassFill";
 import { Box, Label, Scroll, Touch, useScrollAnchor } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn, type Screen as AppScreen } from "../types";
@@ -284,7 +285,8 @@ function Step1({
     ad: store.onboarding.ad || "",
     soyad: store.onboarding.soyad || "",
     email: store.onboarding.email || "",
-    telefon: store.onboarding.telefon || "",
+    // The number box holds only the digits after +90 (a draft saved in the old "+90 …" format converts).
+    telefon: formatLocalPhone(store.onboarding.telefon || ""),
     dogum: formatBirthDate(store.onboarding.dogum || ""),
     sehir: store.onboarding.sehir || "",
     sifre: store.onboarding.sifre || ""
@@ -410,10 +412,20 @@ function Step1({
             ...p,
             email: e
           }))} mode="email" />}
-            {locked("telefon") ? <LockedField label="Telefon" value={submitted.telefon} /> : <GlassInput label="Telefon" placeholder="+90 5XX XXX XX XX" value={form.telefon} onChangeText={e => setForm(p => ({
-            ...p,
-            telefon: formatPhone(e)
-          }))} onFocus={() => { if (!form.telefon) setForm(p => ({ ...p, telefon: PHONE_PREFIX })); }} mode="tel" keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel" maxLength={17} />}
+            {/* Two boxes: the fixed country code, then the number. */}
+            {locked("telefon") ? <LockedField label="Telefon" value={submitted.telefon} /> : <Box>
+              <Label style={passwordStyles.label}>Telefon</Label>
+              <Box style={phoneStyles.row}>
+                <Box accessibilityLabel="Ülke kodu +90" style={phoneStyles.code}>
+                  <GlassFill radius={16} {...INPUT_FROST} />
+                  <Box style={phoneStyles.codeInner}><Label style={phoneStyles.codeText}>{PHONE_COUNTRY_CODE}</Label></Box>
+                </Box>
+                <GlassInput accessibilityLabel="Telefon numarası" placeholder="5XX XXX XX XX" value={form.telefon} onChangeText={e => setForm(p => ({
+                ...p,
+                telefon: formatLocalPhone(e)
+              }))} mode="tel" keyboardType="phone-pad" textContentType="telephoneNumber" autoComplete="tel-national" maxLength={13} />
+              </Box>
+            </Box>}
             {locked("dogum") ? <LockedField label="Doğum Tarihi" value={submitted.dogum} /> : <GlassInput label="Doğum Tarihi" mode="date" defaultValue="2000-01-01" value={toPickerDate(form.dogum)} onChangeText={e => setForm(p => ({
             ...p,
             dogum: formatBirthDate(e)
@@ -762,4 +774,11 @@ const passwordStyles = StyleSheet.create({
   input: { paddingRight: 56 },
   toggle: { position: "absolute", right: 4, top: 0, bottom: 0, width: 48, alignItems: "center", justifyContent: "center" },
   icon: { color: "#c7ceff" },
+});
+// Phone: a fixed "+90" box beside the number field, matching the other register fields.
+const phoneStyles = StyleSheet.create({
+  row: { flexDirection: "row", gap: 8 },
+  code: { width: 72, borderRadius: 16 },
+  codeInner: { flex: 1, minHeight: 52, alignItems: "center", justifyContent: "center", borderRadius: 16, borderWidth: 1, borderColor: palette.glassBorder },
+  codeText: { color: palette.text, fontSize: 16, fontFamily: "Outfit-Medium" },
 });

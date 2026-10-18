@@ -309,12 +309,15 @@ async function tap(tree, label) {
   const fields = registration.root.findAllByType("TextInput")
   assert.deepEqual([fields[0].props.autoCapitalize, fields[1].props.autoCapitalize], ["words", "words"], "Name fields start each word with a capital letter")
   {
-    // The phone field starts with "+90 5"; a number typed without the leading 5 still gets it.
-    const phoneField = () => registration.root.findAllByType("TextInput").find(n => n.props.accessibilityLabel === "Telefon")
+    // "+90" sits in its own box; the number is kept exactly as typed (no leading 5 is added).
+    assert(text(registration.toJSON()).includes("+90"), "The country code is shown in its own box")
+    const phoneField = () => registration.root.findAllByType("TextInput").find(n => n.props.accessibilityLabel === "Telefon numarası")
     await act(async () => phoneField().props.onFocus?.())
-    assert.equal(phoneField().props.value, "+90 5", "An empty phone field gets +90 5 on focus")
+    assert.equal(phoneField().props.value, "", "Focusing an empty number field adds nothing")
     await act(async () => phoneField().props.onChangeText("321234567"))
-    assert.equal(phoneField().props.value, "+90 532 123 45 67", "A number typed without its leading 5 gets it")
+    assert.equal(phoneField().props.value, "321 234 56 7", "Nothing is added to a typed number")
+    await act(async () => phoneField().props.onChangeText("+90 532 123 45 67"))
+    assert.equal(phoneField().props.value, "532 123 45 67", "A pasted number loses its country code")
     await act(async () => phoneField().props.onChangeText(""))
   }
   for (const [index, value] of ["Deniz", "Test", "deniz@example.com", "+90 532 123 45 67", "Password1!"].entries()) {

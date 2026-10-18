@@ -52,9 +52,10 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     let destination, options
     const login = await mount("Login", { navigate: (route, opts) => { destination = route; options = opts } })
     const [phone, password] = login.root.findAllByType("TextInput")
-    assert.equal(phone.props.accessibilityLabel, "Telefon", "Members sign in with their phone number")
+    assert.equal(phone.props.accessibilityLabel, "Telefon numarası", "Members sign in with their phone number")
+    assert(text(login.toJSON()).includes("+90"), "The country code is shown in its own box")
     await act(async () => phone.props.onChangeText("05321234567"))
-    assert.equal(login.root.findAllByType("TextInput")[0].props.value, "+90 532 123 45 67", "The number is formatted as typed")
+    assert.equal(login.root.findAllByType("TextInput")[0].props.value, "532 123 45 67", "The number is formatted as typed, without the country code")
     await act(async () => password.props.onChangeText("Password1!"))
     await tap(login, "Giriş Yap")
     assert.deepEqual(bodies.filter(row => row.path === "/auth/login").at(-1).body, { phoneNumber: "+905321234567", password: "Password1!", language: "tr" }, "The phone number is sent in one format")

@@ -8,7 +8,7 @@ import { GlassFill, INPUT_FROST } from "../components/GlassFill"
 import { ErrorNotice } from "../components/ErrorNotice"
 import { EyeIcon, EyeOffIcon } from "../components/Icons"
 import { Field, Label, Touch, Box, Scroll } from "../native/UI"
-import { formatPhone, phoneDigits, PHONE_PREFIX } from "../content/phone"
+import { formatLocalPhone, PHONE_COUNTRY_CODE, phoneDigits } from "../content/phone"
 import { getApiErrorMessage, login } from "../api/client"
 import { useSignedOutEntry } from "../native/session"
 import { updateStoreUser, useStore } from "../native/Store"
@@ -82,21 +82,27 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
           />
         )}
         <Label style={styles.fieldLabel}>Telefon</Label>
-        <Box style={styles.inputFrame}>
-        <GlassFill radius={16} {...INPUT_FROST} />
-        <Field
-          mode="tel"
-          value={phone}
-          onChangeText={value => setPhone(formatPhone(value))}
-          onFocus={() => { if (!phone) setPhone(PHONE_PREFIX) }}
-          placeholder="+90 5XX XXX XX XX"
-          accessibilityLabel="Telefon"
-          keyboardType="phone-pad"
-          textContentType="telephoneNumber"
-          autoComplete="tel"
-          maxLength={17}
-          style={styles.input}
-        />
+        {/* Two boxes: the fixed country code, then the number. */}
+        <Box style={styles.phoneRow}>
+          <Box accessibilityLabel="Ülke kodu +90" style={[styles.inputFrame, styles.countryCode]}>
+            <GlassFill radius={16} {...INPUT_FROST} />
+            <Box style={styles.countryCodeInner}><Label style={styles.countryCodeText}>{PHONE_COUNTRY_CODE}</Label></Box>
+          </Box>
+          <Box style={[styles.inputFrame, { flex: 1 }]}>
+            <GlassFill radius={16} {...INPUT_FROST} />
+            <Field
+              mode="tel"
+              value={phone}
+              onChangeText={value => setPhone(formatLocalPhone(value))}
+              placeholder="5XX XXX XX XX"
+              accessibilityLabel="Telefon numarası"
+              keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              autoComplete="tel-national"
+              maxLength={13}
+              style={styles.input}
+            />
+          </Box>
         </Box>
         <Label style={styles.fieldLabel}>Şifre</Label>
         <Box style={styles.passwordWrap}>
@@ -152,4 +158,8 @@ const styles = StyleSheet.create({
   passwordIcon: { color: "#c7ceff" },
   input: { minHeight: 56, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: palette.glassBorder, backgroundColor: "transparent", color: "#f4f5ff", fontSize: 15 },
   inputFrame: { borderRadius: 16 },
+  phoneRow: { flexDirection: "row", gap: 8 },
+  countryCode: { width: 72 },
+  countryCodeInner: { flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", borderRadius: 16, borderWidth: 1, borderColor: palette.glassBorder },
+  countryCodeText: { color: "#f4f5ff", fontSize: 15, fontFamily: "Outfit-Medium" },
 })
