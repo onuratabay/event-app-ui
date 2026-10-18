@@ -516,7 +516,9 @@ export function Scroll({
         onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; onScroll?.(event); notifyWalkthroughScroll() }}
         scrollEventThrottle={props.scrollEventThrottle ?? 16}
         horizontal={horizontal}
-        style={[frame, horizontal ? { flexGrow: 0 } : { flex: 1 }]}
+        // A Scroll with a maxHeight is a bounded list inside a content-sized panel (a sheet): it sizes to its
+        // content up to that height. `flex: 1` there collapsed it to 0 px, so its rows never showed.
+        style={[frame, horizontal ? { flexGrow: 0 } : frame.maxHeight !== undefined ? { flexGrow: 0, flexShrink: 1 } : { flex: 1 }]}
         // Paddings and gaps given in `style` go to the content; an explicit contentContainerStyle adds to them.
         contentContainerStyle={[{
           padding,

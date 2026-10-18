@@ -209,11 +209,12 @@ export default function EventDetailScreen({
                 <Box style={[[ui.flex1]]}>
                   <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>Davet açık</Label>
                   <Label style={[[ui.textXs, ui.textWhite55, ui.mt05]]}>
-                    {waitingCount > 0 ? `Şu anda ${waitingCount} kişi buraya katılmayı bekliyor` : "Şu anda takvim havuzunda bu etkinliğe uyan kimse yok"}
+                    {waitingCount > 0 ? `Takviminde bu tarih, saat ve yer için uygun ${waitingCount} kişi var` : "Şu anda takviminde bu tarih, saat ve yer için uygun kimse yok"}
                   </Label>
                 </Box>
-                <Touch accessibilityLabel="Kişi ekle" onPress={() => setInviteOpen(true)} style={[[ui.px4, ui.roundedXl, ui.textXs, ui.fontMedium, ui.border, ui.borderC8a44a30, ui.bgC8a44a10, ui.textC8a44a, ui.textCenter], { minHeight: 40, justifyContent: "center" }]}>
-                  Havuzdan seç
+                {/* Opens the people whose calendar (Etkinlik Takvimim) is open for this date, time, place and activity. */}
+                <Touch accessibilityLabel="Davet et" onPress={() => setInviteOpen(true)} style={[[ui.px4, ui.roundedXl, ui.textXs, ui.fontMedium, ui.border, ui.borderC8a44a30, ui.bgC8a44a10, ui.textC8a44a, ui.textCenter], { minHeight: 40, justifyContent: "center" }]}>
+                  Davet et
                 </Touch>
               </Box>}
 

@@ -7,8 +7,8 @@ import { Alert } from "react-native";
 import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions, getMyProposedInterests, proposeInterest } from "../api/client";
 import { isUnlimitedCapacity, mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useRef, useState } from "react";
-import { Avatar, AtmoBackground, GlassCard, GlassFill, GlassInput, GlassTextarea } from "../components/GlassUI";
-import { CameraIcon, CheckIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, PlusIcon, UserPlusIcon } from "../components/Icons";
+import { Avatar, AtmoBackground, Checkbox, GlassCard, GlassFill, GlassInput, GlassTextarea } from "../components/GlassUI";
+import { CameraIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, PlusIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
 import { Box, Field, Label, Picture, Scroll, Touch, Reveal } from "../native/UI";
@@ -233,7 +233,7 @@ export default function CreateEventScreen({
       // The creator sees the new event at the top of Discover right away.
       setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)], feedIds: [event.id, ...p.feedIds.filter(id => id !== event.id)] }));
       // The event already exists here; a failed invite must not look like a failed creation.
-      if (poolIds.length) await inviteEventCandidates(event.id, poolIds).catch(error => Alert.alert('Etkinlik oluşturuldu', `Davetler gönderilemedi: ${getApiErrorMessage(error)} Etkinlik detayındaki "+ Kişi ekle" ile tekrar deneyebilirsin.`));
+      if (poolIds.length) await inviteEventCandidates(event.id, poolIds).catch(error => Alert.alert('Etkinlik oluşturuldu', `Davetler gönderilemedi: ${getApiErrorMessage(error)} Etkinlik detayındaki "Davet et" ile tekrar deneyebilirsin.`));
       // The creation flow leaves history entirely; back from the new event's detail goes home.
       navigate('event-detail', { eventId: event.id, aboveHome: true });
     } catch (error) { Alert.alert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
@@ -660,10 +660,11 @@ export default function CreateEventScreen({
                   {friends === null ? <Label style={[[ui.textSm, ui.textWhite40]]}>Arkadaşların yükleniyor…</Label> : !friends.length ? <Label style={[[ui.textSm, ui.textWhite40]]}>Henüz aktif arkadaşın yok.</Label> : friends.map(friend => {
                 const name = `${friend.firstName} ${friend.lastName}`.trim();
                 const chosen = invitedIds.includes(friend.id);
-                return <Touch key={friend.id} accessibilityLabel={`${name} davet et`} accessibilityState={{ selected: chosen }} onPress={() => toggleInvite(friend.id)} style={[[ui.wFull, ui.p3, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap3, ui.border, chosen ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={chosen ? "rgba(105,120,255,.16)" : undefined} />
+                return <Touch key={friend.id} accessibilityRole="checkbox" accessibilityLabel={`${name} davet et`} accessibilityState={{ checked: chosen }} onPress={() => toggleInvite(friend.id)} style={[[ui.wFull, ui.p3, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap3, ui.border, chosen ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={chosen ? "rgba(105,120,255,.16)" : undefined} />
+                        {/* The checkbox on the left makes the selection obvious. */}
+                        <Checkbox checked={chosen} />
                         <Avatar uri={friend.profilePhoto || ""} name={name} size="sm" />
                         <Label style={[[ui.textSm, ui.textWhite85], { flex: 1, textAlign: "left" }]}>{name}</Label>
-                        {chosen && <CheckIcon size={16} strokeWidth={2} style={{ color: palette.accent }} />}
                       </Touch>;
               })}
                 </Box>}

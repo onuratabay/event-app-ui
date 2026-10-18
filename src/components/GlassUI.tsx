@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from "react-native"
 import { GlassFill, INPUT_FROST } from "./GlassFill"
 import { useScreenActive } from "../native/useScreenActive"
-import { LockIcon } from "./Icons"
+import { CheckIcon, LockIcon } from "./Icons"
 import { formatScore } from "../events/score"
 import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, LinearGradient as SvgLinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg"
 import {
@@ -522,4 +522,24 @@ export function AtmoBackground({
   )
 }
 export { GlassFill }
+/** A checkbox mark for selectable rows (invite lists): empty box, or filled with a tick when chosen. */
+export function Checkbox({ checked }: { checked: boolean }) {
+  return (
+    <View
+      importantForAccessibility="no-hide-descendants"
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: 7,
+        borderWidth: 1.5,
+        alignItems: "center",
+        justifyContent: "center",
+        borderColor: checked ? palette.accent : "rgba(205,214,255,.35)",
+        backgroundColor: checked ? palette.blue : "transparent",
+      }}
+    >
+      {checked && <CheckIcon size={14} strokeWidth={2.6} style={{ color: "#ffffff" }} />}
+    </View>
+  )
+}
 export default GlassCard

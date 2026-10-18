@@ -2,8 +2,8 @@ import ActivityIndicator from "../components/LoadingSpinner";
 import { useEffect, useState } from "react"
 import { StyleSheet } from "react-native"
 import { getApiErrorMessage, previewEventCandidates, type CandidateDraft, type EventCandidate } from "../api/client"
-import { Avatar, GlassCard } from "../components/GlassUI"
-import { CalendarIcon, CheckIcon } from "../components/Icons"
+import { Avatar, Checkbox, GlassCard } from "../components/GlassUI"
+import { CalendarIcon } from "../components/Icons"
 import { Box, Label, Touch } from "../native/UI"
 import { palette } from "../theme/palette"
 
@@ -37,16 +37,16 @@ export default function PoolCandidatesPicker({ draft, selected, onChange }: { dr
     <Label style={s.muted}>Etkinlik Takvimim'de bu tarih, saat, bölge ve aktiviteye açık olan kişiler. Davet etkinlik oluşturulunca gönderilir; kişiyi otomatik eklemez ve yer ayırmaz.</Label>
     {result.state === "loading" && <Box style={s.row}><ActivityIndicator color={palette.accent} /><Label style={s.muted}>Uygun kişiler aranıyor…</Label></Box>}
     {result.state === "error" && <Box style={{ gap: 6 }}><Label style={s.error}>{result.error}</Label><Touch onPress={() => setAttempt(value => value + 1)} style={s.link}><Label style={s.linkText}>Tekrar dene</Label></Touch></Box>}
-    {result.state === "ready" && !result.items.length && <Label style={s.muted}>Şu an bu taslağa uyan kimse yok. Etkinliği oluşturduktan sonra detay ekranındaki "+ Kişi ekle" ile yeniden bakabilirsin.</Label>}
+    {result.state === "ready" && !result.items.length && <Label style={s.muted}>Şu an bu taslağa uyan kimse yok. Etkinliği oluşturduktan sonra detay ekranındaki "Davet et" ile yeniden bakabilirsin.</Label>}
     {result.items.map(candidate => {
       const name = `${candidate.user.firstName} ${candidate.user.lastName}`.trim(), chosen = selected.includes(candidate.user.id)
-      return <Touch key={candidate.user.id} accessibilityLabel={`${name} davet et`} accessibilityState={{ selected: chosen }} onPress={() => toggle(candidate.user.id)} style={[s.candidate, chosen && s.chosen]}>
+      return <Touch key={candidate.user.id} accessibilityRole="checkbox" accessibilityLabel={`${name} davet et`} accessibilityState={{ checked: chosen }} onPress={() => toggle(candidate.user.id)} style={[s.candidate, chosen && s.chosen]}>
+        <Checkbox checked={chosen} />
         <Avatar uri={candidate.user.profilePhoto || ""} name={name} size="sm" />
         <Box style={{ flex: 1, minWidth: 0 }}>
           <Label style={s.name} numberOfLines={1}>{name}</Label>
           <Label style={s.match}>{[candidate.match.level, `★ ${candidate.user.rank.toFixed(1)}`].filter(Boolean).join(" · ")}</Label>
         </Box>
-        {chosen && <CheckIcon size={16} style={{ color: palette.accent }} />}
       </Touch>
     })}
   </GlassCard>

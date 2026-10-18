@@ -2,7 +2,7 @@ import ActivityIndicator from "../components/LoadingSpinner";
 import { useEffect, useState } from "react"
 import { StyleSheet } from "react-native"
 import { getApiErrorMessage, getEventCandidates, inviteEventCandidates, type EventCandidate } from "../api/client"
-import { Avatar, GlassFill } from "../components/GlassUI"
+import { Avatar, Checkbox, GlassFill } from "../components/GlassUI"
 import { CheckIcon, CloseIcon, UserPlusIcon } from "../components/Icons"
 import { Box, Label, Scroll, Sheet, Touch } from "../native/UI"
 import { palette } from "../theme/palette"
@@ -38,10 +38,10 @@ export default function InviteCandidatesSheet({ eventId, onClose }: { eventId: s
   return <Sheet onClose={() => !sending && onClose()}>
     <Touch haptic={false} onPress={() => {}} style={s.panel}><GlassFill kind="sheet" topRadius={24} />
       <Box style={s.head}>
-        <Label style={s.title} accessibilityRole="header">Takvim havuzundan davet et</Label>
+        <Label style={s.title} accessibilityRole="header">Davet et</Label>
         <Touch accessibilityLabel="Kapat" onPress={onClose} style={s.close}><CloseIcon size={18} style={{ color: palette.muted }} /></Touch>
       </Box>
-      <Label style={s.muted}>Etkinlik Takvimim'de bu tarih, saat, bölge ve aktiviteye açık olduğunu belirten kişiler.</Label>
+      <Label style={s.muted}>Etkinlik Takvimi'nde bu etkinliğin tarihi, saati ve yeri için uygun olduğunu işaretleyen kişiler (aynı aktivite ve uygun seviye).</Label>
       <Box style={{ gap: 10, flexShrink: 1 }}>
         {candidates.state === "loading" && <Box style={s.state}><ActivityIndicator color={palette.accent} /><Label style={s.muted}>Uygun kişiler aranıyor…</Label></Box>}
         {candidates.state === "error" && <Box style={s.state}><Label style={s.error}>{candidates.error}</Label><Touch onPress={load} style={s.link}><Label style={s.linkText}>Tekrar dene</Label></Touch></Box>}
@@ -52,14 +52,14 @@ export default function InviteCandidatesSheet({ eventId, onClose }: { eventId: s
           <Scroll style={{ maxHeight: 360 }}>
             {candidates.items.map(candidate => {
               const name = `${candidate.user.firstName} ${candidate.user.lastName}`.trim(), chosen = selected.includes(candidate.user.id)
-              return <Touch key={candidate.user.id} accessibilityLabel={`${name} davet et`} accessibilityState={{ selected: chosen }} onPress={() => toggle(candidate.user.id)} style={[s.candidate, chosen && s.candidateChosen]}>
+              return <Touch key={candidate.user.id} accessibilityRole="checkbox" accessibilityLabel={`${name} davet et`} accessibilityState={{ checked: chosen }} onPress={() => toggle(candidate.user.id)} style={[s.candidate, chosen && s.candidateChosen]}>
+                <Checkbox checked={chosen} />
                 <Avatar uri={candidate.user.profilePhoto || ""} name={name} size="md" />
                 <Box style={{ flex: 1, minWidth: 0, gap: 2 }}>
                   <Label style={s.optionTitle} numberOfLines={1}>{name}</Label>
                   <Label style={s.matchLine}>{[candidate.match.activity, candidate.match.level, `★ ${candidate.user.rank.toFixed(1)}`].filter(Boolean).join(" · ")}</Label>
                   {candidate.match.summary.map(line => <Label key={line} style={s.muted}>{`✓ ${line}`}</Label>)}
                 </Box>
-                {chosen && <CheckIcon size={18} style={{ color: palette.accent }} />}
               </Touch>
             })}
           </Scroll>

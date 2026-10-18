@@ -213,25 +213,25 @@ module.exports = async function ({ mount, act, text, storage }) {
   assert(text(screen.toJSON()).includes("Kaydı düzenle") && text(screen.toJSON()).includes("14 Eki – 17 Eki 2026 · 4 gün"), "Editing reloads the record into the form")
   await act(async () => screen.unmount())
 
-  // Organizer: "+ Kişi ekle" → "Uygun kişilerden davet et" on the own, waiting event only.
+  // Organizer: "Davet et" → "Uygun kişilerden davet et" on the own, waiting event only.
   storage.set("event-app:access-token", "availability-test")
   server.events.push({ ...server.events[0], id: "own-event", owner: { id: server.user.id, firstName: "Sunucu", lastName: "Kullanıcısı" }, participants: [], viewerParticipationStatus: "confirmed" })
   const detail = await mount("EventDetail", { eventId: "own-event" })
   await wait(50)
   const detailPress = async label => { const all = detail.root.findAllByType("Pressable"); const node = all.find(item => item.props.accessibilityLabel === label) || all.filter(item => text(item).includes(label)).at(-1); assert(node, `Missing control: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })); await wait() }
-  assert(text(detail.toJSON()).includes("Şu anda 1 kişi buraya katılmayı bekliyor"), "The organizer sees how many pool members wait to join")
+  assert(text(detail.toJSON()).includes("Takviminde bu tarih, saat ve yer için uygun 1 kişi var"), "The organizer sees how many people are free for this date, time and place")
   assert(!server.requests.some(request => request.path === "/events/own-event/candidates"), "The count does not load candidate cards")
   {
     // The participants card invites only from the availability pool; the guest link stays in the top bar.
     let card = detail.root.findAll(node => node.type === "Text" && text(node).trim() === "Katılımcılar")[0]
-    while (card && !text(card).includes("Havuzdan seç")) card = card.parent
+    while (card && !text(card).includes("Davet et")) card = card.parent
     assert(card && !text(card).includes("Açıklama"), "The pool invite sits in the participants card")
-    assert(text(card).includes("katılmayı bekliyor") && !text(card).includes("Davet linki"), "No guest link inside the participants card")
+    assert(text(card).includes("için uygun") && !text(card).includes("Davet linki"), "No guest link inside the participants card")
     assert(detail.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "Paylaş"), "The guest link is shared from the top bar")
   }
-  await detailPress("Kişi ekle")
+  await detailPress("Davet et")
   await wait(20)
-  assert(text(detail.toJSON()).includes("Takvim havuzundan davet et"), "The invite sheet opens straight on the availability pool")
+  assert(text(detail.toJSON()).includes("Etkinlik Takvimi'nde bu etkinliğin tarihi, saati ve yeri için uygun"), "The invite sheet opens straight on the availability pool")
   content = text(detail.toJSON())
   assert(content.includes("Ece Aday") && content.includes("Etkinlik saatinde müsait"), "Candidates show visible profile data and a fit summary")
   assert(content.includes("Davet yer ayırmaz"), "The invite explains it does not reserve a place")
@@ -243,7 +243,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   await act(async () => detail.unmount())
   const afterInvite = await mount("EventDetail", { eventId: "own-event" })
   await wait(50)
-  assert(text(afterInvite.toJSON()).includes("takvim havuzunda bu etkinliğe uyan kimse yok"), "The invite stays open and says nobody is waiting")
+  assert(text(afterInvite.toJSON()).includes("takviminde bu tarih, saat ve yer için uygun kimse yok"), "The invite stays open and says nobody is waiting")
   await act(async () => afterInvite.unmount())
   // The invitation stays open until the event is full: up to the max, or up to the minimum when no max was set.
   const ownEvent = server.events.find(event => event.id === "own-event")
@@ -251,17 +251,17 @@ module.exports = async function ({ mount, act, text, storage }) {
     Object.assign(ownEvent, { confirmedParticipantCount: confirmed, minParticipants: 2, maxParticipants: max })
     const view = await mount("EventDetail", { eventId: "own-event" })
     await wait(50)
-    const shown = view.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "Kişi ekle")
+    const shown = view.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "Davet et")
     await act(async () => view.unmount())
     return shown
   }
   assert.equal(await hasInvite(1, 100000), true, "Min 2, no max: the organizer can still invite one person")
-  assert.equal(await hasInvite(2, 100000), false, "No max: \"Havuzdan seç\" disappears once the minimum is reached")
+  assert.equal(await hasInvite(2, 100000), false, "No max: \"Davet et\" disappears once the minimum is reached")
   assert.equal(await hasInvite(2, 4), true, "With a max, inviting continues past the minimum")
-  assert.equal(await hasInvite(4, 4), false, "Kişi ekle disappears when the max is reached")
+  assert.equal(await hasInvite(4, 4), false, "Davet et disappears when the max is reached")
   const guestView = await mount("EventDetail", { eventId: server.events[0].id })
   await wait(50)
-  assert(!guestView.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "Kişi ekle"), "Only the organizer sees Kişi ekle")
+  assert(!guestView.root.findAllByType("Pressable").some(node => node.props.accessibilityLabel === "Davet et"), "Only the organizer sees Davet et")
   assert(!text(guestView.toJSON()).includes("katılmayı bekl"), "Only the organizer sees the pool count")
   assert(!text(guestView.toJSON()).includes("Davet açık"), "Only the organizer invites from the pool")
   await act(async () => guestView.unmount())
