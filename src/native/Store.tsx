@@ -2,6 +2,7 @@ import { useOptionalGuest } from "../guest/GuestSession"
 import { defaultEventCover } from "./images"
 import { startSocket, stopSocket, onSocket, watchEvent } from '../services/socket'
 import { registerForPush } from '../services/push'
+import { appendLiveDirectMessage, appendLiveRoomMessage, cachedRoomList, hydrateChatCache, markChatsStale, rememberRoomList, roomMessageForCache, type ApiRoomMessage } from '../services/chat-cache'
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import React, {
   createContext,
@@ -11,7 +12,7 @@ import React, {
   useRef,
   useState,
 } from "react"
-import { getEvent, getEvents, getCurrentUser, getReferenceRequests, getRooms, getUserInterests, getPreferences, getMyEvents, hasSession, putPreference, archiveLegacyData } from "../api/client"
+import { getEvent, getEvents, getCurrentUser, getReferenceRequests, getRooms, getUserInterests, getPreferences, getMyEvents, hasSession, putPreference, archiveLegacyData, getProfileStats, getFriendRelationship } from "../api/client"
 import { ErrorNotice } from "../components/ErrorNotice"
 export const EMPTY_USER: AppUser = { id: '', name: '', avatar: '', city: '', bio: '', instagram: '', interests: [], score: 0, scores: { punctuality: 0, communication: 0, community: 0 }, stats: { attended: 0, connections: 0, organized: 0 } }
 import type { AppEvent, AppUser, ChatMessage } from "../types"
@@ -191,9 +192,11 @@ const Context = createContext<{
    * Rooms: one light request (/events/rooms) per session. Later calls reuse the cached list, which
    * socket events keep current; pull-to-refresh passes force.
    */
-  refreshRooms: (force?: boolean) => Promise<void>
+  /** `silent`: a background refresh shows no error notice when it fails. */
+  refreshRooms: (force?: boolean, silent?: boolean) => Promise<void>
   /** Resolves when the current account load finishes, or after timeoutMs, whichever comes first. */
   whenReady: (timeoutMs: number) => Promise<void>
+  refreshProfileStats: () => void
   /** Loads reference requests once; later calls reuse the stored list unless forced. */
   loadReferences: (force?: boolean) => Promise<void>
   loadMoreEvents: () => Promise<void>
@@ -204,6 +207,52 @@ const Context = createContext<{
 } | null>(null)
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState(initial)
+  const userIdRef = useRef("")
+  userIdRef.current = data.user.id
+  // Messages arriving while a room or chat is closed are kept on the phone at once, so opening it shows them
+  // without waiting. A dropped connection marks the saved chats as possibly incomplete (filled on next open).
+  useEffect(() => {
+    const userId = data.user.id
+    if (!userId) return
+    const stops = [
+      onSocket('room:message', (delta: { eventId: string; message?: ApiRoomMessage }) => { if (delta.message) appendLiveRoomMessage(userId, delta.eventId, roomMessageForCache(delta.message)) }),
+      onSocket('dm:message', (payload: { conversationId: string; message: import('../api/client').DirectMessage }) => appendLiveDirectMessage(userId, payload.conversationId, payload.message)),
+      onSocket('dm:message_updated', (payload: { conversationId: string; message: import('../api/client').DirectMessage }) => appendLiveDirectMessage(userId, payload.conversationId, payload.message)),
+      onSocket('connection:changed', (payload: { connected: boolean }) => { if (!payload.connected) markChatsStale() }),
+    ]
+    return () => stops.forEach(stop => stop())
+  }, [data.user.id])
+  // Profile counters (Katıldığı / Bağlantı / Düzenlediği) live on the account and load right after sign-in, so the
+  // profile already has them when it opens instead of showing 0 → n. They refresh when the server
+  // reports a change (event started/ended, friendship changed), after a reconnect and whenever the profile is shown.
+  const statsLoad = useRef<() => void>(() => {})
+  useEffect(() => {
+    const userId = data.user.id
+    if (!userId) return
+    let active = true
+    const apply = (patch: Partial<AppUser["stats"]>) => setData(current => {
+      if (current.user.id !== userId) return current
+      const stats = { ...current.user.stats, ...patch }
+      return { ...current, user: { ...current.user, stats } }
+    })
+    const loadEvents = () => { void getProfileStats().then(next => { if (active) apply({ attended: next.attended, organized: next.organized }) }).catch(() => {}) }
+    const loadFriends = () => { void getFriendRelationship(userId).then(next => { if (active) apply({ connections: next.friendCount }) }).catch(() => {}) }
+    const load = () => { loadEvents(); loadFriends() }
+    load()
+    statsLoad.current = load
+    const stops = [onSocket('profile:stats_changed', loadEvents), onSocket('friend:changed', loadFriends), onSocket('sync:required', load)]
+    return () => { active = false; statsLoad.current = () => {}; stops.forEach(stop => stop()) }
+  }, [data.user.id])
+  // Rooms ("Sohbetler") show at once from the phone's saved copy once the account is known (also after an
+  // app restart); /events/rooms then refreshes them.
+  useEffect(() => {
+    const userId = data.user.id
+    if (!userId) return
+    void hydrateChatCache(userId).then(() => {
+      const saved = cachedRoomList(userId)
+      if (saved.length) setData(current => current.user.id === userId && !current.rooms.length ? { ...current, rooms: saved, events: mergeRoomSummaries(current.events, saved) } : current)
+    })
+  }, [data.user.id])
   const [storageError, setStorageError] = useState<string | null>(null)
   const [moreEvents, setMoreEvents] = useState(false)
   const [moreFeedEvents, setMoreFeedEvents] = useState(false)
@@ -286,12 +335,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const feedIds = new Set(events.items.map(event => event.id))
       const all = mine.items.filter(event => !feedIds.has(event.id))
       // Merge instead of replace: events a screen loaded meanwhile (an opened room, a search hit) must survive.
-      setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), interests: interests.map(i => i.name) }, events: mergeRoomSummaries(mergeEvents(mergeFeed(current.events, events.items), all.map(mapApiEvent)), current.rooms), mutedRooms: preferences.mutedRooms?.ids || [], feedIds: events.items.map(event => event.id) }))
+      setData(current => ({ ...current, user: { ...updateStoreUser(EMPTY_USER, remote), stats: current.user.id === remote.id ? current.user.stats : EMPTY_USER.stats, interests: interests.map(i => i.name) }, events: mergeRoomSummaries(mergeEvents(mergeFeed(current.events, events.items), all.map(mapApiEvent)), current.rooms), mutedRooms: preferences.mutedRooms?.ids || [], feedIds: events.items.map(event => event.id) }))
       page.current = 1; setMoreEvents(mine.hasMore)
       feedPage.current = 1; setMoreFeedEvents(events.items.length < events.total)
       setStorageError(null)
-      // Rooms are fetched in the background too, so the Rooms page opens with its list ready.
+      // Rooms and references are fetched in the background too, so the Rooms and Profile pages open with them ready.
       void refreshRooms(false, true).catch(() => {})
+      void loadReferences().catch(() => {})
     } catch (error) {
       if (generation === sessionGeneration.current) setStorageError('Hesap verileri sunucudan yüklenemedi. Bağlantını kontrol edip tekrar dene.')
       throw error
@@ -334,6 +384,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const rooms = await getRooms()
       if (generation !== sessionGeneration.current) return
       setData(current => ({ ...current, rooms, events: mergeRoomSummaries(current.events, rooms) }))
+      if (userIdRef.current) rememberRoomList(userIdRef.current, rooms)
     } catch (error) {
       if (generation === sessionGeneration.current) { roomsLoaded.current = false; if (!silent) setStorageError('Odalar yüklenemedi. Bağlantını kontrol edip tekrar dene.') }
       throw error
@@ -452,7 +503,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     })
     return () => { cleanups.forEach(cleanup => cleanup()); accountStatus(); roomMessage(); referenceCreated(); referenceUpdated(); referenceDeleted(); promoted(); joinedHere(); unknownRoom(); resync(); renamed(); scoresChanged() }
   }, [guestMode])
-  return <Context.Provider value={{ data: guestMode ? initial : data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, refreshFeed, refreshMyEvents, refreshRooms, whenReady, loadReferences, resetSession: () => { referencesLoaded.current = false; roomsLoaded.current = false; feedLoad.current = null; stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
+  return <Context.Provider value={{ data: guestMode ? initial : data, loadMoreEvents, moreEvents, loadMoreFeedEvents, moreFeedEvents, setData: setAccountData, refreshEvents, refreshFeed, refreshMyEvents, refreshRooms, whenReady, refreshProfileStats: () => statsLoad.current(), loadReferences, resetSession: () => { referencesLoaded.current = false; roomsLoaded.current = false; feedLoad.current = null; stopSocket(); sessionGeneration.current++; setData(initial); setStorageError(null); setMoreEvents(false); setMoreFeedEvents(false); page.current = 1; feedPage.current = 1 } }}>
     {!guestMode && storageError && <ErrorNotice title="Veriler yüklenemedi" message={storageError} onDismiss={() => setStorageError(null)} onRetry={() => { setStorageError(null); void refreshEvents().catch(() => {}) }} />}
     {children}
   </Context.Provider>

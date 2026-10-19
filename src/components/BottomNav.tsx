@@ -19,6 +19,14 @@ const nav: [Screen, string][] = [
 // Floating bar geometry. Bar radius = item radius + bar padding, so the active pill's
 // corners run parallel to the bar's; every tab target is 52pt tall (above the 44/48 minimums).
 const BAR_OFFSET = 10
+/**
+ * Where the floating bar's bottom edge sits above the screen's bottom (with the phone's safe area added).
+ * Panels that open from the bottom use the same value so their bottom edge lines up with the bar's.
+ */
+export const barBottom = (safeBottom: number) => BAR_OFFSET + safeBottom
+/** The bar's side margins and widest size, shared with bottom panels for the same alignment. */
+export const BAR_SIDE = 16
+export const BAR_MAX_WIDTH = 420
 const BAR_PADDING = 6
 const ITEM_HEIGHT = 52
 const ITEM_RADIUS = 16
@@ -59,7 +67,7 @@ export default function BottomNav({
     Animated.timing(spin, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()
   }
   return (
-    <Box pointerEvents="box-none" style={[s.frame, { bottom: BAR_OFFSET + safeBottom }]}>
+    <Box pointerEvents="box-none" style={[s.frame, { bottom: barBottom(safeBottom) }]}>
       <Box glass style={s.bar}>
         {/* 3D glass: a lit top edge fading into a darker base, over the blurred screen behind. */}
         <LinearGradient pointerEvents="none" colors={["rgba(170,185,255,.14)", "rgba(146,125,255,.05)", "rgba(10,14,40,.12)"]} locations={[0, 0.5, 1]} style={s.sheen} />
@@ -117,15 +125,15 @@ const s = StyleSheet.create({
   frame: {
     position: "absolute",
     bottom: BAR_OFFSET,
-    left: 16,
-    right: 16,
+    left: BAR_SIDE,
+    right: BAR_SIDE,
     alignItems: "center",
     zIndex: 100,
     elevation: 24,
   },
   bar: {
     width: "100%",
-    maxWidth: 420,
+    maxWidth: BAR_MAX_WIDTH,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,

@@ -595,7 +595,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     await press(own, "Bağlantıları kapat")
     // "Katıldığı": the number of ended events joined; tapping lists them and opens one.
     assert(text(own.toJSON()).replace(/\s+/g, " ").includes("5 Katıldığı"), "Katıldığı = joined-and-ended + organized")
-    assert(text(own.toJSON()).replace(/\s+/g, " ").includes("2 Düzenlediği"), "Düzenlediği = own events that started")
+    assert(text(own.toJSON()).replace(/\s+/g, " ").includes("2 Düzenlediğim"), "Düzenlediğim = own events that started")
     await press(own, "Katıldığım etkinlikleri göster")
     await settle()
     assert(text(own.toJSON()).includes("Eski Sinema"), "Tapping Katıldığı lists those events")
@@ -706,13 +706,10 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     let room = await mount("EventRoom", { eventId: "room-p" })
     await act(() => new Promise(resolve => setTimeout(resolve, 50)))
     assert.deepEqual(messageUrls, ["?limit=20"], "A room opens with the latest 20 messages")
-    const scroller = room.root.findAll(n => typeof n.props.onScrollBeginDrag === "function")[0]
-    const atTop = { nativeEvent: { contentOffset: { y: 0 }, contentSize: { height: 2000 }, layoutMeasurement: { height: 700 } } }
-    await act(async () => scroller.props.onScroll(atTop))
-    assert.equal(messageUrls.length, 1, "The automatic scroll to the newest message does not page backwards")
-    await act(async () => { scroller.props.onScrollBeginDrag(); scroller.props.onScroll(atTop) })
+    // The list is flipped (opens at the newest message by itself); earlier messages load at the top.
+    await tap(room, "Önceki mesajları göster")
     await act(() => new Promise(resolve => setTimeout(resolve, 30)))
-    assert.deepEqual(messageUrls, ["?limit=20", "?cursor=c1&limit=20"], "Scrolling to the top fetches the previous 20")
+    assert.deepEqual(messageUrls, ["?limit=20", "?cursor=c1&limit=20"], "Earlier messages load the previous 20")
     assert(text(room.toJSON()).includes("mesaj 0") && text(room.toJSON()).includes("mesaj 39"), "Both pages are shown")
     {
       // 40 messages a minute apart all have different times, so each keeps its own time.
@@ -720,26 +717,53 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
       assert.equal(times.length, 40, "Messages sent at different times are not merged under one time")
     }
     await act(async () => room.unmount())
-    global.__scrollToEndCalls = 0
+    // Reopening loads the room with a single request. (The saved-messages catch-up needs the account id,
+    // which each fresh test mount loads only after the room opens; see the cache test below.)
+    messageUrls.length = 0
     room = await mount("EventRoom", { eventId: "room-p" })
-    await act(() => new Promise(resolve => setTimeout(resolve, 150)))
-    assert((global.__scrollToEndCalls || 0) >= 1, "Opening a room scrolls to the newest message by itself")
-    // The newest message stays visible while content keeps growing, until the user scrolls up.
-    {
-      const list = room.root.findAll(n => typeof n.props.onContentSizeChange === "function")[0]
-      global.__scrollToEndCalls = 0
-      await act(async () => { list.props.onContentSizeChange(); list.props.onContentSizeChange(); list.props.onLayout() })
-      await act(() => new Promise(resolve => setTimeout(resolve, 20)))
-      assert.equal(global.__scrollToEndCalls, 3, "Every growth of the conversation keeps the last message in view")
-      assert.equal(list.props.maintainVisibleContentPosition, undefined, "Position holding is off while showing the newest message")
-      await act(async () => { list.props.onScrollBeginDrag(); list.props.onScroll({ nativeEvent: { contentOffset: { y: 300 }, contentSize: { height: 2000 }, layoutMeasurement: { height: 700 } } }) })
-      global.__scrollToEndCalls = 0
-      await act(async () => list.props.onContentSizeChange())
-      await act(() => new Promise(resolve => setTimeout(resolve, 20)))
-      assert.equal(global.__scrollToEndCalls, 0, "After the user scrolls up, new content does not pull the list down")
-    }
+    await act(() => new Promise(resolve => setTimeout(resolve, 60)))
+    assert.equal(messageUrls.length, 1, "Reopening a room makes one messages request")
+    assert(text(room.toJSON()).includes("mesaj 39"), "The newest messages are shown")
     await act(async () => room.unmount())
     global.fetch = previousFetch
+  }
+
+  // Saved chats: kept per account on the phone, restored after an app restart, read marks clear badges.
+  {
+    const cachePath = require.resolve("../src/services/chat-cache.ts")
+    let cache = require(cachePath)
+    cache.rememberRoom("acct-1", "room-x", [{ id: "m1", createdAt: "2026-10-20T10:00:00.000Z", text: "Merhaba", time: "13:00", user: { id: "u2", name: "Ada" } }], "c9")
+    cache.rememberChatList("acct-1", [{ id: "conv-1", user: { id: "u2", firstName: "Ada", lastName: "Y", profilePhoto: null }, canSend: true, lastMessage: { id: "d1", conversationId: "conv-1", senderId: "u2", text: "Selam", createdAt: "2026-10-20T10:00:00.000Z" }, unreadCount: 2 }])
+    cache.rememberRoomList("acct-1", [{ id: "room-x", ownerId: "u2", interest: { id: "film", name: "Film" }, date: "20/10/2026", startTime: "20:00", locationName: "Sinema", roomName: null, status: "waiting_participants", minParticipants: 2, maxParticipants: 8, confirmedParticipantCount: 2, participants: [], lastMessageAt: "2026-10-20T10:00:00.000Z", unreadCount: 3 }])
+    await new Promise(resolve => setTimeout(resolve, 450))
+    assert(storage.has("chat-cache:v1:acct-1"), "Chats are saved on the phone per account")
+    // A restart: the module starts empty and reads the saved copy back.
+    delete require.cache[cachePath]
+    cache = require(cachePath)
+    assert.equal(cache.cachedRoom("acct-1", "room-x"), undefined, "Nothing in memory before loading")
+    await cache.hydrateChatCache("acct-1")
+    assert.equal(cache.cachedRoom("acct-1", "room-x").items[0].text, "Merhaba", "Room messages come back after a restart")
+    assert.equal(cache.cachedRoom("acct-1", "room-x").cursor, "c9")
+    assert.equal(cache.cachedConversation("acct-1", "u2").id, "conv-1", "The chat with a person comes back")
+    assert.equal(cache.cachedRoom("acct-2", "room-x"), undefined, "Another account never sees them")
+    assert.equal(cache.cachedRoomList("acct-1")[0].id, "room-x", "The room list (Sohbetler) comes back after a restart too")
+    cache.markRoomListRead("acct-1", "room-x")
+    assert.equal(cache.cachedRoomList("acct-1")[0].unreadCount, 0, "A room read on this phone keeps no saved badge")
+    cache.noteRead("acct-1", "conv-1", Date.parse("2026-10-20T10:05:00.000Z"))
+    assert.equal(cache.applyLocalReads("acct-1", cache.cachedChatList("acct-1"))[0].unreadCount, 0, "A chat read on this phone shows no badge")
+    // Live messages for a closed room are kept; they move the "complete up to" mark only while caught up.
+    const live = (id, at) => ({ id, createdAt: at, text: id, time: "13:00", user: { id: "u2", name: "Ada" } })
+    cache.appendLiveRoomMessage("acct-1", "room-x", live("m2", "2026-10-20T10:01:00.000Z"))
+    assert.equal(cache.cachedRoom("acct-1", "room-x").items.at(-1).id, "m2", "A message arriving while the room is closed is kept")
+    assert.equal(cache.cachedRoom("acct-1", "room-x").syncedAt, undefined, "After a restart live messages do not mark the copy complete")
+    cache.markRoomSynced("acct-1", "room-x", "2026-10-20T10:01:00.000Z")
+    cache.appendLiveRoomMessage("acct-1", "room-x", live("m3", "2026-10-20T10:02:00.000Z"))
+    assert.equal(cache.cachedRoom("acct-1", "room-x").syncedAt, "2026-10-20T10:02:00.000Z", "Caught up and connected: live messages keep it complete")
+    cache.markChatsStale()
+    cache.appendLiveRoomMessage("acct-1", "room-x", live("m4", "2026-10-20T10:05:00.000Z"))
+    assert.equal(cache.cachedRoom("acct-1", "room-x").syncedAt, "2026-10-20T10:02:00.000Z", "After a lost connection the gap is fetched on the next open")
+    await cache.clearChatCache()
+    assert.equal(cache.cachedChatList("acct-1").length, 0, "Signing out forgets the chats in memory")
   }
 
   // Chat: no global loader, and a sent message shows at once while delivery runs in the background.

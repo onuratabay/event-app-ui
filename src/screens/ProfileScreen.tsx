@@ -5,7 +5,6 @@ import { CalendarIcon, MessageIcon, StarIcon } from "../components/Icons";
 import TopNavBar, { NavAction } from "../components/TopNavBar";
 import { Alert, StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
-import { Circle, Path, Polyline } from "react-native-svg";
 import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, getOrganizedEvents, getProfileStats, getCurrentUser, createReferenceCode, getActiveReferenceCode, type FriendRelationship } from "../api/client";
 import { GeneratedCode } from "../components/GeneratedCode";
 import FriendActions from "../components/FriendActions";
@@ -14,14 +13,13 @@ import EventsSheet from "../components/EventsSheet";
 import EventArchive from "../components/EventArchive";
 import { onSocket } from "../services/socket";
 import { useScreenActive } from "../native/useScreenActive";
-import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
 import { InstagramIcon } from "../components/Icons";
 
 import { selectPhoto } from "../native/media";
 import { formatScore } from "../events/score";
 import { EMPTY_USER, mapApiEvent, updateStoreUser, useStore } from "../native/Store";
-import { Box, Field, Label, Picture, Scroll, Touch, Vector, openExternal } from "../native/UI";
+import { Box, Field, Label, Picture, Scroll, Touch, openExternal } from "../native/UI";
 import { ui } from "../theme/styles";
 import { AppEvent, AppUser, NavigateFn } from "../types";
 interface Props {
@@ -156,7 +154,8 @@ export default function ProfileScreen({
     data: store,
     resetSession,
     setData: setStore,
-    loadReferences
+    loadReferences,
+    refreshProfileStats
   } = useStore();
   const EVENTS = store.events;
   const isOwn = ownProfile && (!userId || userId === store.user.id);
@@ -193,22 +192,12 @@ export default function ProfileScreen({
     const stop = onSocket("friend:changed", (payload: { userId: string }) => { if (isOwn || payload.userId === relationTarget) load(); });
     return () => { active = false; stop(); };
   }, [relationTarget, isOwn]);
-  // "Katıldığı": ended events you joined. The count loads with the profile (one row); the list on tap.
-  const [attendedCount, setAttendedCount] = useState<number | null>(null);
-  const [organizedCount, setOrganizedCount] = useState<number | null>(null);
+  // Own counters come from the store (saved on the phone, kept live there), so they show at once; showing the
+  // page again just refreshes them quietly in the background.
+  const setOwnStats = (patch: Partial<AppUser["stats"]>) => setStore(p => ({ ...p, user: { ...p.user, stats: { ...p.user.stats, ...patch } } }));
   // One sheet lists either the attended or the organized events (the two tappable counters).
   const [eventList, setEventList] = useState<{ kind: "attended" | "organized"; events: AppEvent[] | null; error: string } | null>(null);
-  // "Düzenlediği" = own events that started or ended; "Katıldığı" = joined ones that started or ended + those organized ones.
-  // They reload when one of your events starts or ends (server push), after a reconnect and whenever the page is shown again.
-  useEffect(() => {
-    if (!isOwn || !store.user.id || !screenActive) return;
-    let active = true;
-    const load = () => { getProfileStats().then(stats => { if (active) { setAttendedCount(stats.attended); setOrganizedCount(stats.organized); } }).catch(() => {}); };
-    load();
-    const changed = onSocket("profile:stats_changed", load);
-    const sync = onSocket("sync:required", load);
-    return () => { active = false; changed(); sync(); };
-  }, [isOwn, store.user.id, screenActive]);
+  useEffect(() => { if (isOwn && store.user.id && screenActive) refreshProfileStats(); }, [isOwn, store.user.id, screenActive]);
   const openEventList = (kind: "attended" | "organized") => {
     setEventList({ kind, events: null, error: "" });
     (kind === "attended" ? getAttendedEvents() : getOrganizedEvents()).then(result => {
@@ -216,7 +205,7 @@ export default function ProfileScreen({
       // The detail page opens events from the shared list, so these join it (not the Discover feed).
       setStore(p => ({ ...p, events: [...new Map([...p.events, ...found].map(event => [event.id, event])).values()] }));
       setEventList(current => current?.kind === kind ? { ...current, events: found } : current);
-      if (kind === "attended") setAttendedCount(result.total); else setOrganizedCount(result.total);
+      setOwnStats(kind === "attended" ? { attended: result.total } : { organized: result.total });
     }).catch(error => setEventList(current => current?.kind === kind ? { ...current, events: [], error: getApiErrorMessage(error, "Etkinlikler yüklenemedi.") } : current));
   };
   // Connections list: always on your own profile; on someone else's only when you are friends.
@@ -307,7 +296,7 @@ export default function ProfileScreen({
         onClose={() => setEventList(null)} onOpen={eventId => navigate("event-detail", { eventId })} /> : null}
       {connectionsOpen && canSeeConnections && relationTarget ? <ConnectionsSheet userId={relationTarget} title={isOwn ? "Bağlantılarım" : `${user.name.split(" ")[0]} · Bağlantılar`} canRemove={isOwn}
         onClose={() => setConnectionsOpen(false)} onOpenProfile={id => navigate("profile", id === store.user.id ? {} : { userId: id })}
-        onRemoved={() => setRelation(current => current ? { ...current, friendCount: Math.max(0, current.friendCount - 1) } : current)} /> : null}
+        onRemoved={() => { setRelation(current => current ? { ...current, friendCount: Math.max(0, current.friendCount - 1) } : current); if (isOwn) setOwnStats({ connections: Math.max(0, store.user.stats.connections - 1) }); }} /> : null}
 
       <Scroll style={[[ui.relative, ui.hFull, ui.pb28], { paddingTop: 80 }]}>
         {/* Header */}
@@ -368,14 +357,14 @@ export default function ProfileScreen({
         {isOwn && <Box walkthroughId="profile-connections" style={[[ui.px5, ui.mb4]]}>
           <Box style={[[ui.grid, ui.gap3]]} columns={3}>
             {[{
-            value: attendedCount ?? user.stats.attended,
+            value: user.stats.attended,
             label: "Katıldığı"
           }, {
-            value: relation?.friendCount ?? user.stats.connections,
+            value: user.stats.connections,
             label: "Bağlantı"
           }, {
-            value: organizedCount ?? user.stats.organized,
-            label: "Düzenlediği"
+            value: user.stats.organized,
+            label: "Düzenlediğim"
           }].map((s, i) => {
               const card = <GlassCard key={i} style={[[ui.p4, ui.textCenter]]}>
                 <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>
@@ -557,25 +546,7 @@ export default function ProfileScreen({
             </Box>
           </GlassCard>
         </Box>
-        {isOwn && <Box style={[[ui.px5, ui.mb4, ui.spaceY3]]}>
-            <Label style={[[ui.textXs, ui.textWhite25, ui.uppercase, ui.trackingWider]]}>
-              Sizinle Olacak
-            </Label>
-            <ComingSoonCard accent="gold" icon={<Vector width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(105,120,255,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <Circle cx="12" cy="8" r="7" />
-                  <Polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-                </Vector>} title="Rozetler ve Başarılar" subtitle="Etkinlik geçmişine göre özel rozetler kazan, topluluğa ilhamını yansıt." />
-            <ComingSoonCard accent="violet" icon={<Vector width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(178,174,248,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <Path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <Circle cx="9" cy="7" r="4" />
-                  <Path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                  <Path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </Vector>} title="Bağlantı Ağı" subtitle="Birlikte etkinliğe gittiğin kişileri keşfet, ortak çevreni gör." />
-          </Box>}
       </Scroll>
-
-      {/* Coming soon for profile */}
-
     </Box>;
 }
 ;

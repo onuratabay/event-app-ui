@@ -25,6 +25,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  FlatList,
   ScrollView,
   StyleSheet,
   Text,
@@ -32,6 +33,7 @@ import {
   View,
   type GestureResponderEvent,
   type ImageStyle,
+  type FlatListProps,
   type ScrollViewProps,
   type StyleProp,
   type TextInputProps,
@@ -547,6 +549,22 @@ export function Scroll({
     </Typography.Provider>
   )
 }
+/**
+ * Chat message list: a flipped (inverted) FlatList that opens at the newest message and renders only the
+ * rows on screen. `data` is newest first. Where FlatList is unavailable (the host-mock test runner) the
+ * same rows render oldest first in a plain Scroll.
+ */
+export function ChatList<T>(props: FlatListProps<T>) {
+  if (FlatList) return <FlatList inverted {...props} />
+  const rows = [...(props.data as readonly T[] | null | undefined ?? [])]
+  const footer = props.ListFooterComponent
+  return <Scroll style={props.style as NativeStyleProp}>
+    {footer ? (React.isValidElement(footer) ? footer : React.createElement(footer as React.ComponentType)) : null}
+    {rows.map((item, index) => ({ item, index })).reverse().map(({ item, index }) => <React.Fragment key={props.keyExtractor ? props.keyExtractor(item, index) : String(index)}>
+      {props.renderItem?.({ item, index, separators: { highlight() {}, unhighlight() {}, updateProps() {} } })}
+    </React.Fragment>)}
+  </Scroll>
+}
 export function Picture({
   uri,
   style,
@@ -582,6 +600,8 @@ export function Picture({
       accessibilityLabel={accessibilityLabel}
       style={split(style).view as ImageStyle}
       contentFit="cover"
+      // Kept in memory too, so a page opened again (e.g. Discover from the bottom bar) shows covers at once.
+      cachePolicy="memory-disk"
       transition={150}
       onError={() => setFailedUri(sourceUri)}
     />

@@ -43,7 +43,10 @@ export default function TopNavBar({
   titleHint,
   hideBack = false,
   walkthroughId,
+  leading,
 }: {
+  /** Shown before the title, e.g. the photo of the person in a one-to-one chat. */
+  leading?: ReactNode
   walkthroughId?: string
   navigate: NavigateFn
   fallback: Screen
@@ -71,14 +74,20 @@ export default function TopNavBar({
           {backLabel ? <Label style={s.backLabel}>{backLabel}</Label> : null}
         </Touch>}
         {onTitlePress ? (
-          <Touch walkthroughId={walkthroughId} accessibilityLabel={title} accessibilityHint={titleHint} onPress={onTitlePress} style={[s.copy, hideBack && s.copyFlush]}>
-            <Label style={s.title} numberOfLines={1}>{title}</Label>
-            {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
+          <Touch walkthroughId={walkthroughId} accessibilityLabel={title} accessibilityHint={titleHint} onPress={onTitlePress} style={[s.copy, hideBack && s.copyFlush, leading ? s.copyRow : undefined]}>
+            {leading}
+            <Box style={leading ? s.copyText : undefined}>
+              <Label style={s.title} numberOfLines={1}>{title}</Label>
+              {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
+            </Box>
           </Touch>
         ) : (
-          <Box walkthroughId={walkthroughId} style={[s.copy, hideBack && s.copyFlush]}>
-            <Label style={s.title} numberOfLines={1}>{title}</Label>
-            {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
+          <Box walkthroughId={walkthroughId} style={[s.copy, hideBack && s.copyFlush, leading ? s.copyRow : undefined]}>
+            {leading}
+            <Box style={leading ? s.copyText : undefined}>
+              <Label style={s.title} numberOfLines={1}>{title}</Label>
+              {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
+            </Box>
           </Box>
         )}
         <Box style={s.right}>{right}</Box>
@@ -140,6 +149,8 @@ const s = StyleSheet.create({
   actionText: { paddingHorizontal: 8 },
   icon: { color: palette.text },
   copy: { flex: 1, minWidth: 0, paddingHorizontal: 12, justifyContent: "center" },
+  copyRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-start", gap: 10 },
+  copyText: { flex: 1, minWidth: 0, alignItems: "flex-start" },
   // Without a back button the title lines up with the page's left margin.
   copyFlush: { paddingLeft: 0 },
   title: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15, lineHeight: 20 },

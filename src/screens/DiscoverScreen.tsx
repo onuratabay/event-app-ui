@@ -166,7 +166,7 @@ function EventCard({
   // Still gathering people only while below the minimum; status turns "started" later, at the start time.
   const isForming = !isRoomReady(event) && !['cancelled', 'closed'].includes(event.status || '');
   const phase = eventPhase(event);
-  return <Box style={[[], {}]} enter>
+  return <Box style={[[], {}]}>
       <RippleButton onPress={onPress} accessibilityLabel={`${event.title}, ${PHASE_A11Y[phase]}`} rippleColor="rgba(255,255,255,0.06)" style={[[ui.wFull, ui.textLeft, ui.rounded2xl, ui.overflowHidden], {
       backgroundColor: palette.glassCard,
       borderWidth: 1,
@@ -337,6 +337,8 @@ export default function DiscoverScreen({
     try { await loadMoreFeedEvents(); }
     finally { setLoadingMore(false); }
   };
+  // Every tab press opens a fresh Discover page, so nothing fades in from transparent: header, filters and
+  // cards show on the first frame (a 400 ms fade on each made the switch look like a one-second blank).
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground />
 
@@ -369,7 +371,7 @@ export default function DiscoverScreen({
         {/* Symmetric action groups keep the wordmark at the screen center. */}
         <Box style={[[ui.fixed, ui.top0, ui.left0, ui.right0, ui.z40]]}>
         <FeedHeaderBackdrop />
-        <Box style={{ height: 68, paddingHorizontal: 12, flexDirection: "row", alignItems: "center" }} enter>
+        <Box style={{ height: 68, paddingHorizontal: 12, flexDirection: "row", alignItems: "center" }}>
           <Box style={{ width: 132, flexDirection: "row" }}>
             <HeaderIconButton plain label="Ara" onPress={() => navigate("search")}><SearchIcon size={20} strokeWidth={1.8} style={{ color: "#f4f5ff" }} /></HeaderIconButton>
             <HeaderIconButton walkthroughId="discover-sort" plain label="Sıralama ve filtre" selected={isCustomSort} onPress={() => setSortOpen(true)}>
@@ -386,7 +388,7 @@ export default function DiscoverScreen({
         </Box>
 
         {/* Filter row */}
-        <Box walkthroughId="discover-filters" style={[[ui.px5, ui.pb3]]} enter>
+        <Box walkthroughId="discover-filters" style={[[ui.px5, ui.pb3]]}>
           <Box style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>
             {/* Scrollable filters */}
             <Scroll style={[[ui.flex, ui.gap2, ui.pb05, ui.flex1, ui.minW0]]} horizontal>

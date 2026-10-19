@@ -1,7 +1,7 @@
 import { palette } from "../theme/palette";
 import { MessageIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
-import { Circle, Path, Polygon, Polyline, Rect } from "react-native-svg";
+import { Circle, Path, Polyline, Rect } from "react-native-svg";
 import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
 import { byLatestMessage, isEventMember, isRoomReady, roomTitle, useStore } from "../native/Store";
@@ -9,11 +9,12 @@ import { Box, Label, Picture, Scroll, Touch, Vector } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import { useEffect, useRef, useState } from "react";
-import { getDirectConversations, type DirectConversation } from "../api/client";
+import { deleteDirectConversation, getApiErrorMessage, getDirectConversations, type DirectConversation } from "../api/client";
 import { Avatar } from "../components/GlassUI";
 import { onSocket } from "../services/socket";
+import { applyLocalReads, cachedChatList, forgetConversation, hydrateChatCache, rememberChatList } from "../services/chat-cache";
 import { useScreenActive } from "../native/useScreenActive";
-import { RefreshControl } from "react-native";
+import { Alert, RefreshControl } from "react-native";
 interface Props {
   navigate: NavigateFn;
 }
@@ -32,8 +33,6 @@ function MoreToggle({ total, open, onPress }: { total: number; open: boolean; on
     {open ? "Daha az göster" : `Daha fazla göster (${total - PREVIEW_COUNT})`}
   </Touch>;
 }
-/** Last one-to-one chat list per account (this app session), shown at once while /direct refreshes it. */
-const chatCache = new Map<string, DirectConversation[]>();
 export default function RoomsScreen({
   navigate
 }: Props) {
@@ -45,10 +44,17 @@ export default function RoomsScreen({
   // One-to-one chats show the last known list at once (kept per account for this app session); /direct
   // then refreshes it in the background and the screen updates only if something changed.
   const cacheKey = store.user.id;
-  const [chats, setChats] = useState<DirectConversation[]>(() => (cacheKey && chatCache.get(cacheKey)) || []);
+  // Chats read on this device show no badge even before the server has the read mark.
+  const [chats, setChats] = useState<DirectConversation[]>(() => cacheKey ? applyLocalReads(cacheKey, cachedChatList(cacheKey)) : []);
+  // After an app restart the saved list comes from the phone (a few ms), before the network answers.
+  useEffect(() => {
+    if (!cacheKey) return;
+    void hydrateChatCache(cacheKey).then(() => setChats(current => current.length ? current : applyLocalReads(cacheKey, cachedChatList(cacheKey))));
+  }, [cacheKey]);
   const loadChats = () => getDirectConversations().then(result => {
-    if (cacheKey) chatCache.set(cacheKey, result.items);
-    setChats(current => JSON.stringify(current) === JSON.stringify(result.items) ? current : result.items);
+    if (cacheKey) rememberChatList(cacheKey, result.items);
+    const items = cacheKey ? applyLocalReads(cacheKey, result.items) : result.items;
+    setChats(current => JSON.stringify(current) === JSON.stringify(items) ? current : items);
   }).catch(() => {});
   // Messages and rooms show their newest three; "Daha fazla göster" lists the rest.
   const [showAllChats, setShowAllChats] = useState(false);
@@ -61,17 +67,37 @@ export default function RoomsScreen({
     finally { if (pulled) setRefreshing(false); }
   };
   useEffect(() => { void reloadMine(); }, []);
+  // "Sohbeti sil" (long press): gone from this list at once; only messages after this moment come back.
+  const dropChat = (conversationId: string) => setChats(current => {
+    if (cacheKey) forgetConversation(cacheKey, conversationId);
+    const next = current.filter(chat => chat.id !== conversationId);
+    if (cacheKey) rememberChatList(cacheKey, next);
+    return next;
+  });
+  const removeChat = (chat: DirectConversation, name: string) => Alert.alert("Sohbet silinsin mi?", `${name} ile tüm mesajlar senin için silinir; ${chat.user.firstName} kendi mesajlarını görmeye devam eder. Yeni bir mesaj gelirse sohbet yalnızca yeni mesajlarla yeniden görünür.`, [
+    { text: "Vazgeç", style: "cancel" },
+    { text: "Sohbeti sil", style: "destructive", onPress: () => {
+      const previous = chats;
+      dropChat(chat.id);
+      deleteDirectConversation(chat.id).catch(error => { setChats(previous); if (cacheKey) rememberChatList(cacheKey, previous); Alert.alert("Sohbet silinemedi", getApiErrorMessage(error)); });
+    } },
+  ]);
   // Coming back to the page, a new message, a friendship change or a reconnect refreshes the chats.
   const screenActive = useScreenActive();
   const firstFocus = useRef(true);
   useEffect(() => {
     if (!screenActive) return;
-    if (firstFocus.current) firstFocus.current = false; else void loadChats();
+    // Back from a chat: its badge disappears at once, before the refreshed list arrives.
+    if (cacheKey) setChats(current => { const next = applyLocalReads(cacheKey, current); return next.some((row, i) => row !== current[i]) ? next : current; });
+    // Rooms and chats refresh quietly together when the page is shown again (the saved lists are already on screen).
+    if (firstFocus.current) firstFocus.current = false; else { void loadChats(); void refreshRooms(true, true).catch(() => {}); }
     const stops = ["dm:message", "friend:changed", "sync:required"].map(name => onSocket(name, () => { void loadChats(); }));
+    // Deleted on another device of this account.
+    stops.push(onSocket("dm:cleared", (payload: { conversationId: string }) => dropChat(payload.conversationId)));
     // Online / offline changes update the dots without reloading the list.
     stops.push(onSocket("presence:changed", (payload: { userId: string; online: boolean }) => setChats(current => {
       const next = current.map(chat => chat.user.id === payload.userId ? { ...chat, online: payload.online } : chat);
-      if (cacheKey) chatCache.set(cacheKey, next);
+      if (cacheKey) rememberChatList(cacheKey, next);
       return next;
     })));
     return () => { stops.forEach(stop => stop()); };
@@ -88,14 +114,15 @@ export default function RoomsScreen({
 
         {/* Direct messages */}
         {chats.length > 0 && <Box style={[[ui.px5, ui.mb6]]}>
-          <Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-            Mesajlar
-          </Label>
+          <Box style={[[ui.flex, ui.itemsCenter, ui.mb3], { justifyContent: "space-between" }]}>
+            <Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider]]}>Mesajlar</Label>
+            <Label style={[[ui.text10px, ui.textWhite25]]}>Silmek için basılı tut</Label>
+          </Box>
           <Box style={[[ui.spaceY3]]}>
             {(showAllChats ? chats : chats.slice(0, PREVIEW_COUNT)).map(chat => {
               const name = `${chat.user.firstName} ${chat.user.lastName}`.trim();
               const last = chat.lastMessage;
-              return <Touch key={chat.id} accessibilityLabel={`${name} ile sohbet`} onPress={() => navigate("direct-chat", { userId: chat.user.id })} style={[[ui.wFull, ui.textLeft]]}>
+              return <Touch key={chat.id} accessibilityLabel={`${name} ile sohbet`} accessibilityHint="Silmek için basılı tut" onPress={() => navigate("direct-chat", { userId: chat.user.id })} onLongPress={() => removeChat(chat, name)} style={[[ui.wFull, ui.textLeft]]}>
                 <GlassCard style={[[ui.p4]]}>
                   <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
                     {/* A green dot only while the person is online; nothing when offline. */}
@@ -106,7 +133,7 @@ export default function RoomsScreen({
                     <Box style={[[ui.flex1, ui.minW0]]}>
                       <Label style={[[ui.textSm, chat.unreadCount > 0 ? ui.fontSemibold : ui.fontMedium, ui.textWhite85]]} numberOfLines={1}>{name}</Label>
                       <Label style={[[ui.textXs, chat.unreadCount > 0 ? ui.textWhite70 : ui.textWhite40]]} numberOfLines={1}>
-                        {last ? `${last.senderId === store.user.id ? "Sen: " : ""}${last.text}` : "Henüz mesaj yok"}
+                        {last ? `${last.senderId === store.user.id ? "Sen: " : ""}${last.deleted ? "Bu mesaj silindi" : last.text}` : "Henüz mesaj yok"}
                       </Label>
                       {!chat.canSend && <Label style={[[ui.text10px, ui.textWhite30, ui.mt1]]}>Artık bağlantın değil · yalnızca okunur</Label>}
                     </Box>
@@ -225,9 +252,6 @@ export default function RoomsScreen({
                 <Circle cx="8.5" cy="8.5" r="1.5" />
                 <Polyline points="21 15 16 10 5 21" />
               </Vector>} title="Etkinlik Fotoğraf Galerisi" subtitle="Anlarını toplulukla paylaş, sonradan tekrar yaşa." />
-          <ComingSoonCard accent="emerald" icon={<Vector width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(110,231,183,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <Polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </Vector>} title="Etkinlik Sonrası Puanlama" subtitle="Birlikte geçirdiğin anları değerlendir, güveni birlikte inşa et." />
         </Box>
       </Scroll>
 

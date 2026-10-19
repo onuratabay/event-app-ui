@@ -3,6 +3,7 @@ import { Platform } from "react-native"
 import Constants from "expo-constants"
 import { resolveApiUrl } from "./config"
 import { apiLoading } from "./loading"
+import { clearChatCache } from "../services/chat-cache"
 
 export const API_URL = resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, __DEV__ ? Constants.expoConfig?.hostUri : undefined, Platform.OS)
 /** Photos come as signed server paths ("/photos/users/…?v=…&s=…"); images load them from the API host and cache them on disk. */
@@ -230,6 +231,8 @@ export async function logout() {
   await beforeLogout?.().catch(() => {})
   sessionVersion++
   clearSessionCache("user")
+  // Saved chats belong to the account: they leave the phone with it.
+  void clearChatCache()
   const removal = tokenWrites.then(() => AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]))
   tokenWrites = removal.catch(() => {})
   await removal
@@ -301,7 +304,8 @@ let referenceLoad: { version: number; promise: Promise<{ items: ReferenceRequest
 export function getReferenceRequests() {
   if (referenceLoad?.version === sessionVersion) return referenceLoad.promise
   const version = sessionVersion
-  const promise = request<{ items: ReferenceRequest[] }>("/references/requests").finally(() => { if (referenceLoad?.promise === promise) referenceLoad = undefined })
+  // Background: the profile shows at once and the references fill in (no full-screen loader on first visit).
+  const promise = request<{ items: ReferenceRequest[] }>("/references/requests", { background: true }).finally(() => { if (referenceLoad?.promise === promise) referenceLoad = undefined })
   referenceLoad = { version, promise }
   return promise
 }
@@ -324,6 +328,11 @@ export const getMyProposedInterests = () => request<ProposedInterest[]>('/intere
 // An existing interest with the same name comes back (existing: true) instead of a duplicate.
 export const proposeInterest = (name: string, withLevels: boolean) => request<ProposedInterest>('/interests/proposals', { method: 'POST', body: JSON.stringify({ name, withLevels }) })
 export interface PendingInterest { id: string; name: string; createdAt: string; proposedBy: string | null; hasLevels: boolean; eventCount: number }
+/** Admin: member reports (users and events, with the reported message in the description). */
+export interface AdminReport { id: string; description: string; status: 'submitted' | 'in_review' | 'completed'; createdAt: string; targetType: 'user' | 'event'; targetId: string; reporterId: string; reporterName: string | null; targetName: string | null; targetStatus: string | null; eventTitle: string | null }
+export const getAdminReports = (status: 'open' | 'all') => request<{ items: AdminReport[]; counts: { open: number; all: number } }>(`/admin/reports?status=${status}`, { background: true })
+// One action closes the report and every other open report about the same member or event.
+export const decideReport = (id: string, action: 'dismiss' | 'deactivate') => request<{ closed: string[]; targetId: string; targetStatus?: string }>(`/admin/reports/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ action }) })
 export const getPendingInterests = () => request<PendingInterest[]>('/admin/interests/pending', { background: true })
 export const decideInterest = (id: string, decision: 'approved' | 'rejected') => request<{ id: string; status: string }>(`/admin/interests/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ decision }) })
 // The catalog is the same for everyone and changes rarely: fetched once per 6 hours per app session.
@@ -449,13 +458,21 @@ export const getRatingForm = (eventId: string) => request<RatingForm>(`/events/$
 // The organizer sends no eventScore; everyone else must. Ratings are final once sent.
 export const submitRatings = (eventId: string, body: { eventScore?: number; participants: ParticipantRatingInput[] }) => request<{ submitted: true }>(`/events/${encodeURIComponent(eventId)}/ratings`, { method: 'POST', body: JSON.stringify(body) })
 /** One-to-one chats with connections (no event room needed). canSend is false once you are no longer connected. */
-export interface DirectMessage { id: string; conversationId: string; senderId: string; text: string; createdAt: string }
+export interface DirectMessage { id: string; conversationId: string; senderId: string; text: string; createdAt: string; /** Deleted by its sender: shown as "Bu mesaj silindi". */ deleted?: boolean; /** Edited by its sender: shown as "düzenlendi". */ editedAt?: string | null }
 export interface DirectConversation { id: string; user: { id: string; firstName: string; lastName: string; profilePhoto: string | null }; canSend: boolean; lastMessage: DirectMessage | null; unreadCount: number; /** Has the app open right now; live updates arrive as "presence:changed". */ online?: boolean }
 export const getDirectConversations = () => request<{ items: DirectConversation[] }>('/direct', { background: true })
 // Opens the chat with a connection (created on first use); an existing chat opens even after unfriending, read-only.
-export const openDirectConversation = (userId: string) => request<DirectConversation>(`/direct/with/${encodeURIComponent(userId)}`, { method: 'POST' })
-export const getDirectMessages = (conversationId: string, cursor?: string) => request<{ items: DirectMessage[]; nextCursor: string | null; otherReadAt: string | null }>(`/direct/${encodeURIComponent(conversationId)}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, { background: true })
+// Background: the chat screen opens at once (from saved data); this never shows the full-screen loader.
+export const openDirectConversation = (userId: string) => request<DirectConversation>(`/direct/with/${encodeURIComponent(userId)}`, { method: 'POST', background: true })
+// `after`: only messages newer than the device's newest (a small catch-up for a cached chat).
+export const getDirectMessages = (conversationId: string, cursor?: string, after?: string) => request<{ items: DirectMessage[]; nextCursor: string | null; otherReadAt: string | null }>(`/direct/${encodeURIComponent(conversationId)}/messages${after ? `?after=${encodeURIComponent(after)}` : cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, { background: true })
 export const sendDirectMessage = (conversationId: string, text: string) => request<DirectMessage>(`/direct/${encodeURIComponent(conversationId)}/messages`, { method: 'POST', body: JSON.stringify({ text }), background: true })
+// "Sohbeti sil": only for the caller; earlier messages stay hidden for them, the other side keeps everything.
+export const deleteDirectConversation = (conversationId: string) => request<{ cleared: true }>(`/direct/${encodeURIComponent(conversationId)}`, { method: 'DELETE' })
+// The sender edits their own message; both sides see it marked "düzenlendi".
+export const editDirectMessage = (conversationId: string, messageId: string, text: string) => request<DirectMessage>(`/direct/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`, { method: 'PATCH', body: JSON.stringify({ text }), background: true })
+// The sender deletes their own message for both sides.
+export const deleteDirectMessage = (conversationId: string, messageId: string) => request<DirectMessage>(`/direct/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE', background: true })
 export const markDirectRead = (conversationId: string) => request<{ readAt: string }>(`/direct/${encodeURIComponent(conversationId)}/read`, { method: 'POST', background: true })
 export const getEvent = (id: string, options: { background?: boolean } = {}) => request<ApiEvent>(`/events/${id}`, options)
 export const favoriteEvent = (id: string, saved: boolean) => request(`/events/${id}/favorite`, { method: saved ? 'PUT' : 'DELETE', background: true })
@@ -506,7 +523,8 @@ export const getMessageReads = (eventId: string) => request<{ items: Array<{ use
 export const reportUser = (userId: string, description: string) => request<{ message: string }>(`/reports/users/${userId}`, { method: 'POST', body: JSON.stringify({ description, language: 'tr' }) })
 // A room opens with its latest 20 messages; each older page is another 20.
 export const MESSAGE_PAGE_SIZE = 20
-export const getMessages = (id: string, signal?: AbortSignal, cursor?: string) => request<{ items: ApiMessage[]; nextCursor?: string | null }>(`/events/${id}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}&limit=${MESSAGE_PAGE_SIZE}` : `?limit=${MESSAGE_PAGE_SIZE}`}`, { signal, background: true })
+// `after`: only messages newer than the device's newest (a small catch-up for a cached room).
+export const getMessages = (id: string, signal?: AbortSignal, cursor?: string, after?: string) => request<{ items: ApiMessage[]; nextCursor?: string | null }>(`/events/${id}/messages${after ? `?after=${encodeURIComponent(after)}` : cursor ? `?cursor=${encodeURIComponent(cursor)}&limit=${MESSAGE_PAGE_SIZE}` : `?limit=${MESSAGE_PAGE_SIZE}`}`, { signal, background: true })
 export const markRoomRead = (id: string) => request<{ eventId: string; unreadCount: number }>(`/events/${id}/messages/read`, { method: 'POST', background: true })
 export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text }), background: true })
 /** Profile "Katıldığı": ended events the user joined (not their own), newest first; `total` is the count. */
@@ -514,7 +532,7 @@ export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/e
 export const getProfileStats = () => request<{ attended: number; organized: number }>('/events/stats', { background: true })
 // The full list loads only when it is opened (covers are heavy).
 export const getAttendedEvents = (limit = 50) => request<EventListResponse>(`/events/attended?limit=${limit}`, { background: true })
-/** "Düzenlediği" on the profile: own events that started or ended, newest first. */
+/** "Düzenlediğim" on the profile: own events that started or ended, newest first. */
 export const getOrganizedEvents = (limit = 50) => request<EventListResponse>(`/events/organized?limit=${limit}`, { background: true })
 /** Profile "Arşiv": every event the user created, any status, newest first. Only ever the requester's own. */
 export const getOwnedEvents = (page = 1) => request<EventListResponse>(`/events/mine?page=${page}&limit=20`, { background: true })
@@ -585,7 +603,7 @@ export const createEventShare = (eventId: string) => request<EventShareLink>(`/e
 /** The organizer's 24-hour event code (EWT-…); accepting guest responsibility is part of creating it. */
 export const createEventCode = (eventId: string) => request<EventShareLink>(`/events/${encodeURIComponent(eventId)}/share`, { method: 'POST', body: JSON.stringify({ acceptResponsibility: true, kind: 'code' }) })
 export const createReferenceCode = () => request<{ code: string; expiresAt: string }>('/references/codes', { method: 'POST' })
-export const getActiveReferenceCode = () => request<{ code: { code: string; expiresAt: string } | null }>('/references/codes/active').then(result => result.code)
+export const getActiveReferenceCode = () => request<{ code: { code: string; expiresAt: string } | null }>('/references/codes/active', { background: true }).then(result => result.code)
 export const revokeEventShare = (code: string) => request(`/sharing/links/${encodeURIComponent(code)}`, { method: 'DELETE' })
 export interface GuestEvent {
   id: string; title: string; category: string; date: string; time: string; location: string;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { Alert, RefreshControl, StyleSheet } from "react-native"
-import { getAdminStats, type AdminStats as AdminStatsData, decideApplication, decideInterest, getPendingInterests, type PendingInterest, getApiErrorMessage, getApplicationDetail, getApplications, type ApplicationDecision, type ApplicationFilter, type ApplicationsPage, type MembershipApplication, type MembershipApplicationDetail } from "../api/client"
+import { getAdminStats, type AdminStats as AdminStatsData, decideApplication, decideInterest, decideReport, getAdminReports, getPendingInterests, type AdminReport, type PendingInterest, getApiErrorMessage, getApplicationDetail, getApplications, type ApplicationDecision, type ApplicationFilter, type ApplicationsPage, type MembershipApplication, type MembershipApplicationDetail } from "../api/client"
 import TopNavBar from "../components/TopNavBar"
 import AdminStats from "../components/AdminStats"
 import CountBadge from "../components/CountBadge"
@@ -132,6 +132,71 @@ function PendingInterests({ reload }: { reload: number }) {
   </Box>
 }
 
+const REPORT_STATUS: Record<AdminReport["status"], { label: string; color: string; background: string }> = {
+  submitted: { label: "Yeni", color: palette.error, background: "rgba(243,155,175,.14)" },
+  in_review: { label: "İncelemede", color: "#fbbf24", background: "rgba(251,191,36,.14)" },
+  completed: { label: "Tamamlandı", color: palette.success, background: "rgba(111,208,182,.14)" },
+}
+/** Member reports: who reported whom and the reported message; review, complete, or take the member passive. */
+function ReportsSection({ navigate, reload }: { navigate: NavigateFn; reload: number }) {
+  const [filter, setFilter] = useState<"open" | "all">("open")
+  const [data, setData] = useState<{ items: AdminReport[]; counts: { open: number; all: number } } | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  useEffect(() => { let active = true; getAdminReports(filter).then(result => { if (active && Array.isArray(result?.items) && result.counts) setData(result) }).catch(() => {}); return () => { active = false } }, [filter, reload])
+  // One action settles it: this report and the other open ones about the same member/event close together and
+  // leave the open list at once, so the same case never has to be handled twice.
+  const act = async (report: AdminReport, action: "dismiss" | "deactivate") => {
+    setBusy(report.id)
+    try {
+      const result = await decideReport(report.id, action)
+      const closed = new Set(result.closed)
+      setData(current => current && {
+        counts: { ...current.counts, open: Math.max(0, current.counts.open - current.items.filter(row => closed.has(row.id) && row.status !== "completed").length) },
+        items: filter === "open"
+          ? current.items.filter(row => !closed.has(row.id))
+          : current.items.map(row => closed.has(row.id) ? { ...row, status: "completed" as const, targetStatus: result.targetStatus ?? row.targetStatus } : row),
+      })
+    } catch (cause) { Alert.alert("İşlem yapılamadı", getApiErrorMessage(cause)) }
+    finally { setBusy(null) }
+  }
+  const deactivate = (report: AdminReport) => Alert.alert("Üye pasife alınsın mı?", `${report.targetName ?? "Üye"} uygulamayı kullanamaz; "hesabın incelemede" sayfasını görür. Bu kişi hakkındaki açık şikayetler de kapanır. Başvurulardan aktifleştirerek geri alabilirsin.`, [
+    { text: "Vazgeç", style: "cancel" },
+    { text: "Pasife al ve kapat", style: "destructive", onPress: () => void act(report, "deactivate") },
+  ])
+  if (!data || !data.counts.all) return null
+  return <Box style={{ gap: 8 }}>
+    <Box style={[s.toggle, { justifyContent: "space-between" }]}>
+      <Label style={s.section}>{`Şikayetler · ${data.counts.open} açık`}</Label>
+      <Box style={[s.toggle, { gap: 6 }]}>
+        {([["open", `Açık · ${data.counts.open}`], ["all", `Tümü · ${data.counts.all}`]] as const).map(([id, label]) => <Touch key={id} accessibilityRole="tab" accessibilityState={{ selected: filter === id }} onPress={() => setFilter(id)} style={[s.chip, filter === id && s.chipOn, { minHeight: 30 }]}>
+          <Label style={[s.chipText, filter === id && s.chipTextOn, { fontSize: 12 }]}>{label}</Label>
+        </Touch>)}
+      </Box>
+    </Box>
+    {!data.items.length && <Box style={s.stateBox}><Label style={s.muted}>Açık şikayet yok.</Label></Box>}
+    {data.items.map(report => {
+      const badge = REPORT_STATUS[report.status]
+      const target = report.targetType === "user" ? report.targetName ?? "Silinmiş üye" : `Etkinlik · ${report.eventTitle ?? "silinmiş"}`
+      return <Box key={report.id} style={s.card}>
+        <Box style={s.cardHead}>
+          <Box style={{ flex: 1, minWidth: 0 }}>
+            <Label style={s.name} numberOfLines={1}>{target}</Label>
+            <Label style={s.muted} numberOfLines={1}>{`Şikayet eden: ${report.reporterName ?? "Silinmiş üye"} · ${appliedOn(report.createdAt)}`}</Label>
+          </Box>
+          <Label style={[s.badge, { color: badge.color, backgroundColor: badge.background }]}>{badge.label}</Label>
+        </Box>
+        <Label style={s.line} selectable>{report.description}</Label>
+        {report.targetStatus === "passive" && <Label style={s.warning}>Üye pasife alındı.</Label>}
+        <Box style={s.actions}>
+          {report.targetType === "user" && report.targetName && <Touch accessibilityLabel={`${report.targetName} profilini aç`} onPress={() => navigate("profile", { userId: report.targetId })} style={[s.action, s.neutral]}><Label style={s.neutralText}>Profil</Label></Touch>}
+          {report.status !== "completed" && <Touch accessibilityLabel="Şikayeti kapat" disabled={busy === report.id} disabledOpacity={0.35} onPress={() => void act(report, "dismiss")} style={[s.action, s.approve]}><Label style={s.approveText}>Kapat</Label></Touch>}
+          {report.status !== "completed" && report.targetType === "user" && report.targetStatus !== "passive" && report.targetName && <Touch accessibilityLabel={`${report.targetName} pasife al ve kapat`} disabled={busy === report.id} disabledOpacity={0.35} onPress={() => deactivate(report)} style={[s.action, s.reject]}><Label style={s.rejectText}>Pasife al</Label></Touch>}
+        </Box>
+      </Box>
+    })}
+  </Box>
+}
+
 /** Admin only: search membership applications and approve, reject or review them in one tap. */
 export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
   const { data } = useStore()
@@ -247,6 +312,7 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
         {!stats && !statsError && <Box style={s.stateBox}><LoadingSpinner /></Box>}
         {stats && <AdminStats stats={stats} />}
       </> : <>
+      <ReportsSection navigate={navigate} reload={attempt + (pulling ? 1 : 0)} />
       <PendingInterests reload={attempt + (pulling ? 1 : 0)} />
       <Box style={s.search}>
         <SearchIcon size={16} style={{ color: palette.muted }} />

@@ -7,15 +7,17 @@ import { useScreenActive } from '../native/useScreenActive';
 import { onSocket, retainEvent, socketAction, socketConnected } from '../services/socket';
 import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions } from "react-native";
 import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import { AtmoBackground, GlassFill } from "../components/GlassUI";
+import ActionSheet, { REPORT_REASONS, type SheetOption } from "../components/ActionSheet";
 import { deleteMessage, editMessage, getApiErrorMessage, getEvent, getEventActivity, getMessageReads, getMessages, markRoomRead, putPreference, renameRoom, reportUser, sendMessage, type ApiMessage } from "../api/client";
-import { EMPTY_USER, defaultRoomTitle, mapApiEvent, participantCount, roomTitle, setOpenRoom } from "../native/Store";
+import { EMPTY_USER, defaultRoomTitle, mapApiEventPreservingCover, participantCount, roomTitle, setOpenRoom } from "../native/Store";
+import { cachedRoom, hydrateChatCache, markRoomListRead, markRoomSynced, rememberRoom, type CachedRoomMessage } from "../services/chat-cache";
 import { useStore } from "../native/Store";
-import { Box, Field, Label, Picture, Scroll, Touch } from "../native/UI";
+import { Box, ChatList, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import type { ChatMessage, NavigateFn } from "../types";
 interface Props {
@@ -25,12 +27,11 @@ interface Props {
 // Same limit the backend enforces for chat messages and edits.
 const MAX_MESSAGE_LENGTH = 2000;
 const QUICK_REPLIES = ["Yoldayım 🚶", "5 dk gecikeceğim ⏱️", "Geldim 📍"];
-const REPORT_REASONS = ["Taciz veya hakaret", "Spam veya reklam", "Uygunsuz içerik", "Güvenliğimi tehdit ediyor"];
 // system: a WhatsApp-style info line (e.g. the organizer renamed the room), not a chat bubble.
 type RoomMessage = ChatMessage & { system?: boolean; announcement?: boolean; deleted?: boolean; edited?: boolean; pending?: boolean; failed?: boolean };
-type SheetOption = { label: string; onPress: () => void; danger?: boolean };
-/** Last messages per room for this app session, so reopening a room shows them without waiting. */
-const roomCache = new Map<string, { messages: RoomMessage[]; cursor: string | null }>();
+/** Saved room messages keep only the author's id and name; the rest of the user comes back empty. */
+const fromCache = (row: CachedRoomMessage): RoomMessage => ({ ...row, user: { ...EMPTY_USER, ...row.user } });
+const toCache = (row: RoomMessage): CachedRoomMessage => ({ id: row.id, createdAt: row.createdAt, text: row.text, time: row.time, user: { id: row.user.id, name: row.user.name }, system: row.system, announcement: row.announcement, deleted: row.deleted, edited: row.edited });
 // Times arrive as "+03:00" from REST but "Z" from the device (pending sends), so compare instants,
 // never the strings: as text, "09:31Z" sorted before "12:30+03:00" and a new message jumped to the top.
 const instant = (iso?: string) => Date.parse(iso || "") || 0;
@@ -52,20 +53,6 @@ function dayLabel(iso?: string) {
   if (diff === 1) return "Dün";
   return date.toLocaleDateString("tr-TR", { day: "numeric", month: "long" });
 }
-/** Same look on iOS and Android (Android alerts are limited to three buttons). */
-function ActionSheet({ title, options, onClose }: { title?: string; options: SheetOption[]; onClose: () => void }) {
-  return <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-    <Pressable accessibilityLabel="Menüyü kapat" style={s.sheetBackdrop} onPress={onClose}>
-      <Pressable style={s.sheet} onPress={() => {}}><GlassFill kind="sheet" topRadius={24} />
-        {title ? <Label style={s.sheetTitle} numberOfLines={2}>{title}</Label> : null}
-        {options.map(option => <Touch key={option.label} accessibilityLabel={option.label} onPress={() => { onClose(); option.onPress(); }} style={s.sheetOption}>
-          <Label style={[s.sheetLabel, option.danger && s.danger]}>{option.label}</Label>
-        </Touch>)}
-        <Touch accessibilityLabel="Vazgeç" onPress={onClose} style={[s.sheetOption, s.sheetCancel]}><Label style={s.sheetLabel}>Vazgeç</Label></Touch>
-      </Pressable>
-    </Pressable>
-  </Modal>;
-}
 export default function EventRoomScreen({
   navigate,
   eventId
@@ -81,10 +68,11 @@ export default function EventRoomScreen({
   const screenActive = useScreenActive();
   const ME = store.user;
   const event = store.events.find(e => e.id === eventId);
-  // A room opened before shows its last messages at once; the fresh page then merges in.
-  // Per account: another account signing in on this phone never sees these.
-  const cacheKey = eventId && store.user.id ? `${store.user.id}:${eventId}` : "";
-  const [messages, setMessages] = useState<RoomMessage[]>(() => (cacheKey && roomCache.get(cacheKey)?.messages) || []);
+  // A room opened before (also before an app restart) shows its last messages at once; only newer
+  // ones are then fetched. Saved per account: another account on this phone never sees them.
+  const meId = store.user.id;
+  const savedRoom = eventId && meId ? cachedRoom(meId, eventId) : undefined;
+  const [messages, setMessages] = useState<RoomMessage[]>(() => savedRoom?.items.map(fromCache) ?? []);
   const messagesRef = useRef<RoomMessage[]>([]);
   messagesRef.current = messages;
   const [sending, setSending] = useState(false);
@@ -96,13 +84,13 @@ export default function EventRoomScreen({
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const typingExpiry = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTyping = useRef(0);
-  const [cursor, setCursor] = useState<string | null>(() => (cacheKey && roomCache.get(cacheKey)?.cursor) || null);
+  const [cursor, setCursor] = useState<string | null>(() => savedRoom?.cursor ?? null);
   // Remember what this room showed (sent messages only, newest 100) for the next time it opens.
   useEffect(() => {
-    if (!cacheKey || !messages.length) return;
+    if (!eventId || !meId || !messages.length) return;
     const kept = messages.filter(m => !m.pending && !m.failed).sort((a, b) => instant(a.createdAt) - instant(b.createdAt)).slice(-100);
-    roomCache.set(cacheKey, { messages: kept, cursor });
-  }, [cacheKey, messages, cursor]);
+    rememberRoom(meId, eventId, kept.map(toCache), cursor);
+  }, [eventId, meId, messages, cursor]);
   const [loading, setLoading] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const { height: windowHeight } = useWindowDimensions();
@@ -131,9 +119,6 @@ export default function EventRoomScreen({
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   useWalkthroughScreenBlocker(infoOpen || !!sheet || busy || renaming || sending || !!editing || !!input.trim());
-  const scrollRef = useRef<ScrollView>(null);
-  const nearBottom = useRef(true);
-  const stickToEnd = useRef(true);
   const mapMessage = (message: ApiMessage): RoomMessage => ({ id: message.id, createdAt: message.createdAt, announcement: message.kind === 'announcement', system: message.kind === 'system', deleted: message.deleted === true, edited: Boolean(message.editedAt), text: message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}`.trim() } });
   const upsert = (incoming: RoomMessage[]) => setMessages(prev => [...new Map([...prev, ...incoming].map(m => [m.id, m])).values()]);
   // Listeners read the signed-in id through a ref, so the room loads without waiting for the account.
@@ -154,11 +139,24 @@ export default function EventRoomScreen({
       void getMessageReads(eventId).then(r => { if (active) setReads(Object.fromEntries(r.items.map(item => [item.userId, item.readAt]))); }).catch(() => {});
       void getEventActivity(eventId).then(r => { if (active) { setCheckins(r.checkins.map(c => c.userId)); setWaitlist(r.waitlist.map(w => w.userId)); } }).catch(() => {});
       try {
-        const result = await getMessages(eventId, controller.signal);
+        // Saved messages on screen: only newer ones are fetched (a small catch-up); otherwise the newest page.
+        if (meId) await hydrateChatCache(meId);
         if (!active) return;
-        upsert(result.items.map(mapMessage)); setCursor(current => current && roomCache.has(cacheKey) && messagesRef.current.length > result.items.length ? current : result.nextCursor || null); setError(''); setClosedReason(null);
-        // Opening a room shows the newest message; a late second pass covers rows that render after layout.
-        if (stickToEnd.current) setTimeout(() => { if (stickToEnd.current) scrollRef.current?.scrollToEnd({ animated: false }); }, 80);
+        if (!messagesRef.current.length && meId) {
+          const saved = cachedRoom(meId, eventId);
+          if (saved?.items.length) { const restored = saved.items.map(fromCache); setMessages(restored); messagesRef.current = restored; setCursor(saved.cursor); }
+        }
+        // Only what came after the point the saved copy is known complete (messages that arrived live while
+        // the room was closed are already shown; any gap before them is filled here). Nothing saved: newest page.
+        const after = meId ? cachedRoom(meId, eventId)?.syncedAt : undefined;
+        let result = await getMessages(eventId, controller.signal, undefined, after);
+        // A very long gap: the newest page instead (earlier messages load on scroll).
+        const full = !after || result.items.length >= 100;
+        if (after && full) result = await getMessages(eventId, controller.signal);
+        if (!active) return;
+        upsert(result.items.map(mapMessage)); if (full) setCursor(result.nextCursor || null); setError(''); setClosedReason(null);
+        const newestShown = [...messagesRef.current, ...result.items.map(mapMessage)].filter(m => !m.pending && !m.failed && m.createdAt).reduce<string | undefined>((at, m) => !at || instant(m.createdAt) > instant(at) ? m.createdAt : at, undefined);
+        if (meId) markRoomSynced(meId, eventId, newestShown);
       }
       catch (cause) {
         if (!active) return;
@@ -167,7 +165,15 @@ export default function EventRoomScreen({
       }
       finally { if (active) setLoading(false); }
     };
-    if (!event) void getEvent(eventId, { background: true }).then(value => { if (active) setStore(p => ({ ...p, events: [mapApiEvent(value), ...p.events.filter(e => e.id !== value.id)] })); }).catch(() => {});
+    // The full event, also when the room list already had a summary of it: only it carries the members'
+    // photos (shown beside messages and in the room info). Photos already loaded are kept meanwhile.
+    void getEvent(eventId, { background: true }).then(value => {
+      if (active) setStore(p => {
+        const existing = p.events.find(e => e.id === value.id);
+        const fresh = mapApiEventPreservingCover(value, existing);
+        return { ...p, events: [{ ...fresh, unreadCount: existing?.unreadCount ?? fresh.unreadCount, lastMessageAt: fresh.lastMessageAt ?? existing?.lastMessageAt }, ...p.events.filter(e => e.id !== value.id)] };
+      });
+    }).catch(() => {});
     const release = retainEvent(eventId);
     const loadPresence = () => { void socketAction<string[]>('event:presence', { eventId }).then(ids => { if (active && Array.isArray(ids)) setPresent(new Set(ids)); }).catch(() => {}); };
     setTimeout(loadPresence, 300);
@@ -176,6 +182,7 @@ export default function EventRoomScreen({
     let readTimer: ReturnType<typeof setTimeout> | undefined;
     const markRead = (delay = 0) => {
       setStore(p => ({ ...p, events: p.events.map(e => e.id === eventId ? { ...e, unreadCount: 0 } : e) }));
+      if (meIdRef.current) markRoomListRead(meIdRef.current, eventId);
       clearTimeout(readTimer);
       readTimer = setTimeout(() => { void markRoomRead(eventId).catch(() => {}); }, delay);
     };
@@ -232,25 +239,17 @@ export default function EventRoomScreen({
   const pinned = useMemo(() => [...sorted].reverse().find(m => m.announcement && !m.deleted), [sorted]);
   const lastMine = useMemo(() => [...sorted].reverse().find(m => m.user.id === ME.id && !m.announcement && !m.system && !m.deleted && !m.pending && !m.failed), [sorted, ME.id]);
   const muted = !!eventId && (store.mutedRooms || []).includes(eventId);
-  // Only a user's own scroll may page backwards, not the automatic scroll to the newest message.
-  const userScrolled = useRef(false);
+  // The list is drawn newest first and flipped (inverted): it opens at the newest message, stays there as
+  // messages arrive or the keyboard opens, and only the rows on screen are rendered (long rooms stay smooth).
+  const newestFirst = useMemo(() => sorted.slice().reverse(), [sorted]);
   const loadingOlder = useRef(false);
-  const onScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
-    nearBottom.current = nativeEvent.contentSize.height - nativeEvent.layoutMeasurement.height - nativeEvent.contentOffset.y < 120;
-    // Reaching the top loads the previous 20 messages; the button stays as a fallback.
-    if (userScrolled.current && nativeEvent.contentOffset.y < 60) void loadOlder();
-  };
-  // Holding the visible message in place is only for prepending older pages; left on all the time it
-  // pinned the first message and cancelled the initial scroll to the newest one.
-  const [keepPosition, setKeepPosition] = useState(false);
-  // Scroll after the frame in which new rows are laid out; an immediate call landed before layout.
-  const scrollToNewest = (animated = false) => requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated }));
+  // Reaching the top (the end of the flipped list) loads earlier messages; the button stays as a fallback.
   const loadOlder = async () => {
     if (!eventId || !cursor || loading || loadingOlder.current) return;
     loadingOlder.current = true;
-    setLoading(true); stickToEnd.current = false; setKeepPosition(true);
+    setLoading(true);
     try { const result = await getMessages(eventId, undefined, cursor); upsert(result.items.map(mapMessage)); setCursor(result.nextCursor || null); }
-    catch (cause) { setError(getApiErrorMessage(cause)); } finally { loadingOlder.current = false; setLoading(false); requestAnimationFrame(() => setKeepPosition(false)); }
+    catch (cause) { setError(getApiErrorMessage(cause)); } finally { loadingOlder.current = false; setLoading(false); }
   };
   // Sends are optimistic: the message shows at once and the request runs in the background.
   // Sends are chained so several quick messages keep their order on the server.
@@ -275,7 +274,6 @@ export default function EventRoomScreen({
     if (cancelled) return;
     const text = raw.trim();
     if (!text || !eventId) return;
-    stickToEnd.current = true;
     if (editing) {
       if (sending) return;
       setSending(true);
@@ -295,10 +293,12 @@ export default function EventRoomScreen({
     deliver(msg);
   };
   const send = () => sendText(input);
-  const removeMessage = (msg: RoomMessage) => Alert.alert("Mesaj silinsin mi?", "Mesaj herkes için “Bu mesaj silindi” olarak görünür.", [
-    { text: "Vazgeç", style: "cancel" },
-    { text: "Sil", style: "destructive", onPress: () => { if (eventId) void deleteMessage(eventId, msg.id).then(saved => upsert([mapMessage(saved)])).catch(cause => Alert.alert('Mesaj silinemedi', getApiErrorMessage(cause))); } },
-  ]);
+  // "Sil" in the options deletes at once (no second confirmation); a failure brings the message back.
+  const removeMessage = (msg: RoomMessage) => {
+    if (!eventId) return;
+    upsert([{ ...msg, text: "", deleted: true }]);
+    void deleteMessage(eventId, msg.id).then(saved => upsert([mapMessage(saved)])).catch(cause => { upsert([msg]); Alert.alert('Mesaj silinemedi', getApiErrorMessage(cause)); });
+  };
   const report = (msg: RoomMessage) => setSheet({
     title: `${firstName(msg.user.id)} kullanıcısını neden şikayet ediyorsun?`,
     options: REPORT_REASONS.map(reason => ({ label: reason, onPress: () => {
@@ -382,7 +382,8 @@ export default function EventRoomScreen({
               return <Box key={person.id} style={s.person}>
                 <Touch accessibilityLabel={`${person.name} profilini aç`} onPress={() => { setInfoOpen(false); navigate("profile", person.id === ME.id ? {} : { userId: person.id }); }} style={s.personLink}>
                   <Box style={s.avatarWrap}>
-                    <Picture uri={person.avatar} accessibilityLabel={person.name} style={s.personAvatar} />
+                    {/* Your own row uses your profile photo (the member list leaves the viewer's own out). */}
+                    <Picture uri={person.id === ME.id ? ME.avatar : person.avatar} accessibilityLabel={person.name} style={s.personAvatar} />
                     {/* Presence shows only as the dot (no "Aktif/Pasif" text); screen readers still hear it. */}
                     <Box accessibilityLabel={online ? "Odada" : "Odada değil"} style={[s.statusDot, { backgroundColor: online ? palette.success : "rgba(255,255,255,.25)" }]} />
                   </Box>
@@ -435,34 +436,44 @@ export default function EventRoomScreen({
           </Touch> : null}
           {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
           {!live && !error ? <Label accessibilityLiveRegion="polite" style={s.connection}>Bağlantı yeniden kuruluyor… Mesajların yine de gönderilir.</Label> : null}
-          {/* The newest message stays in view until the user scrolls up: content keeps growing after the
-              first render (messages, "Görüldü", fonts), so pinning only once left the last ones hidden. */}
-          <Scroll ref={scrollRef} onScroll={onScroll} onScrollBeginDrag={() => { userScrolled.current = true; stickToEnd.current = false; }} scrollEventThrottle={64} maintainVisibleContentPosition={keepPosition ? { minIndexForVisible: 0 } : undefined}
-            onContentSizeChange={() => { if (!keepPosition && (stickToEnd.current || nearBottom.current)) scrollToNewest(!stickToEnd.current); }}
-            onLayout={() => { if (stickToEnd.current) scrollToNewest(); }}
-            style={s.list}>
-            {cursor ? <Touch disabled={loading} onPress={() => void loadOlder()} style={s.older}><Label style={s.olderLabel}>{loading ? "Yükleniyor…" : "Önceki mesajları göster"}</Label></Touch> : null}
-            {!sorted.length && !loading ? <Box style={s.empty}><Label style={s.emptyTitle}>Sohbet başladı</Label><Label style={s.emptyText}>İlk mesajı sen yaz; buluşma detaylarını burada konuşabilirsiniz.</Label></Box> : null}
-            {sorted.map((msg, index) => {
-              const previous = sorted[index - 1];
+          {/* Empty state sits outside the flipped list (an inverted list would turn it upside down). */}
+          {!sorted.length && !loading ? <Box style={[s.empty, { flex: 1 }]}><Label style={s.emptyTitle}>Sohbet başladı</Label><Label style={s.emptyText}>İlk mesajı sen yaz; buluşma detaylarını burada konuşabilirsiniz.</Label></Box>
+          : <ChatList
+            data={newestFirst}
+            keyExtractor={msg => msg.id}
+            style={{ flex: 1 }}
+            contentContainerStyle={s.listContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={20}
+            maxToRenderPerBatch={20}
+            windowSize={11}
+            onEndReached={() => { void loadOlder(); }}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={cursor ? <Touch disabled={loading} onPress={() => void loadOlder()} style={s.older}><Label style={s.olderLabel}>{loading ? "Yükleniyor…" : "Önceki mesajları göster"}</Label></Touch> : null}
+            renderItem={({ item: msg, index }) => {
+              // In the flipped list the older neighbour is the next item and the newer one the previous.
+              const previous = newestFirst[index + 1];
+              const following = newestFirst[index - 1];
               const newDay = !previous || dayKey(previous.createdAt) !== dayKey(msg.createdAt);
-              const separator = newDay ? <Label key={`day-${msg.id}`} style={s.day}>{dayLabel(msg.createdAt)}</Label> : null;
+              const separator = newDay ? <Label style={s.day}>{dayLabel(msg.createdAt)}</Label> : null;
               // "Burak oda adını “…” olarak değiştirdi" / "Sen …": centred, no bubble, no actions.
-              if (msg.system) return [separator, <Label key={msg.id} accessibilityRole="text" style={s.systemLine}>
+              if (msg.system) return <View>{separator}<Label accessibilityRole="text" style={s.systemLine}>
                 {msg.user.id === ME.id ? "Sen" : msg.user.name.split(" ")[0]} {msg.text} · {msg.time}
-              </Label>];
-              if (msg.announcement) return [separator, <Touch key={msg.id} onLongPress={() => openActions(msg)} style={s.announcement}>
+              </Label></View>;
+              if (msg.announcement) return <View>{separator}<Touch onLongPress={() => openActions(msg)} style={s.announcement}>
                 <Label style={s.announcementTitle}>📣 Organizatör duyurusu</Label>
                 <Label style={msg.deleted ? s.deletedText : s.announcementText}>{msg.deleted ? "Bu duyuru silindi" : msg.text}</Label>
                 <Label style={s.time}>{msg.time}</Label>
-              </Touch>];
+              </Touch></View>;
               const isMe = msg.user.id === ME.id;
               const isHost = msg.user.id === event.host.id;
               // Same-person runs show name/photo once; a time shows under the last message of each minute.
               const grouped = !newDay && sameSender(previous, msg);
-              const endsGroup = !sameMinute(msg, sorted[index + 1]);
+              const endsGroup = !sameMinute(msg, following);
               const person = people.get(msg.user.id);
-              return [separator, <Box key={msg.id} style={[s.message, isMe && s.messageMine, grouped && s.messageGrouped]}>
+              return <View>{separator}<Box style={[s.message, isMe && s.messageMine, grouped && s.messageGrouped]}>
                 {!isMe && (grouped ? <Box style={s.avatarSpacer} /> : <Picture uri={person?.avatar || ""} accessibilityLabel={msg.user.name} style={s.avatar} />)}
                 <Box style={[s.bubbleColumn, isMe ? s.alignEnd : s.alignStart]}>
                   {!isMe && !grouped && <Box style={s.author}>
@@ -476,9 +487,9 @@ export default function EventRoomScreen({
                     : (endsGroup || msg.pending || msg.edited) ? <Label style={s.time}>{msg.time}{msg.pending ? " · Gönderiliyor…" : ""}{msg.edited && !msg.deleted ? " · düzenlendi" : ""}</Label> : null}
                   {lastMine && msg.id === lastMine.id ? <Label style={s.seen}>{seenBy.length ? `Görüldü · ${seenBy.slice(0, 2).join(", ")}${seenBy.length > 2 ? ` +${seenBy.length - 2}` : ""}` : "Gönderildi"}</Label> : null}
                 </Box>
-              </Box>];
-            })}
-          </Scroll>
+              </Box></View>;
+            }}
+          />}
 
           {cancelled ? <Box accessibilityRole="alert" style={[s.cancelledBar, { paddingBottom: 14 + navInset + keyboardOverlap }]}>
             <Label style={s.cancelledTitle}>Etkinlik iptal edildi</Label>
@@ -543,7 +554,7 @@ const s = StyleSheet.create({
   pinned: { marginHorizontal: 16, marginTop: 10, gap: 3, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: "rgba(105,120,255,.14)", borderWidth: 1, borderColor: "rgba(183,197,255,.3)" },
   pinnedTitle: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 11, lineHeight: 15 },
   pinnedText: { color: palette.text, fontSize: 13, lineHeight: 18 },
-  list: { flex: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 },
+  listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 },
   older: { alignSelf: "center", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: "rgba(255,255,255,.06)", marginBottom: 8 },
   olderLabel: { color: palette.accent, fontSize: 12, lineHeight: 16 },
   empty: { alignItems: "center", gap: 6, paddingVertical: 48, paddingHorizontal: 24 },
