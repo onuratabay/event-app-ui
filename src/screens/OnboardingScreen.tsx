@@ -16,9 +16,6 @@ import { Alert, RefreshControl, StyleSheet, View } from "react-native";
 import { clearSessionCache, logout, getApiErrorMessage, getCurrentUser, getLegalDocuments, login, redeemAccessCode, register, type ApiUser, type LegalDocumentSummary } from "../api/client";
 import { useOpenLegal } from "../legal/links";
 import { gatedScreen } from "../native/access";
-import { useOptionalGuest } from "../guest/GuestSession";
-import { parseGuestCode } from "../guest/links";
-import { useRouter, type Href } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ContinueButton } from "../components/ContinueButton";
 import { formatLocalPhone, formatPhone, PHONE_COUNTRY_CODE, phoneDigits } from "../content/phone";
@@ -155,40 +152,37 @@ const INSTAGRAM_REQUIRED = "Devam etmek için Instagram kullanıcı adını yaz.
 /** Where a valid code leads; "Devam Et" opens it. */
 type CodeResult = { kind: "access"; target: AppScreen };
 
-function InviteCodeField({ result, onResult }: { result: CodeResult | null; onResult: (result: CodeResult | null) => void }) {
-  const guest = useOptionalGuest();
+/**
+ * A member's reference code (REF-…, made on their profile) entered inside the reference card. Redeeming
+ * it records that member's approved reference; "Devam Et" then moves the application on.
+ */
+function ReferenceCodeField({ done, onResult }: { done: boolean; onResult: (result: CodeResult | null) => void }) {
   const { setData: setStore } = useStore();
-  const router = useRouter();
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const open = async () => {
-    const code = parseGuestCode(input);
+  const redeem = async () => {
+    const code = input.trim().toUpperCase();
+    if (!/^REF-/.test(code)) { setError("Referans kodu REF- ile başlar. Kodu üyenin profilinden al."); return; }
     setBusy(true); setError("");
     try {
-      if (code) {
-        if (!guest) return;
-        await guest.enter(code);
-        // An event code goes straight to that event; an access code waits for "Devam Et".
-        router.replace({ pathname: "/guest-event", params: { code } } as Href);
-        return;
-      }
-      const redeemed = await redeemAccessCode(input.trim());
+      const redeemed = await redeemAccessCode(code);
       setStore(current => ({ ...current, user: { ...current.user, status: redeemed.status } }));
       onResult({ kind: "access", target: redeemed.target as AppScreen });
     }
-    catch { setError("Geçerli bir kod gir."); }
+    catch (cause) { setError(getApiErrorMessage(cause, "Bu kod geçerli değil veya süresi dolmuş.")); }
     finally { setBusy(false); }
   };
-  return <Box>
+  const filled = !!input.trim();
+  return <Box style={[[ui.mt3]]}>
     <Box style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
-      <Box style={{ flex: 1, minWidth: 0 }}><GlassInput label="Etkinlik veya referans kodu" accessibilityLabel="Etkinlik veya referans kodu" placeholder="Örn. REF-… ya da EWT-…" value={input} onChangeText={text => { setInput(text); setError(""); if (result) onResult(null); }} autoCapitalize="none" autoCorrect={false} returnKeyType="go" onSubmitEditing={() => void open()} /></Box>
-      {/* Blurred glass like the inputs, so it stays visible over the moving background even before a code is typed. */}
-      <Box style={{ zIndex: 2, elevation: 2, flexShrink: 0 }}><Touch accessibilityLabel="Kodu ekle" disabled={busy || !input.trim()} disabledOpacity={0.7} onPress={() => void open()} glass
-        style={{ minHeight: 52, paddingHorizontal: 20, borderRadius: 16, borderWidth: 1, borderColor: input.trim() ? "rgba(105,120,255,.55)" : palette.glassBorder, backgroundColor: input.trim() ? palette.selected : palette.glass, color: input.trim() ? palette.accent : palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15 }}>{busy ? "…" : "Ekle"}</Touch></Box>
+      <Box style={{ flex: 1, minWidth: 0 }}><GlassInput label="Referans kodun var mı?" accessibilityLabel="Referans kodu" placeholder="REF-…" value={input} onChangeText={text => { setInput(text.toUpperCase()); setError(""); if (done) onResult(null); }} autoCapitalize="characters" autoCorrect={false} returnKeyType="go" onSubmitEditing={() => void redeem()} /></Box>
+      <Box style={{ zIndex: 2, elevation: 2, flexShrink: 0 }}><Touch accessibilityLabel="Referans kodunu ekle" disabled={busy || !filled} disabledOpacity={0.7} onPress={() => void redeem()} glass
+        style={{ minHeight: 52, paddingHorizontal: 20, borderRadius: 16, borderWidth: 1, borderColor: filled ? "rgba(105,120,255,.55)" : palette.glassBorder, backgroundColor: filled ? palette.selected : palette.glass, color: filled ? palette.accent : palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15 }}>{busy ? "…" : "Ekle"}</Touch></Box>
     </Box>
-    {error ? <Label accessibilityRole="alert" style={[[ui.textXs, ui.mt15], { color: palette.error }]}>{error}</Label> : null}
-    {result && !error ? <Label accessibilityRole="alert" style={[[ui.textXs, ui.mt15], { color: palette.accent }]}>Kod geçerli. Devam edebilirsin.</Label> : null}
+    {error ? <Label accessibilityRole="alert" style={[[ui.textXs, ui.mt15], { color: palette.error }]}>{error}</Label>
+      : done ? <Label accessibilityRole="alert" style={[[ui.textXs, ui.mt15], { color: palette.success }]}>Referansın eklendi. Devam edebilirsin.</Label>
+      : <Label style={[[ui.textXs, ui.mt15, ui.textWhite40]]}>Üye, kodu profilindeki “Referans kodu oluştur” ile alır.</Label>}
   </Box>;
 }
 
@@ -625,16 +619,9 @@ function Step2({
 
               {/* A reference approved while this step is open moves the application on by itself. */}
               <ReferencePicker refreshSignal={refreshSignal} onRefreshed={() => { referencesDone.current?.(); referencesDone.current = null; }} onApproved={() => void submitApplication()} />
+              <ReferenceCodeField done={(codeResult?.target as string) === "reference"} onResult={setCodeResult} />
             </GlassCard>
 
-            <Box style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <Box style={{ flex: 1, height: 1, backgroundColor: palette.glassBorder }} />
-              <Label style={[[ui.textXs, ui.textWhite40]]}>veya</Label>
-              <Box style={{ flex: 1, height: 1, backgroundColor: palette.glassBorder }} />
-            </Box>
-
-            {/* An event invite code (EWT-… or its link) opens that event as a guest, right from here. */}
-            <InviteCodeField result={codeResult} onResult={setCodeResult} />
           </Box>
         </Box>
       </Scroll>

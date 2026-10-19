@@ -3,11 +3,12 @@ import GuestRouteBoundary from "../src/guest/GuestRouteBoundary";
 import { BlurSurface } from "../src/native/SharedBlur";
 import { palette } from "../src/theme/palette";
 import { useFonts } from "expo-font"
-import { Stack } from "expo-router"
+import { Stack, usePathname } from "expo-router"
 import * as SplashScreen from "expo-splash-screen"
 import { StatusBar } from "expo-status-bar"
 import { useEffect } from "react"
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -26,7 +27,12 @@ import PushOpenHandler from "../src/components/PushOpenHandler"
 import HardwareBack from "../src/components/HardwareBack"
 import { WalkthroughProvider } from "../src/walkthrough/WalkthroughProvider"
 void SplashScreen.preventAutoHideAsync()
+// Full-screen forms whose own Scroll keeps the focused field above the keyboard. The keyboard slides over
+// their fixed background instead of the root shrinking the whole screen (which lifted the backdrop and
+// pushed the fields up twice).
+const SCREEN_OWNS_KEYBOARD = new Set(["/login"])
 export default function RootLayout() {
+  const pathname = usePathname()
   const [loaded, error] = useFonts({
     Outfit: require("../assets/fonts/Outfit.ttf"),
     "Outfit-Medium": require("../assets/fonts/Outfit-Medium.ttf"),
@@ -56,8 +62,11 @@ export default function RootLayout() {
         <ErrorNoticeProvider>
           <KeyboardAvoidingView
             style={s.root}
+            enabled={!SCREEN_OWNS_KEYBOARD.has(pathname)}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
           >
+            {/* A tap that no button, field or list takes closes the keyboard, on every screen. */}
+            <View style={s.root} onStartShouldSetResponder={() => Keyboard.isVisible()} onResponderRelease={() => Keyboard.dismiss()}>
             <BlurSurface overlay={<ApiLoadingOverlay />}><GuestProvider><StoreProvider><GuestRouteBoundary><WalkthroughProvider>
               <Stack
                 screenOptions={{
@@ -73,6 +82,7 @@ export default function RootLayout() {
               <PushOpenHandler />
               <HardwareBack />
             </WalkthroughProvider></GuestRouteBoundary></StoreProvider></GuestProvider></BlurSurface>
+            </View>
           </KeyboardAvoidingView>
         </ErrorNoticeProvider>
       </SafeAreaView>

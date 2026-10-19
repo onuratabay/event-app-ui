@@ -12,8 +12,43 @@ import { formatLocalPhone, PHONE_COUNTRY_CODE, phoneDigits } from "../content/ph
 import { getApiErrorMessage, login } from "../api/client"
 import { useSignedOutEntry } from "../native/session"
 import { updateStoreUser, useStore } from "../native/Store"
+import { useOptionalGuest } from "../guest/GuestSession"
+import { parseGuestCode } from "../guest/links"
+import { useRouter, type Href } from "expo-router"
 import type { NavigateFn } from "../types"
 import { ui } from "../theme/styles"
+
+/** An Ewent invite (EWT-… code or its link) opens that event as a guest, without an account. */
+function GuestInviteField() {
+  const guest = useOptionalGuest()
+  const router = useRouter()
+  const [input, setInput] = useState("")
+  const [error, setError] = useState("")
+  const [busy, setBusy] = useState(false)
+  const open = async () => {
+    const code = parseGuestCode(input)
+    if (!code) { setError("Geçerli bir Ewent davet kodu veya bağlantısı gir.") ; return }
+    if (!guest || busy) return
+    setBusy(true); setError("")
+    try { await guest.enter(code); router.replace({ pathname: "/guest-event", params: { code } } as Href) }
+    catch { setError("Davet açılamadı. Tekrar dene.") }
+    finally { setBusy(false) }
+  }
+  const filled = !!input.trim()
+  return <Box>
+    <Label style={styles.fieldLabel}>Ewent davet kodum var</Label>
+    <Box style={styles.phoneRow}>
+      <Box style={[styles.inputFrame, { flex: 1 }]}>
+        <GlassFill radius={16} {...INPUT_FROST} />
+        <Field value={input} onChangeText={text => { setInput(text); setError("") }} placeholder="EWT-… veya davet bağlantısı" accessibilityLabel="Ewent davet kodu"
+          autoCapitalize="none" autoCorrect={false} returnKeyType="go" onSubmitEditing={() => void open()} style={styles.input} />
+      </Box>
+      <Touch accessibilityLabel="Daveti aç" disabled={busy || !filled} disabledOpacity={0.7} onPress={() => void open()} glass
+        style={[styles.inviteButton, filled && styles.inviteButtonOn]}>{busy ? "…" : "Aç"}</Touch>
+    </Box>
+    {error ? <Label accessibilityRole="alert" style={styles.inviteError}>{error}</Label> : null}
+  </Box>
+}
 
 export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
   const { refreshEvents, setData, whenReady } = useStore()
@@ -129,10 +164,17 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
           </Touch>
         </Box>
         <Touch accessibilityLabel="Şifremi unuttum" onPress={() => navigate("forgot-password")} style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}><Label style={{ color: "#c7ceff", fontFamily: "Outfit-Medium", fontSize: 14 }}>Şifremi unuttum</Label></Touch>
+        <Box style={styles.divider}>
+          <Box style={styles.dividerLine} />
+          <Label style={styles.dividerText}>veya</Label>
+          <Box style={styles.dividerLine} />
+        </Box>
+        <GuestInviteField />
+        {/* Every input first; the actions close the form. */}
         <Touch
           onPress={submit}
           disabled={busy}
-          style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.fontSemibold, { color: palette.text, marginTop: 16, minHeight: 54, justifyContent: "center" }]]}
+          style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.fontSemibold, { color: palette.text, marginTop: 24, minHeight: 54, justifyContent: "center" }]]}
           gradient={palette.actionGradient}
         >
           {busy ? "Bağlanıyor..." : "Giriş Yap"}
@@ -161,5 +203,11 @@ const styles = StyleSheet.create({
   phoneRow: { flexDirection: "row", gap: 8 },
   countryCode: { width: 72 },
   countryCodeInner: { flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", borderRadius: 16, borderWidth: 1, borderColor: palette.glassBorder },
+  divider: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: palette.glassBorder },
+  dividerText: { color: "rgba(241,245,249,.4)", fontSize: 12 },
+  inviteButton: { minHeight: 56, paddingHorizontal: 20, borderRadius: 16, borderWidth: 1, borderColor: palette.glassBorder, backgroundColor: palette.glass, justifyContent: "center", color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15 },
+  inviteButtonOn: { borderColor: "rgba(105,120,255,.55)", backgroundColor: palette.selected, color: palette.accent },
+  inviteError: { color: palette.error, fontSize: 12, marginTop: 6, marginLeft: 4 },
   countryCodeText: { color: "#f4f5ff", fontSize: 15, fontFamily: "Outfit-Medium" },
 })
