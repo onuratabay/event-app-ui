@@ -1,7 +1,7 @@
 import { useWalkthroughBlocker } from "../walkthrough/activity"
 import { palette } from "../theme/palette";
 import { useEffect, useMemo, useRef, useState } from "react"
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native"
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions } from "react-native"
 import * as Location from "expo-location"
 import { FilterChip, GlassInput } from "../components/GlassUI"
 import { Box, Label, Scroll, Touch } from "../native/UI"
@@ -26,6 +26,8 @@ export default function DiscoveryFilterSheet({ value, categories, events = [], n
   const [error, setError] = useState<string | null>(null)
   const searchVersion = useRef(0)
   const { data: store } = useStore()
+  // The panel sizes to its content, so the list needs a maxHeight (room left for the title and buttons) to show at all.
+  const listMaxHeight = Math.max(240, useWindowDimensions().height * 0.94 - 260)
   const [availabilities, setAvailabilities] = useState<ApiAvailability[]>([])
   const [myInterestIds, setMyInterestIds] = useState<string[]>([])
   useEffect(() => {
@@ -86,7 +88,7 @@ export default function DiscoveryFilterSheet({ value, categories, events = [], n
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.keyboard}>
       <Box style={s.panel}>
         <Box style={s.heading}><Box><Label style={s.eyebrow}>PLANIN NEREDEYSE</Label><Label style={s.title}>Filtreler</Label></Box><Touch accessibilityLabel="Filtreyi kapat" onPress={onClose} style={s.close}><Label style={s.text}>✕</Label></Touch></Box>
-        <Scroll style={s.scroll} keyboardShouldPersistTaps="handled">
+        <Scroll style={[s.scroll, { maxHeight: listMaxHeight }]} keyboardShouldPersistTaps="handled">
           {suggestions.length > 0 && <>
             <Label style={[s.section, { marginTop: 0 }]}>Senin için</Label>
             <Scroll horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={s.suggestions}>

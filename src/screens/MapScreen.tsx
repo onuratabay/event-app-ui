@@ -279,6 +279,14 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
       </Touch>
     </Box>
 
+    {/* Density legend as a vertical scale on the right edge, dense at the top, while the heat layer shows. */}
+    {showLegend && <Box pointerEvents="none" accessibilityLabel="Yoğunluk ölçeği: aşağıdan yukarı azdan çoka" style={[s.legend, { top: TOP_OVERLAY + 16 }]}>
+      <Label style={s.legendTitle}>Yoğunluk</Label>
+      <Label style={s.legendText}>Çok</Label>
+      <Box style={s.legendScale}>{[...COLORS].reverse().map(color => <View key={color} style={[s.legendBar, { backgroundColor: color }]} />)}</Box>
+      <Label style={s.legendText}>Az</Label>
+    </Box>}
+
     {/* Bottom: the picked event(s) as large cards; otherwise the events in view as a strip of small cards. */}
     <Box pointerEvents="box-none" onLayout={event => setPanelHeight(event.nativeEvent.layout.height)} style={[s.bottom, { bottom: navInset + 12 }]}>
       {selected.length > 0 ? <Box style={s.selection}>
@@ -298,17 +306,11 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
             {strip.map(event => <EventMiniCard key={event.id} event={event} onOpen={() => openEvent(event)} />)}
           </Scroll>
         </>}
-        {(statusLine || showLegend || truncated || locationError) && <Box glass style={s.status}>
+        {(statusLine || truncated || locationError) && <Box glass style={s.status}>
           {statusLine && <Box style={s.statusRow}>
             {loading ? <><ActivityIndicator color={palette.accent} /><Label style={s.statusText}>Etkinlikler yükleniyor…</Label></>
               : error ? <><Label style={[s.statusText, s.errorText]} numberOfLines={2}>{error}</Label><Touch onPress={() => setRetry(value => value + 1)} style={s.statusAction}><Label style={s.statusActionText}>Tekrar dene</Label></Touch></>
               : <><Label style={s.statusText}>Bu filtrelerde etkinlik yok</Label>{anyFilter && <Touch onPress={clearFilters} style={s.statusAction}><Label style={s.statusActionText}>Filtreleri temizle</Label></Touch>}</>}
-          </Box>}
-          {showLegend && <Box style={s.legend}>
-            <Label style={s.legendText}>Yoğunluk</Label>
-            <Label style={s.legendText}>Az</Label>
-            {COLORS.map(color => <View key={color} style={[s.legendBar, { backgroundColor: color }]} />)}
-            <Label style={s.legendText}>Çok</Label>
           </Box>}
           {truncated && <Label style={s.note}>En fazla 500 etkinlik gösteriliyor; tarih veya bölgeyi daralt.</Label>}
           {locationError && <Touch onPress={() => setLocationError(null)}><Label style={[s.note, s.errorText]}>{locationError}</Label></Touch>}
@@ -343,9 +345,11 @@ const s = StyleSheet.create({
   statusAction: { minHeight: 32, paddingHorizontal: 10, borderRadius: 10, justifyContent: "center", backgroundColor: palette.selected },
   statusActionText: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 12 },
   errorText: { color: palette.error },
-  legend: { flexDirection: "row", alignItems: "center", gap: 6 },
-  legendText: { color: palette.muted, fontSize: 11 },
-  legendBar: { width: 22, height: 6, borderRadius: 3 },
+  legend: { position: "absolute", right: 16, width: 44, alignItems: "center", gap: 6, paddingVertical: 10, borderRadius: 22, backgroundColor: "rgba(17,22,42,.88)", borderWidth: 1, borderColor: palette.border },
+  legendTitle: { color: palette.muted, fontSize: 8, letterSpacing: 0.4, fontFamily: "Outfit-Medium" },
+  legendText: { color: palette.muted, fontSize: 10 },
+  legendScale: { width: 8, borderRadius: 4, overflow: "hidden" },
+  legendBar: { width: 8, height: 28 },
   note: { color: palette.muted, fontSize: 11, lineHeight: 16 },
   selection: { gap: 8 },
   selectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4 },
