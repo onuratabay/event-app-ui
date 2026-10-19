@@ -118,6 +118,7 @@ Module._load = function (id, parent, isMain) {
   if (id === "expo-haptics") return { impactAsync: async () => {}, ImpactFeedbackStyle: { Light: "light" } }
   if (id === "expo-image") return { Image: "Image" }
   if (id === "expo-linear-gradient") return { LinearGradient: "LinearGradient" }
+  if (id === "@react-native-masked-view/masked-view") return { __esModule: true, default: "MaskedView" }
   if (id === "expo-blur") return { BlurView: "BlurView", BlurTargetView: "BlurTargetView" }
   if (id === "react-native-safe-area-context") return { SafeAreaView: "View", useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }) }
   if (id === "@react-native-community/datetimepicker")

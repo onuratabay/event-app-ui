@@ -478,10 +478,14 @@ export function CloseIcon(props: IconProps) { return <LineSymbol {...props} path
 export function EditIcon(props: IconProps) { return <LineSymbol {...props} path="m15 5 4 4M4 20l5-1L20 8a2.8 2.8 0 0 0-4-4L5 15l-1 5Z" /> }
 export function SendIcon(props: IconProps) { return <LineSymbol {...props} path="M12 19V5m-6 6 6-6 6 6" /> }
 export function FilterIcon(props: IconProps) { return <LineSymbol {...props} path="M4 7h10M18 7h2M4 17h4M12 17h8M14 4v6M8 14v6" /> }
-export function LocateIcon(props: IconProps) { return <LineSymbol {...props} path="M12 2v3M12 19v3M2 12h3M19 12h3M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /> }
+/** Map apps' "my location" arrow; filled once the map is following the user's position. */
+export function MyLocationIcon({ size = defaults.size, style, strokeWidth = defaults.strokeWidth, filled = false }: IconProps & { filled?: boolean }) {
+  return <Vector width={size} height={size} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={[style]}>
+    <Path d="M20.5 3.5 3.8 10.4a.6.6 0 0 0 .05 1.13l6.6 2.02 2.02 6.6a.6.6 0 0 0 1.13.05L20.5 3.5Z" />
+  </Vector>
+}
 export function EyeIcon(props: IconProps) { return <LineSymbol {...props} path="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /> }
 export function EyeOffIcon(props: IconProps) { return <LineSymbol {...props} path="M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.6 3.4M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18" /> }
-export function ExpandIcon(props: IconProps) { return <LineSymbol {...props} path="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" /> }
 export function CategoryIcon({ name = "", ...props }: IconProps & { name?: string }) {
   const key = name.toLocaleLowerCase("tr-TR");
   const path = /kahve|coffee|yemek/.test(key) ? "M4 8h12v6a5 5 0 0 1-10 0V8m10 1h2a3 3 0 0 1 0 6h-2M5 21h14M8 3v2m4-2v2"

@@ -1,17 +1,21 @@
 import { useWalkthroughBlocker } from "../walkthrough/activity"
 import { palette } from "../theme/palette";
-import { useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from "react-native"
 import * as Location from "expo-location"
 import { FilterChip, GlassInput } from "../components/GlassUI"
 import { Box, Label, Scroll, Touch } from "../native/UI"
 import { PlaceSuggestionList, usePlaceSuggestions } from "./PlaceSuggestions"
-import type { PlaceSuggestion } from "../api/client"
+import { getAvailabilities, getUserInterests, type ApiAvailability, type ApiEvent, type PlaceSuggestion } from "../api/client"
+import { useStore } from "../native/Store"
+import { buildFilterSuggestions, SOURCE_LABEL, suggestionApplied, type FilterSuggestion } from "./suggestions"
 import { categoryVisual, CITY_PRESETS, DEFAULT_FILTERS, filterError, localDate, type DiscoveryFilters, type MapPlace } from "./filters"
 
-export default function DiscoveryFilterSheet({ value, categories, onApply, onClose }: {
+export default function DiscoveryFilterSheet({ value, categories, events = [], nearby = null, onApply, onClose }: {
   value: DiscoveryFilters
   categories: Array<{ id: string; name: string }>
+  events?: ApiEvent[]
+  nearby?: MapPlace | null
   onApply: (value: DiscoveryFilters) => void
   onClose: () => void
 }) {
@@ -21,6 +25,24 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const searchVersion = useRef(0)
+  const { data: store } = useStore()
+  const [availabilities, setAvailabilities] = useState<ApiAvailability[]>([])
+  const [myInterestIds, setMyInterestIds] = useState<string[]>([])
+  useEffect(() => {
+    let active = true
+    // Each source is optional: a failed request only drops its own suggestions.
+    getAvailabilities().then(result => { if (active) setAvailabilities(result.items) }).catch(() => {})
+    getUserInterests().then(rows => { if (active) setMyInterestIds(rows.map(row => row.id)) }).catch(() => {})
+    return () => { active = false }
+  }, [])
+  const suggestions = useMemo(() => buildFilterSuggestions({ availabilities, interestIds: myInterestIds, interestNames: store.user.interests, profileCity: store.user.city, categories, events, nearby }),
+    [availabilities, myInterestIds, store.user.interests, store.user.city, categories, events, nearby])
+  const applySuggestion = (suggestion: FilterSuggestion) => {
+    searchVersion.current++
+    setDraft(previous => ({ ...previous, ...suggestion.apply }))
+    if (suggestion.apply.place) setQuery(suggestion.apply.place.name)
+    setResults([]); setError(null)
+  }
   const search = async () => {
     if (!query.trim() || busy) return
     const version = ++searchVersion.current
@@ -47,10 +69,10 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
     } finally { setBusy(false) }
   }
   // Suggestions while typing (venues, districts, cities); "Konumu bul" stays as the geocoder fallback.
-  const suggestions = usePlaceSuggestions(draft.place ? "" : query, draft.place)
+  const placeSuggestions = usePlaceSuggestions(draft.place ? "" : query, draft.place)
   const pickSuggestion = async (suggestion: PlaceSuggestion) => {
     try {
-      const place = await suggestions.resolve(suggestion)
+      const place = await placeSuggestions.resolve(suggestion)
       choosePlace({ name: place.name || suggestion.title, latitude: place.latitude, longitude: place.longitude }, 5)
     } catch { setError("Bu yer seçilemedi. Bağlantını kontrol edip tekrar dene.") }
   }
@@ -65,6 +87,18 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
       <Box style={s.panel}>
         <Box style={s.heading}><Box><Label style={s.eyebrow}>PLANIN NEREDEYSE</Label><Label style={s.title}>Filtreler</Label></Box><Touch accessibilityLabel="Filtreyi kapat" onPress={onClose} style={s.close}><Label style={s.text}>✕</Label></Touch></Box>
         <Scroll style={s.scroll} keyboardShouldPersistTaps="handled">
+          {suggestions.length > 0 && <>
+            <Label style={[s.section, { marginTop: 0 }]}>Senin için</Label>
+            <Scroll horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={s.suggestions}>
+              {suggestions.map(item => {
+                const on = suggestionApplied(draft, item)
+                return <Touch key={item.id} accessibilityLabel={`${SOURCE_LABEL[item.source]}: ${item.label}`} accessibilityState={{ selected: on }} onPress={() => applySuggestion(item)} style={[s.suggestion, on && s.suggestionOn]}>
+                  <Label style={[s.suggestionSource, on && { color: palette.accent }]}>{SOURCE_LABEL[item.source]}</Label>
+                  <Label style={s.text} numberOfLines={1}>{item.label}</Label>
+                </Touch>
+              })}
+            </Scroll>
+          </>}
           <Label style={s.section}>Ne zaman uygunsun?</Label>
           <Box style={s.wrap}>{([["all", "Yaklaşan"], ["today", "Bugün"], ["tomorrow", "Yarın"], ["week", "Haftaya"], ["custom", "Tarih seç"]] as const).map(([id, label]) => <FilterChip key={id} label={label} selected={draft.datePreset === id} onPress={() => setDraft(previous => ({ ...previous, datePreset: id, dateFrom: previous.dateFrom || localDate(new Date()), dateTo: previous.dateTo || localDate(new Date()) }))} />)}</Box>
           {draft.datePreset === "custom" && <Box style={s.row}><Box style={s.grow}><GlassInput label="Başlangıç tarihi" mode="date" value={draft.dateFrom} onChangeText={dateFrom => setDraft(previous => ({ ...previous, dateFrom }))} /></Box><Box style={s.grow}><GlassInput label="Bitiş tarihi" mode="date" value={draft.dateTo} onChangeText={dateTo => setDraft(previous => ({ ...previous, dateTo }))} /></Box></Box>}
@@ -73,7 +107,7 @@ export default function DiscoveryFilterSheet({ value, categories, onApply, onClo
           <Label style={s.hint}>Süresi belli etkinliklerin tamamı bu aralığa sığar. Bitiş saati daha erkense aralık ertesi güne uzanır.</Label>
           <Label style={s.section}>Nerede olacaksın?</Label>
           <GlassInput label="Şehir, semt veya mekân" placeholder="Örn. İzmir veya Eymir Gölü, Ankara" value={query} onChangeText={text => { searchVersion.current++; setQuery(text); setResults([]); setDraft(previous => ({ ...previous, place: null })) }} />
-          <PlaceSuggestionList items={suggestions.items} onPick={item => void pickSuggestion(item)} />
+          <PlaceSuggestionList items={placeSuggestions.items} onPick={item => void pickSuggestion(item)} />
           <Touch style={s.search} onPress={() => void search()} disabled={busy || !query.trim()}><Label style={s.text}>{busy ? "Konum aranıyor…" : "Konumu bul"}</Label></Touch>
           {results.map((place, index) => <Touch key={index} style={s.result} onPress={() => choosePlace(place, 1)}><Label style={s.text}>⌖ {place.name}</Label><Label style={s.hint}>Bu konumu seç</Label></Touch>)}
           <Box style={s.wrap}>{CITY_PRESETS.map(place => <FilterChip key={place.name} label={place.name} selected={draft.place?.name === place.name} onPress={() => choosePlace(place)} />)}<FilterChip label="Her yerde" selected={!draft.place && !query} onPress={() => { searchVersion.current++; setQuery(""); setResults([]); setDraft(previous => ({ ...previous, place: null })) }} /></Box>
@@ -99,5 +133,9 @@ const s = StyleSheet.create({
   close: { padding: 15 }, scroll: { flexShrink: 1 }, section: { fontFamily: "Outfit-SemiBold", color: "#f4f5ff", fontSize: 17, marginTop: 16, marginBottom: 10 },
   wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 8 }, row: { flexDirection: "row", gap: 12, marginTop: 8 }, grow: { flex: 1 }, text: { color: "#f4f5ff", fontSize: 14 },
   hint: { color: "#9995ab", fontSize: 12, lineHeight: 18 }, link: { color: "#b9c3ff", fontSize: 12, paddingVertical: 8 }, search: { padding: 12, backgroundColor: "#ffffff0d", alignItems: "center", borderRadius: 12, marginVertical: 8 },
+  suggestions: { flexGrow: 0, flexDirection: "row", gap: 8, marginBottom: 4 },
+  suggestion: { maxWidth: 240, minHeight: 52, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 16, borderWidth: 1, borderColor: palette.glassBorder, backgroundColor: palette.glass, justifyContent: "center", gap: 2 },
+  suggestionOn: { backgroundColor: palette.selected, borderColor: "rgba(105,120,255,.38)" },
+  suggestionSource: { color: "#9995ab", fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", fontFamily: "Outfit-Medium" },
   result: { padding: 12, borderBottomWidth: 1, borderColor: "#ffffff15" }, error: { color: "#efaa91", fontSize: 12 }, reset: { padding: 14, justifyContent: "center" }, apply: { flex: 1, padding: 16, backgroundColor: "#4d5bcb", borderRadius: 18, alignItems: "center" }, applyText: { fontFamily: "Outfit-SemiBold", color: "#f4f5ff", fontSize: 14 },
 })

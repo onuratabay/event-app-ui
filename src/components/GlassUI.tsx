@@ -311,7 +311,7 @@ export function ScoreBadge({ score, label }: { score: number; label: string }) {
   )
 }
 type Glyph = { body: string; detail?: string; dots?: [number, number, number][] }
-type EventShape = { glyph: Glyph; color: string; z: number; period: number; size: number; top: `${number}%`; left: `${number}%`; depth: number; drift: number; angle: string }
+type EventShape = { glyph: Glyph; color: string; z: number; period: number; size: number; top: `${number}%`; left: `${number}%`; drift: number; angle: string }
 // Duotone event glyphs on a 48 grid: a filled body, stroked inner detail and solid accent dots.
 const GLYPHS = {
   ticket: { body: "M10 10h28a4 4 0 0 1 4 4v5a5 5 0 0 0 0 10v5a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4v-5a5 5 0 0 0 0-10v-5a4 4 0 0 1 4-4Z",
@@ -337,16 +337,16 @@ const GLYPHS = {
 // Ten glyphs that each glide towards and away from the viewer on their own cycle (`period` ms for a
 // full approach and retreat, starting at depth `z`), so near and far keep trading places.
 const EVENT_SHAPES: EventShape[] = [
-  { glyph: GLYPHS.ticket, z: 0.9, period: 15000, size: 116, top: "5%", left: "-10%", depth: 1, drift: 14, angle: "-14deg", color: palette.accent },
-  { glyph: GLYPHS.sparkle, z: 0.2, period: 11000, size: 52, top: "15%", left: "46%", depth: -1, drift: -16, angle: "0deg", color: palette.text },
-  { glyph: GLYPHS.music, z: 0.5, period: 17000, size: 92, top: "19%", left: "68%", depth: 1, drift: 16, angle: "10deg", color: palette.violet },
-  { glyph: GLYPHS.pin, z: 0.3, period: 13000, size: 84, top: "33%", left: "4%", depth: -1, drift: -14, angle: "-6deg", color: palette.cyan },
-  { glyph: GLYPHS.coffee, z: 0.1, period: 19000, size: 76, top: "45%", left: "38%", depth: 1, drift: 12, angle: "6deg", color: palette.cyan },
-  { glyph: GLYPHS.headphones, z: 0.7, period: 14000, size: 84, top: "43%", left: "76%", depth: -1, drift: -14, angle: "-8deg", color: palette.cyan },
-  { glyph: GLYPHS.calendar, z: 0.4, period: 18000, size: 108, top: "58%", left: "62%", depth: 1, drift: 14, angle: "9deg", color: palette.accent },
-  { glyph: GLYPHS.mic, z: 0.8, period: 12000, size: 78, top: "66%", left: "28%", depth: -1, drift: -16, angle: "-12deg", color: palette.cyan },
-  { glyph: GLYPHS.cocktail, z: 0.6, period: 16000, size: 96, top: "78%", left: "-6%", depth: 1, drift: 16, angle: "-10deg", color: palette.violet },
-  { glyph: GLYPHS.popper, z: 0.25, period: 20000, size: 88, top: "84%", left: "64%", depth: -1, drift: -12, angle: "8deg", color: palette.violet },
+  { glyph: GLYPHS.ticket, z: 0.9, period: 15000, size: 116, top: "5%", left: "-10%", drift: 14, angle: "-14deg", color: palette.accent },
+  { glyph: GLYPHS.sparkle, z: 0.2, period: 11000, size: 52, top: "15%", left: "46%", drift: -16, angle: "0deg", color: palette.text },
+  { glyph: GLYPHS.music, z: 0.5, period: 17000, size: 92, top: "19%", left: "68%", drift: 16, angle: "10deg", color: palette.violet },
+  { glyph: GLYPHS.pin, z: 0.3, period: 13000, size: 84, top: "33%", left: "4%", drift: -14, angle: "-6deg", color: palette.cyan },
+  { glyph: GLYPHS.coffee, z: 0.1, period: 19000, size: 76, top: "45%", left: "38%", drift: 12, angle: "6deg", color: palette.cyan },
+  { glyph: GLYPHS.headphones, z: 0.7, period: 14000, size: 84, top: "43%", left: "76%", drift: -14, angle: "-8deg", color: palette.cyan },
+  { glyph: GLYPHS.calendar, z: 0.4, period: 18000, size: 108, top: "58%", left: "62%", drift: 14, angle: "9deg", color: palette.accent },
+  { glyph: GLYPHS.mic, z: 0.8, period: 12000, size: 78, top: "66%", left: "28%", drift: -16, angle: "-12deg", color: palette.cyan },
+  { glyph: GLYPHS.cocktail, z: 0.6, period: 16000, size: 96, top: "78%", left: "-6%", drift: 16, angle: "-10deg", color: palette.violet },
+  { glyph: GLYPHS.popper, z: 0.25, period: 20000, size: 88, top: "84%", left: "64%", drift: -12, angle: "8deg", color: palette.violet },
 ]
 const dotPath = ([x, y, r]: [number, number, number]) => `M${x + r} ${y}a${r} ${r} 0 1 1-${2 * r} 0a${r} ${r} 0 1 1 ${2 * r} 0Z`
 function EventGlyph({ glyph, color, size, id, blur }: { glyph: Glyph; color: string; size: number; id: string; blur?: number }) {
@@ -380,38 +380,9 @@ function EventGlyph({ glyph, color, size, id, blur }: { glyph: Glyph; color: str
     </Svg>
   )
 }
-// One device-motion subscription shared by every mounted background, released with the last one.
-const tilt = { x: new Animated.Value(0), y: new Animated.Value(0) }
-let tiltUsers = 0
-let stopTilt: (() => void) | undefined
-function startTilt() {
-  let cancelled = false
-  let subscription: { remove: () => void } | undefined
-  let motion: typeof import("expo-sensors").DeviceMotion | undefined
-  // Missing native module (tests, previews) leaves the background drifting without parallax.
-  try { motion = require("expo-sensors").DeviceMotion } catch { return () => {} }
-  if (!motion) return () => {}
-  const deviceMotion = motion
-  void deviceMotion.isAvailableAsync().then(available => {
-    if (!available || cancelled) return
-    deviceMotion.setUpdateInterval(60)
-    subscription = deviceMotion.addListener(({ rotation }) => {
-      tilt.x.setValue(Math.max(-1, Math.min(1, (rotation?.gamma || 0) / 0.45)))
-      tilt.y.setValue(Math.max(-1, Math.min(1, (rotation?.beta || 0) / 0.45)))
-    })
-  }).catch(() => {})
-  return () => { cancelled = true; subscription?.remove() }
-}
-function useTilt(active: boolean) {
-  useEffect(() => {
-    if (!active) return
-    if (tiltUsers++ === 0) stopTilt = startTilt()
-    return () => { if (--tiltUsers === 0) { stopTilt?.(); stopTilt = undefined } }
-  }, [active])
-}
 /**
- * A feed glyph gliding towards and away from the viewer: nearer means larger, sharper and more
- * responsive to the phone's tilt; farther means smaller, dimmer and blurred. A sharp and a blurred
+ * A feed glyph gliding towards and away from the viewer: nearer means larger and sharper;
+ * farther means smaller, dimmer and blurred. A sharp and a blurred
  * copy cross-fade with depth, so focus changes without re-rendering the SVG every frame.
  */
 function DepthGlyph({ shape, index, moving, drift }: { shape: EventShape; index: number; moving: boolean; drift: Animated.Value }) {
@@ -428,23 +399,18 @@ function DepthGlyph({ shape, index, moving, drift }: { shape: EventShape; index:
     return () => cycle.stop()
   }, [depth, moving, shape])
   const by = (from: number, to: number) => depth.interpolate({ inputRange: [0, 1], outputRange: [from, to] })
-  // Parallax grows with nearness: a far glyph barely shifts when the phone tilts, a near one swings.
-  const reach = by(5, 34)
   const sway = shape.drift, turn = (index % 2 ? -1 : 1) * 16
   return (
     <Animated.View style={{ position: "absolute", top: shape.top, left: shape.left, width: shape.size, height: shape.size, opacity: by(0.35, 1),
       transform: [
         { translateX: drift.interpolate({ inputRange: [0, 1], outputRange: [-sway, sway] }) },
         { translateY: drift.interpolate({ inputRange: [0, 1], outputRange: [sway * 0.6, -sway * 0.6] }) },
-        { translateX: Animated.multiply(tilt.x, Animated.multiply(reach, shape.depth)) },
-        { translateY: Animated.multiply(tilt.y, Animated.multiply(reach, shape.depth)) },
         { scale: by(0.5, 1.2) },
       ] }}
     >
       <Animated.View style={{ flex: 1, transform: [
         { perspective: 700 },
         { rotate: shape.angle },
-        { rotateX: tilt.y.interpolate({ inputRange: [-1, 1], outputRange: ["-12deg", "12deg"] }) },
         { rotateY: drift.interpolate({ inputRange: [0, 1], outputRange: [`${-turn}deg`, `${turn}deg`] }) },
       ] }}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: depth.interpolate({ inputRange: [0, 0.55, 1], outputRange: [1, 0.7, 0] }) }]}>
@@ -467,7 +433,7 @@ export function useReduceMotion() {
   }, [])
   return reduce
 }
-/** Ambient screen backdrop: drifting glows and event glyphs gliding near and far, following the device tilt. */
+/** Ambient screen backdrop: drifting glows and event glyphs gliding near and far. */
 export function AtmoBackground({
   variant = "violet",
 }: {
@@ -482,7 +448,6 @@ export function AtmoBackground({
   const reduceMotion = useReduceMotion()
   const moving = screenActive && !reduceMotion
   const drift = useRef(new Animated.Value(0)).current
-  useTilt(moving)
   useEffect(() => {
     if (!moving) return
     const ease = Easing.inOut(Easing.quad)

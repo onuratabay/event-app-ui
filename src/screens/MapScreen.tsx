@@ -1,6 +1,6 @@
 import ActivityIndicator from "../components/LoadingSpinner";
 import { palette } from "../theme/palette";
-import { CategoryIcon, ClockIcon, CloseIcon, ExpandIcon, FilterIcon, LocateIcon, LocationIcon } from "../components/Icons";
+import { CategoryIcon, ClockIcon, CloseIcon, FilterIcon, LocationIcon, MyLocationIcon } from "../components/Icons";
 import { useScreenActive } from '../native/useScreenActive'
 import { useEventDeltas, patchApiEvent } from '../services/event-deltas'
 import TopNavBar from "../components/TopNavBar"
@@ -21,6 +21,8 @@ import { Box, Label, Scroll, Touch } from "../native/UI"
 import { COLORS, createIndex, densitySpots, INITIAL_REGION, isVisible, modeForZoom, regionForRadius, USER_LOCATION_RADIUS_KM, zoomForRegion } from "../map/model"
 import type { NavigateFn } from "../types"
 
+// Bottom edge of the top overlays (floating title bar + filter row); map content is framed below it.
+const TOP_OVERLAY = 126
 
 /** Card for an event picked on the map: what, when, where, how full, and one clear action. */
 function EventMapCard({ event, width, onOpen }: { event: ApiEvent; width: number; onOpen: () => void }) {
@@ -38,6 +40,20 @@ function EventMapCard({ event, width, onOpen }: { event: ApiEvent; width: number
     </Box>
   </Touch>
 }
+/** Compact card for an event currently in view; the strip under the map scrolls through them. */
+function EventMiniCard({ event, onOpen }: { event: ApiEvent; onOpen: () => void }) {
+  return <Touch accessibilityLabel={`${event.interest.name}, ${event.date} ${event.startTime}, detayı aç`} onPress={onOpen} style={s.mini}>
+    <Box style={[s.miniIcon, { backgroundColor: categoryVisual(event.interest.name).color }]}><CategoryIcon name={event.interest.name} size={17} style={{ color: palette.text }} /></Box>
+    <Box style={s.cardBody}>
+      <Label style={s.miniTitle} numberOfLines={1}>{event.interest.name}{event.level ? ` · ${event.level.name}` : ""}</Label>
+      <Label style={s.miniMeta} numberOfLines={1}>{`${event.date.slice(0, 5)} · ${event.startTime} · ${participantCount(event.confirmedParticipantCount, event.maxParticipants)} kişi`}</Label>
+      {event.locationName ? <Label style={s.miniMeta} numberOfLines={1}>{event.locationName}</Label> : null}
+    </Box>
+  </Touch>
+}
+const MAX_MINI_CARDS = 40
+const MINI_WIDTH = 220
+const startKey = (event: ApiEvent) => `${event.date.split("/").reverse().join("-")} ${event.startTime}`
 export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   const screenActive = useScreenActive()
   const loadedQuery = useRef('')
@@ -56,7 +72,11 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [showUser, setShowUser] = useState(false)
+  const [panelHeight, setPanelHeight] = useState(56)
   const navInset = useBottomNavInset()
+  // Overlays frame the map: camera moves keep events clear of the top bar and the bottom panel.
+  const panelTop = navInset + 12 + panelHeight
+  const edgePadding = { top: TOP_OVERLAY + 24, right: 48, bottom: panelTop + 24, left: 48 }
   const interacted = useRef(false)
   const alive = useRef(true)
   const filterRef = useRef(filters)
@@ -152,8 +172,14 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   ], Math.floor(zoom)), [index, region, zoom])
   const density = useMemo(() => mode === "heat" ? densitySpots(filtered, region, size.width, size.height) : [], [filtered, region, size, mode])
   const visible = useMemo(() => filtered.filter(event => isVisible(event, region)), [filtered, region])
+  // Soonest first, so the strip reads like an agenda for the area on screen.
+  const strip = useMemo(() => [...visible].sort((a, b) => startKey(a).localeCompare(startKey(b))).slice(0, MAX_MINI_CARDS), [visible])
   const heatOpacity = Math.max(0, Math.min(1, (11 - zoom) / 0.65))
   const markerOpacity = Math.max(0, Math.min(1, (zoom - 10.35) / 0.65))
+  // The strip lists only events whose pins are on screen; with no pins (wide heat view or an empty area) it stays hidden.
+  const showStrip = markerOpacity > 0 && strip.length > 0 && !loading && !error
+  const statusLine = loading || !!error || !filtered.length
+  const showLegend = mode === "heat" && !loading && !error && filtered.length > 0
   useEffect(() => {
     if (!screenActive || !ready || centered.current) return
     const requestedPlace = interacted.current ? filters.place : null
@@ -164,18 +190,9 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
       centered.current = true
     } else if (initialLocationResolved && filtered.length) {
       centered.current = true
-      map.current?.fitToCoordinates(filtered.map(event => ({ latitude: event.latitude, longitude: event.longitude })), {
-        edgePadding: { top: 150, right: 50, bottom: 30, left: 50 }, animated: true,
-      })
+      map.current?.fitToCoordinates(filtered.map(event => ({ latitude: event.latitude, longitude: event.longitude })), { edgePadding, animated: true })
     }
   }, [screenActive, ready, filtered, filters.place, filters.radiusKm, nearby, initialLocationResolved, size])
-  const zoomBy = (factor: number) => {
-    centered.current = true
-    map.current?.animateToRegion({ ...region,
-      latitudeDelta: Math.min(120, Math.max(0.0002, region.latitudeDelta * factor)),
-      longitudeDelta: Math.min(350, Math.max(0.0002, region.longitudeDelta * factor)),
-    }, 350)
-  }
   const openEvent = (event: ApiEvent) => {
     setData(current => ({ ...current, events: [mapApiEventPreservingCover(event, current.events.find(item => item.id === event.id)), ...current.events.filter(item => item.id !== event.id)] }))
     navigate("event-detail", { eventId: event.id })
@@ -188,10 +205,6 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
   const summary = [filters.place ? `${filters.place.name} · ${filters.radiusKm} km` : "Her yerde",
     filters.datePreset === "custom" ? `${range.from}${range.to && range.to !== range.from ? ` → ${range.to}` : ""}` : "",
     filters.timeFrom ? `${filters.timeFrom}–${filters.timeTo}` : ""].filter(Boolean).join(" · ")
-  const fitAll = () => {
-    centered.current = true
-    map.current?.fitToCoordinates(filtered.map(event => ({ latitude: event.latitude, longitude: event.longitude })), { edgePadding: { top: 200, right: 60, bottom: 200, left: 60 }, animated: true })
-  }
   const cardWidth = Math.min(360, size.width - 64)
   return <Box style={s.root}>
     {/* The map owns the entire canvas. Every control below is an overlay layer. */}
@@ -252,29 +265,22 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
     </View>
     <TopNavBar navigate={navigate} fallback="discover" title="Harita" subtitle={summary} floating />
 
-    {/* Only the Filtreler button sits on the map; date, activity, time and place are chosen in its sheet. */}
-    <Box walkthroughId="map-filters" pointerEvents="box-none" style={[s.top, { paddingTop: 66 }]}>
-      <Box style={s.typeRow} pointerEvents="box-none">
+    {/* Top row under the title, as in map apps: filters on the left, my location on the right. */}
+    <Box pointerEvents="box-none" style={s.top}>
+      <Box walkthroughId="map-filters">
         <Touch accessibilityLabel={advancedCount ? `Filtreler, ${advancedCount} aktif` : "Filtreler"} onPress={() => { interacted.current = true; setFilterOpen(true) }} glass style={[s.filterButton, advancedCount > 0 && s.filterButtonOn]}>
           <FilterIcon size={16} style={{ color: advancedCount ? palette.accent : palette.text }} />
           <Label style={[s.filterText, advancedCount > 0 && { color: palette.accent }]}>Filtreler</Label>
           {advancedCount > 0 && <Box style={s.badge}><Label style={s.badgeText}>{String(advancedCount)}</Label></Box>}
         </Touch>
       </Box>
-    </Box>
-
-    {/* Map controls: zoom, my location, fit all events. */}
-    <Box style={s.controls}>
-      <Touch accessibilityLabel="Yakınlaştır" onPress={() => zoomBy(0.5)} style={[s.control, s.controlTop]}><Label style={s.controlText}>+</Label></Touch>
-      <Touch accessibilityLabel="Uzaklaştır" onPress={() => zoomBy(2)} style={[s.control, s.controlBottom]}><Label style={s.controlText}>−</Label></Touch>
       <Touch walkthroughId="map-location" accessibilityLabel="Konumuma git" disabled={locating} onPress={() => void locate(true)} style={[s.control, s.controlSolo]}>
-        {locating ? <ActivityIndicator color={palette.accent} /> : <LocateIcon size={20} style={{ color: showUser ? palette.accent : palette.text }} />}
+        {locating ? <ActivityIndicator color={palette.accent} /> : <MyLocationIcon size={19} filled={showUser} style={{ color: showUser ? palette.accent : palette.text }} />}
       </Touch>
-      <Touch accessibilityLabel="Tüm etkinlikleri göster" disabled={!filtered.length} onPress={fitAll} style={[s.control, s.controlSolo]}><ExpandIcon size={18} style={{ color: palette.text }} /></Touch>
     </Box>
 
-    {/* Bottom: the picked event(s) as cards, otherwise one compact status line. */}
-    <Box pointerEvents="box-none" style={[s.bottom, { bottom: navInset + 12 }]}>
+    {/* Bottom: the picked event(s) as large cards; otherwise the events in view as a strip of small cards. */}
+    <Box pointerEvents="box-none" onLayout={event => setPanelHeight(event.nativeEvent.layout.height)} style={[s.bottom, { bottom: navInset + 12 }]}>
       {selected.length > 0 ? <Box style={s.selection}>
         <Box style={s.selectionHead}>
           <Label style={s.selectionTitle}>{selected.length > 1 ? `Bu noktada ${selected.length} etkinlik` : "Seçilen etkinlik"}</Label>
@@ -283,46 +289,46 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
         <Scroll horizontal showsHorizontalScrollIndicator={false} snapToInterval={cardWidth + 10} decelerationRate="fast" style={s.cards}>
           {selected.map(event => <EventMapCard key={event.id} event={event} width={cardWidth} onOpen={() => openEvent(event)} />)}
         </Scroll>
-      </Box> : <Box glass style={s.status}>
-        <Box style={s.statusRow}>
-          {loading ? <><ActivityIndicator color={palette.accent} /><Label style={s.statusText}>Etkinlikler yükleniyor…</Label></>
-            : error ? <><Label style={[s.statusText, s.errorText]} numberOfLines={2}>{error}</Label><Touch onPress={() => setRetry(value => value + 1)} style={s.statusAction}><Label style={s.statusActionText}>Tekrar dene</Label></Touch></>
-            : !filtered.length ? <><Label style={s.statusText}>Bu filtrelerde etkinlik yok</Label>{anyFilter && <Touch onPress={clearFilters} style={s.statusAction}><Label style={s.statusActionText}>Filtreleri temizle</Label></Touch>}</>
-            : <><Label style={s.statusCount}>{String(visible.length)}</Label><Label style={s.statusText}>{visible.length === filtered.length ? "etkinlik bu alanda" : `etkinlik bu alanda · toplam ${filtered.length}`}</Label>{visible.length < filtered.length && <Touch onPress={fitAll} style={s.statusAction}><Label style={s.statusActionText}>Tümünü göster</Label></Touch>}</>}
-        </Box>
-        {mode === "heat" && !loading && !error && filtered.length > 0 && <Box style={s.legend}>
-          <Label style={s.legendText}>Yoğunluk</Label>
-          <Label style={s.legendText}>Az</Label>
-          {COLORS.map(color => <View key={color} style={[s.legendBar, { backgroundColor: color }]} />)}
-          <Label style={s.legendText}>Çok</Label>
+      </Box> : <Box style={s.selection}>
+        {showStrip && <>
+          <Box style={s.selectionHead}>
+            <Label style={s.selectionTitle}>{visible.length === filtered.length ? `${visible.length} etkinlik bu alanda` : `${visible.length} etkinlik bu alanda · toplam ${filtered.length}`}</Label>
+          </Box>
+          <Scroll horizontal showsHorizontalScrollIndicator={false} snapToInterval={MINI_WIDTH + 8} decelerationRate="fast" style={s.cards}>
+            {strip.map(event => <EventMiniCard key={event.id} event={event} onOpen={() => openEvent(event)} />)}
+          </Scroll>
+        </>}
+        {(statusLine || showLegend || truncated || locationError) && <Box glass style={s.status}>
+          {statusLine && <Box style={s.statusRow}>
+            {loading ? <><ActivityIndicator color={palette.accent} /><Label style={s.statusText}>Etkinlikler yükleniyor…</Label></>
+              : error ? <><Label style={[s.statusText, s.errorText]} numberOfLines={2}>{error}</Label><Touch onPress={() => setRetry(value => value + 1)} style={s.statusAction}><Label style={s.statusActionText}>Tekrar dene</Label></Touch></>
+              : <><Label style={s.statusText}>Bu filtrelerde etkinlik yok</Label>{anyFilter && <Touch onPress={clearFilters} style={s.statusAction}><Label style={s.statusActionText}>Filtreleri temizle</Label></Touch>}</>}
+          </Box>}
+          {showLegend && <Box style={s.legend}>
+            <Label style={s.legendText}>Yoğunluk</Label>
+            <Label style={s.legendText}>Az</Label>
+            {COLORS.map(color => <View key={color} style={[s.legendBar, { backgroundColor: color }]} />)}
+            <Label style={s.legendText}>Çok</Label>
+          </Box>}
+          {truncated && <Label style={s.note}>En fazla 500 etkinlik gösteriliyor; tarih veya bölgeyi daralt.</Label>}
+          {locationError && <Touch onPress={() => setLocationError(null)}><Label style={[s.note, s.errorText]}>{locationError}</Label></Touch>}
         </Box>}
-        {truncated && <Label style={s.note}>En fazla 500 etkinlik gösteriliyor; tarih veya bölgeyi daralt.</Label>}
-        {locationError && <Touch onPress={() => setLocationError(null)}><Label style={[s.note, s.errorText]}>{locationError}</Label></Touch>}
       </Box>}
     </Box>
-    {filterOpen && <DiscoveryFilterSheet value={filters} categories={categories} onApply={applyFilters} onClose={() => setFilterOpen(false)} />}
+    {filterOpen && <DiscoveryFilterSheet value={filters} categories={categories} events={events} nearby={nearby} onApply={applyFilters} onClose={() => setFilterOpen(false)} />}
   </Box>
 }
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.background },
-  // Full-width rows: the scrolling chips run to the screen edge; the 16 px side margin sits inside them.
-  top: { position: "absolute", top: 16, left: 0, right: 0, gap: 8 },
-  typeRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 16 },
+  top: { position: "absolute", top: TOP_OVERLAY - 44, left: 16, right: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   // Same look as the search screen's chips (FilterChip).
   filterButton: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: palette.glassBorder, backgroundColor: palette.glass },
   filterButtonOn: { backgroundColor: palette.selected, borderColor: "rgba(105,120,255,.38)" },
   filterText: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 13 },
   badge: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: palette.blue, alignItems: "center", justifyContent: "center" },
   badgeText: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 11, lineHeight: 14 },
-  filters: { flexGrow: 0, flexShrink: 1, flexDirection: "row", gap: 8, paddingHorizontal: 16 },
-  // Beside the Filtreler button the row only needs the right margin.
-  typeChips: { paddingLeft: 0 },
-  controls: { position: "absolute", right: 16, top: 176, gap: 8 },
   control: { width: 44, height: 44, backgroundColor: "rgba(17,22,42,.94)", borderWidth: 1, borderColor: palette.border, alignItems: "center", justifyContent: "center" },
-  controlTop: { borderTopLeftRadius: 14, borderTopRightRadius: 14, marginBottom: -8, borderBottomWidth: 0 },
-  controlBottom: { borderBottomLeftRadius: 14, borderBottomRightRadius: 14 },
-  controlSolo: { borderRadius: 14 },
-  controlText: { fontSize: 22, lineHeight: 26, color: palette.text },
+  controlSolo: { borderRadius: 22 },
   pinLabel: { marginTop: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9, backgroundColor: "rgba(8,11,24,.92)", borderWidth: 1, borderColor: palette.border },
   pinLabelText: { fontFamily: "Outfit-Medium", fontSize: 10, color: palette.text },
   pin: { minWidth: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: "rgba(244,245,255,.9)", alignItems: "center", justifyContent: "center", paddingHorizontal: 7 },
@@ -356,4 +362,8 @@ const s = StyleSheet.create({
   cardCount: { flex: 1, color: palette.text, fontSize: 12, fontFamily: "Outfit-Medium" },
   cardHint: { color: "rgba(251,191,36,.85)", fontSize: 12 },
   cardCta: { color: palette.accent, fontFamily: "Outfit-SemiBold", fontSize: 13 },
+  mini: { width: MINI_WIDTH, flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 16, backgroundColor: "rgba(17,22,42,.95)", borderWidth: 1, borderColor: palette.border },
+  miniIcon: { width: 36, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  miniTitle: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 13 },
+  miniMeta: { color: palette.muted, fontSize: 11 },
 })
