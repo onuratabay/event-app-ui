@@ -25,6 +25,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     if (path === "/auth/register" && registerConflict) return { ok: false, status: 409, text: async () => JSON.stringify({ statusCode: 409, errors: [{ field: "phoneNumber", message: "Bu telefon numarası zaten kayıtlı" }] }) }
     if (path === "/access-codes/redeem") {
       const code = JSON.parse(options.body).code.toUpperCase()
+      if (code === "REF-ABC123") return { ok: true, status: 200, json: async () => ({ target: "reference", status: "profile_incomplete" }) }
       return code === "EVENT2026" ? { ok: true, status: 200, json: async () => ({ target: "discover", status: "approved" }) }
         : { ok: false, status: 404, text: async () => JSON.stringify({ statusCode: 404, errors: [{ field: null, message: "Bu kod geçerli değil veya süresi dolmuş." }] }) }
     }
@@ -64,6 +65,14 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     if (status !== "approved") assert(!calls.includes("/events"), `${status} never loads the in-app feed`)
     await act(async () => login.unmount())
   }
+  // Under the sign-in form, "veya" offers an Ewent invite code; anything else is explained under the input.
+  storage.clear()
+  const inviteLogin = await mount("Login", { navigate: () => {} })
+  assert(text(inviteLogin.toJSON()).includes("veya") && text(inviteLogin.toJSON()).includes("Ewent davet kodum var"))
+  await act(async () => inviteLogin.root.findAll(n => n.props.accessibilityLabel === "Ewent davet kodu" && typeof n.props.onChangeText === "function")[0].props.onChangeText("REF-ABC"))
+  await tap(inviteLogin, "Aç")
+  assert(text(inviteLogin.toJSON()).includes("Geçerli bir Ewent davet kodu"), "Only invite codes open from the login screen")
+  await act(async () => inviteLogin.unmount())
 
   // A reset navigation dismisses the whole stack before replacing it.
   const { useNavigate } = require("../src/native/navigation.ts")
@@ -190,26 +199,29 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   assert.equal(calls.at(-1), "/auth/login", "With a wrong password the sign-in attempt is the last request")
   await act(async () => resumed.unmount())
   registerConflict = false; loginFails = false
-  // The application's second step ("Seni biraz daha tanıyalım") has an event invite code field.
+  // The application's second step has no general code field any more; event invites start from the login screen.
   storage.set("event-app:access-token", "a"); current = "profile_incomplete"
-  const visited = []
-  const stepTwo = await mount("Onboarding", { step: 2, navigate: route => visited.push(route) })
+  const stepTwo = await mount("Onboarding", { step: 2, navigate: () => {} })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
-  const codeInput = stepTwo.root.findAll(n => n.props.accessibilityLabel === "Etkinlik veya referans kodu" && typeof n.props.onChangeText === "function")[0]
-  assert(codeInput, "Step two has an invite code field")
-  const openCode = async value => {
-    await act(async () => stepTwo.root.findAll(n => n.props.accessibilityLabel === "Etkinlik veya referans kodu" && typeof n.props.onChangeText === "function")[0].props.onChangeText(value))
-    await act(async () => { stepTwo.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Kodu ekle").props.onPress?.({ stopPropagation() {} }); await new Promise(resolve => setTimeout(resolve, 20)) })
-  }
-  await openCode("yanlis")
-  assert(text(stepTwo.toJSON()).includes("Geçerli bir kod gir."), "An unknown code is explained under the input")
-  await openCode("event2026")
-  assert.deepEqual(bodies.filter(row => row.path === "/access-codes/redeem").at(-1).body, { code: "event2026" })
-  assert(!visited.includes("discover"), "A valid code waits for Devam Et")
-  await tap(stepTwo, "Devam Et")
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
-  assert(visited.includes("discover"), "With a valid code Devam Et opens the screen it was set up for (the feed)")
+  assert(!stepTwo.root.findAll(n => n.props.accessibilityLabel === "Etkinlik veya davet kodu").length && !text(stepTwo.toJSON()).includes("veya"), "No divider or invite code field on step two")
   await act(async () => stepTwo.unmount())
+  // The reference card takes a member's REF- code: other text is explained, a valid code waits for Devam Et.
+  const refVisited = []
+  const refStep = await mount("Onboarding", { step: 2, navigate: route => refVisited.push(route) })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  const enterReference = async value => {
+    await act(async () => refStep.root.findAll(n => n.props.accessibilityLabel === "Referans kodu" && typeof n.props.onChangeText === "function")[0].props.onChangeText(value))
+    await act(async () => { refStep.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Referans kodunu ekle").props.onPress?.({ stopPropagation() {} }); await new Promise(resolve => setTimeout(resolve, 20)) })
+  }
+  await enterReference("EWT-123")
+  assert(text(refStep.toJSON()).includes("REF- ile başlar"), "Only reference codes go in the reference card")
+  await enterReference("ref-abc123")
+  assert.deepEqual(bodies.filter(row => row.path === "/access-codes/redeem").at(-1).body, { code: "REF-ABC123" })
+  assert(text(refStep.toJSON()).includes("Referansın eklendi"))
+  await tap(refStep, "Devam Et")
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  assert(refVisited.includes("interests"), "After a reference code, an incomplete profile goes on to its interests")
+  await act(async () => refStep.unmount())
 
   // Profile completion: three interests are required, the photo is not; saving approves and opens the app.
   storage.set("event-app:access-token", "a"); current = "profile_incomplete"; calls.length = 0

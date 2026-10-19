@@ -56,6 +56,33 @@ module.exports = async function checkMap({ mount, tap, act, text, storage }) {
   assert.equal(discovery.applyDiscoveryFilters([{ ...scenarios[1], startTime: "23:00", durationMinutes: 120 }], { ...trip, timeFrom: "22:00", timeTo: "02:00" }, now).length, 1)
   assert.equal(discovery.categoryVisual("Bisiklet").icon, "🚲")
   assert.equal(discovery.categoryVisual("Padel").icon, "🎾")
+  // Filter suggestions: availability first, then interests (with the profile city), then what is popular.
+  const tips = require("../src/map/suggestions.ts")
+  const categories = [{ id: "padel", name: "Padel" }, { id: "yoga", name: "Yoga" }]
+  const availability = { id: "a1", status: "active", dateFrom: "2026-09-01", dateTo: "2026-09-30", weekdays: [1, 2, 3, 4, 5, 6, 7],
+    timeWindows: [{ from: "18:00", to: "21:00" }], area: { mode: "city", name: "Eskişehir", latitude: 39.78, longitude: 30.52 },
+    activities: [{ interestId: "yoga", maxDurationMinutes: null }] }
+  const built = tips.buildFilterSuggestions({ availabilities: [availability, { ...availability, id: "old", dateTo: "2026-09-10" }, { ...availability, id: "off", status: "paused" }],
+    interestNames: ["padel"], profileCity: "Ankara", categories, events: [...points, { ...points[0], id: "past", date: "01/09/2026" }], now })
+  assert.deepEqual(built.map(item => item.id), ["availability-a1", "interests", "popular-activity", "popular-time", "popular-city", "quick-tonight", "quick-weekend"], "Expired and paused records are skipped")
+  const fromCalendar = built[0]
+  assert.equal(fromCalendar.label, "Eskişehir · 18:00–21:00 · Yoga")
+  assert.deepEqual({ from: fromCalendar.apply.dateFrom, to: fromCalendar.apply.dateTo, time: fromCalendar.apply.timeFrom, ids: fromCalendar.apply.interestIds }, { from: "2026-09-20", to: "2026-09-30", time: "18:00", ids: ["yoga"] }, "A record that already began starts today")
+  assert.equal(built[1].label, "İlgi alanların · Ankara")
+  assert.equal(built.find(item => item.id === "popular-activity").label, "Padel (2)", "Past events do not count")
+  assert.equal(built.find(item => item.id === "popular-time").apply.timeFrom, "17:00")
+  assert.equal(built.find(item => item.id === "popular-city").apply.place.name, "Ankara")
+  const applied = { ...discovery.DEFAULT_FILTERS, ...built[1].apply }
+  assert(tips.suggestionApplied(applied, built[1]) && !tips.suggestionApplied(applied, fromCalendar), "Only the picked suggestion is marked")
+  // A new account still gets quick picks; the weekend pick on a Sunday is that same day.
+  const fresh = tips.buildFilterSuggestions({ availabilities: [], interestNames: [], profileCity: "", categories, events: [], nearby: { name: "Bulunduğun konum", latitude: 39.9, longitude: 32.8 }, now })
+  assert.deepEqual(fresh.map(item => item.id), ["quick-tonight", "quick-weekend", "quick-nearby"])
+  assert.deepEqual([fresh[1].apply.dateFrom, fresh[1].apply.dateTo], ["2026-09-20", "2026-09-20"])
+  assert.equal(tips.buildFilterSuggestions({ availabilities: [], interestNames: [], profileCity: "", categories, events: [], now: new Date(2026, 8, 16) })[1].apply.dateTo, "2026-09-20", "Midweek, the weekend is the coming Saturday and Sunday")
+  // Interests match by id (names can arrive in another language); a single event is still a popular pick.
+  const byId = tips.buildFilterSuggestions({ availabilities: [], interestIds: ["yoga"], interestNames: ["Yoga (EN)"], profileCity: "", categories, events: [points[0]], now })
+  assert.deepEqual(byId.find(item => item.id === "interests").apply.interestIds, ["yoga"])
+  assert.equal(byId.find(item => item.id === "popular-activity").label, "Padel")
   const oldFetch = global.fetch
   let pageRequests = 0
   global.fetch = async url => ({ ok: true, json: async () => {
@@ -90,12 +117,19 @@ module.exports = async function checkMap({ mount, tap, act, text, storage }) {
   const press = async label => { const node = tree.root.findAllByType("Pressable").find(item => item.props.accessibilityLabel === label); assert(node, `Missing control: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })) }
   const map = tree.root.findByType("MapView")
   assert(Array.isArray(map.props.customMapStyle) && map.props.customMapStyle.length > 0 && map.props.userInterfaceStyle === "dark", "The map uses the dark style")
-  // Wide view: heat layer with a compact legend; the status line counts events instead of explaining modes.
-  assert(text(tree.toJSON()).includes("Yoğunluk") && text(tree.toJSON()).includes("etkinlik bu alanda"))
+  // Wide view: heat layer with a compact legend; with no pins on screen there is no event strip.
+  assert(text(tree.toJSON()).includes("Yoğunluk") && !text(tree.toJSON()).includes("etkinlik bu alanda"), "No event strip without pins")
   assert(!text(tree.toJSON()).includes("Otomatik görünüm"), "No mode jargon in the bottom panel")
   await act(async () => map.props.onRegionChangeComplete({ ...region, latitudeDelta: 0.1, longitudeDelta: 0.1 }))
   assert(!text(tree.toJSON()).includes("Yoğunluk"), "The density legend is only shown while the heat layer is visible")
   await act(async () => map.props.onRegionChangeComplete({ ...region, latitudeDelta: 0.0008, longitudeDelta: 0.0008 }))
+  // With pins on screen, the events in view appear as small cards that open the event.
+  assert(text(tree.toJSON()).includes("etkinlik bu alanda"), "Pins on screen bring up the event strip")
+  const mini = tree.root.findAllByType("Pressable").find(item => /detayı aç$/.test(String(item.props.accessibilityLabel)))
+  assert(mini, "Each event in view has a small card")
+  await act(async () => mini.props.onPress?.({ stopPropagation() {} }))
+  assert.equal(destination[0], "event-detail")
+  destination = undefined
   // Picking a pin opens an event card with one clear action.
   await act(async () => tree.root.findAllByType("Marker")[0].props.onPress({ stopPropagation() {} }))
   assert(text(tree.toJSON()).includes("Seçilen etkinlik") && text(tree.toJSON()).includes("1/10 kişi"), "The picked event shows as a card with its fill")

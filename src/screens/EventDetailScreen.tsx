@@ -17,6 +17,8 @@ import { openDirections } from "../native/directions";
 import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
+import MaskedView from "@react-native-masked-view/masked-view";
+import { LinearGradient } from "expo-linear-gradient";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import InviteCandidatesSheet from "../availability/InviteCandidatesSheet";
@@ -33,6 +35,12 @@ function startsAt(event: { date: string; time: string }) {
   const [day, month, year] = event.date.split("/").map(Number);
   const [hour, minute] = event.time.split(":").map(Number);
   return new Date(year, (month || 1) - 1, day || 1, hour || 0, minute || 0);
+}
+// The cover fades to transparent (not to a flat colour) so the animated backdrop shows through below it.
+function FadingCover({ uri, label }: { uri: string; label: string }) {
+  return <MaskedView style={StyleSheet.absoluteFill} maskElement={<LinearGradient colors={["#000", "transparent"]} style={StyleSheet.absoluteFill} />}>
+    <Picture uri={uri} accessibilityLabel={label} style={[[ui.wFull, ui.hFull]]} />
+  </MaskedView>;
 }
 export function durationLabel(duration?: string) {
   const minutes = parseInt(duration || "", 10);
@@ -106,14 +114,26 @@ export default function EventDetailScreen({
   };
   const roomReady = isRoomReady(event);
   const isForming = !roomReady && !['cancelled', 'closed'].includes(event.status || '');
+  const isHost = event.host.id === store.user.id;
+  // The organizer may cancel only before the start; members are notified and the room closes.
+  const canCancel = isHost && participationOpen;
+  // Once joined, status, room entry and cancel live under the title; the action bar remains for joining
+  // and for re-creating a cancelled event.
+  const showActionBar = !joined || (isHost && event.status === "cancelled");
+  const confirmCancel = () => Alert.alert("Etkinliği iptal et", "Etkinlik iptal edilecek, katılımcılara bildirim gidecek ve etkinlik odasında artık mesaj gönderilemeyecek. Emin misin?", [
+    { text: "Vazgeç", style: "cancel" },
+    { text: "Etkinliği iptal et", style: "destructive", onPress: async () => {
+      try { await cancelEvent(event.id); setStore(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, status: "cancelled", isActive: false } : e) })); }
+      catch (error) { Alert.alert("Etkinlik iptal edilemedi", getApiErrorMessage(error)); }
+    } },
+  ]);
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="discover" title={event.title} subtitle={`${event.date} · ${event.time}`} floating right={<NavAction label="Paylaş" onPress={() => setShareOpen(true)}><ShareIcon size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} style={{ color: palette.text }} /></NavAction>} />
-      <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol], { paddingBottom: actionHeight + 20 + navInset }]}>
+      <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol], { paddingBottom: (showActionBar ? actionHeight : 0) + 20 + navInset }]}>
         {/* Cover image header */}
-        <Box style={[[ui.relative, ui.h72, ui.flexShrink0, ui.bgGray900]]}>
-          <Picture uri={event.coverImage} accessibilityLabel={event.title} style={[[ui.wFull, ui.hFull]]} />
-          <Box style={[[ui.fixed, ui.inset0], {}]} gradient={[palette.background, "transparent"]} gradientDirection="up" />
+        <Box style={[[ui.relative, ui.h72, ui.flexShrink0]]}>
+          <FadingCover uri={event.coverImage} label={event.title} />
 
           {/* Status */}
           <Box style={[[ui.fixed, ui.bottom4, ui.left5]]}>
@@ -128,12 +148,30 @@ export default function EventDetailScreen({
           <Box>
             <Box style={[[ui.flex, ui.itemsStart, ui.justifyBetween, ui.mt1]]}>
               <Box style={[[ui.flex1]]}>
-                <Label style={[[ui.textXs, ui.textWhite40, ui.fontMedium]]}>
-                  {event.category}
-                </Label>
                 <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mt1, ui.leadingTight]]}>
                   {event.title}
                 </Label>
+                {joined && <Box walkthroughId={showActionBar ? undefined : "event-action"} style={[[ui.mt2]]}>
+                  <Box style={detailStyles.hostRow}>
+                    <Box style={detailStyles.hostBadge}>
+                      <CheckIcon size={12} strokeWidth={2.2} style={{ color: palette.success }} />
+                      <Label style={detailStyles.hostBadgeText}>{isHost ? "Düzenleyensin" : "Katıldın"}</Label>
+                    </Box>
+                    <Box style={detailStyles.rowActions}>
+                      {roomReady && <Touch accessibilityLabel="Odaya Katıl" onPress={() => navigate("event-room", { eventId: event.id })} style={detailStyles.roomChip} gradient={palette.actionGradient}>
+                        Odaya Katıl →
+                      </Touch>}
+                      {canCancel && <Touch accessibilityLabel="Etkinliği iptal et" onPress={confirmCancel} style={detailStyles.cancelChip}>
+                        İptal et
+                      </Touch>}
+                      {!isHost && participationOpen && <Touch accessibilityLabel="Katılımı iptal et" disabled={joining} onPress={() => setJoined(false)} style={detailStyles.cancelChip}>
+                        {joining ? "Bekle…" : "İptal Et"}
+                      </Touch>}
+                    </Box>
+                  </Box>
+                  {!participationOpen && !isHost && <Label accessibilityRole="text" style={[[ui.textXs, ui.mt2, ui.textWhite50]]}>{frozenNote}</Label>}
+                  <ContextualTip id="participation" when={justJoined} />
+                </Box>}
               </Box>
             </Box>
 
@@ -299,10 +337,9 @@ export default function EventDetailScreen({
       {shareOpen && <EventShareSheet event={event} onClose={() => setShareOpen(false)} />}
 
       {/* Compact action bar with an opaque surface so scrolling text cannot show through. */}
-      <Box walkthroughId="event-action" onLayout={event => setActionHeight(event.nativeEvent.layout.height)} style={[actionStyles.bar, { bottom: navInset }]}>
-        <ContextualTip id="participation" when={justJoined} />
+      {showActionBar && <Box walkthroughId="event-action" onLayout={event => setActionHeight(event.nativeEvent.layout.height)} style={[actionStyles.bar, { bottom: navInset }]}>
         <ContextualTip id="invitations" when={!!event.invited && !joined} />
-        {!participationOpen && event.host.id !== store.user.id && <Label accessibilityRole="text" style={[[ui.textXs, ui.mb2, ui.textWhite50]]}>{frozenNote}</Label>}
+        {!participationOpen && !joined && <Label accessibilityRole="text" style={[[ui.textXs, ui.mb2, ui.textWhite50]]}>{frozenNote}</Label>}
         {event.invited && !joined && remaining !== null && <Label accessibilityLiveRegion="polite" style={[[ui.textXs, ui.mb2], { color: remaining > 0 ? palette.accent : palette.error }]}>
             {remaining > 0 ? `Davete yanıt için ${remainingLabel(remaining)}` : "Bu davetin süresi doldu."}
           </Label>}
@@ -322,36 +359,34 @@ export default function EventDetailScreen({
           finally { setJoining(false); }
         }} style={[actionStyles.primary, { flex: 0 }]} gradient={palette.actionGradient} enter>
             {event.waitlisted ? 'Yedek listeden ayrıl' : event.currentParticipants >= event.maxParticipants ? 'Yedek listeye katıl' : 'Katıl'}
-          </Touch> : <Box style={actionStyles.row}>
-            {roomReady ? <Touch accessibilityLabel="Odaya Katıl" onPress={() => navigate("event-room", { eventId: event.id })} style={actionStyles.primary} gradient={palette.actionGradient}>
-              Odaya Katıl →
-            </Touch> : event.host.id === store.user.id && event.status === "cancelled" ? <Touch accessibilityLabel="Güncelle ve yeniden oluştur" onPress={() => navigate("create-event", { eventId: event.id })} style={actionStyles.primary} gradient={palette.actionGradient}>
-              {/* A cancelled event stays cancelled; the organizer starts a new one from its details. */}
-              Güncelle ve yeniden oluştur
-            </Touch> : <Box style={actionStyles.status}>
-              <CheckIcon size={16} strokeWidth={2} style={{ color: palette.success }} />
-              <Label style={actionStyles.statusText}>{event.host.id === store.user.id ? "Düzenleyensin" : "Katıldın"}</Label>
-            </Box>}
-            {/* The organizer may cancel only before the start; members are notified and the room closes. */}
-            {event.host.id === store.user.id && event.status === "waiting_participants" && startsAt(event) > new Date() && <Touch accessibilityLabel="Etkinliği iptal et" disabled={joining} onPress={() => Alert.alert("Etkinliği iptal et", "Etkinlik iptal edilecek, katılımcılara bildirim gidecek ve etkinlik odasında artık mesaj gönderilemeyecek. Emin misin?", [
-              { text: "Vazgeç", style: "cancel" },
-              { text: "Etkinliği iptal et", style: "destructive", onPress: async () => {
-                try { await cancelEvent(event.id); setStore(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, status: "cancelled", isActive: false } : e) })); }
-                catch (error) { Alert.alert("Etkinlik iptal edilemedi", getApiErrorMessage(error)); }
-              } },
-            ])} style={actionStyles.cancel}>
-              Etkinliği iptal et
-            </Touch>}
-            {event.host.id !== store.user.id && participationOpen && <Touch accessibilityLabel="Katılımı iptal et" disabled={joining} onPress={() => setJoined(false)} style={actionStyles.cancel}>
-              {joining ? "Bekle…" : "İptal Et"}
-            </Touch>}
-          </Box>}
+          </Touch> : <Touch accessibilityLabel="Güncelle ve yeniden oluştur" onPress={() => navigate("create-event", { eventId: event.id })} style={actionStyles.primary} gradient={palette.actionGradient}>
+            {/* A cancelled event stays cancelled; the organizer starts a new one from its details. */}
+            Güncelle ve yeniden oluştur
+          </Touch>}
 
-      </Box>
+      </Box>}
       {inviteOpen && <InviteCandidatesSheet eventId={event.id} onClose={() => setInviteOpen(false)} />}
     </Box>;
 }
 
+const detailStyles = StyleSheet.create({
+  hostRow: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 32 },
+  hostBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 999, backgroundColor: "rgba(111,208,182,.12)", borderWidth: 1, borderColor: "rgba(111,208,182,.30)",
+  },
+  hostBadgeText: { color: palette.success, fontSize: 11, fontFamily: "Outfit-Medium" },
+  rowActions: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 8 },
+  roomChip: {
+    minHeight: 32, paddingHorizontal: 14, borderRadius: 999,
+    color: palette.text, fontSize: 12, fontFamily: "Outfit-SemiBold",
+  },
+  cancelChip: {
+    minHeight: 32, paddingHorizontal: 12, borderRadius: 999,
+    backgroundColor: palette.elevated, borderWidth: 1, borderColor: palette.border,
+    color: palette.error, fontSize: 12, fontFamily: "Outfit-Medium",
+  },
+});
 const actionStyles = StyleSheet.create({
   bar: {
     position: "absolute", left: 12, right: 12, zIndex: 40,
@@ -370,11 +405,4 @@ const actionStyles = StyleSheet.create({
     borderRadius: 14, backgroundColor: palette.elevated,
     borderWidth: 1, borderColor: palette.border, color: palette.text, fontSize: 14,
   },
-  cancel: {
-    minHeight: 48, paddingHorizontal: 16, borderRadius: 14,
-    backgroundColor: palette.elevated, borderWidth: 1, borderColor: palette.border,
-    color: palette.muted, fontSize: 13, fontFamily: "Outfit-Medium",
-  },
-  status: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48, paddingHorizontal: 4 },
-  statusText: { color: palette.success, fontSize: 14, fontFamily: "Outfit-Medium" },
 });
