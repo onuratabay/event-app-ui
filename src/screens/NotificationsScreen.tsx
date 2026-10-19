@@ -151,7 +151,8 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
       <NavAction label="Tüm bildirimleri sil" tone="danger" disabled={busy || nothingToDelete} onPress={() => void removeAll()}>Tümünü sil</NavAction>
     </>} />
     <Scroll style={[[ui.flex1, ui.px5, ui.spaceY2], { paddingTop: 80, paddingBottom: 40 + navInset }]}>
-      <Box walkthroughId="notification-invites" style={{ minHeight: 44 }}>
+      {/* Guide anchor for invitations: takes no space while there are none (it used to reserve 44 px). */}
+      <Box walkthroughId="notification-invites">
       <EventInvitations key={`invites-${pendingVersion}`} navigate={navigate} onCount={setInviteCount} />
       <ReferenceNotifications key={`references-${pendingVersion}`} onCount={setReferenceCount} />
       </Box>
