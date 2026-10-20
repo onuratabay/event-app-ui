@@ -222,7 +222,11 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
           const event = !isCluster ? filtered.find(item => item.id === props.eventId) : undefined
           const count = isCluster ? Number(props.point_count) : 1
           const active = !!event && selectedIds.has(event.id)
-          return <Marker key={isCluster ? `cluster-${props.cluster_id}` : String(props.eventId)} coordinate={{ latitude, longitude }} opacity={markerOpacity}
+          const labeled = !isCluster && (zoom >= 14 || active)
+          // Android draws a custom marker as a bitmap sized on first render: when the pin grows on selection
+          // (or gains its label) the old bitmap stays behind and the larger icon is clipped. A new key per look
+          // makes the marker be created again at its new size.
+          return <Marker key={isCluster ? `cluster-${props.cluster_id}` : `${props.eventId}-${active ? "on" : "off"}-${labeled ? "label" : "pin"}`} coordinate={{ latitude, longitude }} opacity={markerOpacity}
             tracksViewChanges={true} zIndex={active ? 4 : isCluster ? 2 : 3}
             onPress={press => {
               press.stopPropagation()
@@ -242,7 +246,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
             <View style={{ alignItems: "center" }}><View style={[s.pin, isCluster && s.cluster, active && s.pinActive, { backgroundColor: isCluster ? palette.blue : categoryVisual(event?.interest.name || "").color }]}>
               {isCluster ? <Label style={s.pinText}>{String(count)}</Label> : <CategoryIcon name={event?.interest.name} size={active ? 22 : 18} style={{ color: palette.text }} />}
             </View>
-            {!isCluster && (zoom >= 14 || active) && <View style={s.pinLabel}><Label style={s.pinLabelText}>{event?.interest.name} · {event?.startTime}</Label></View>}
+            {labeled && <View style={s.pinLabel}><Label style={s.pinLabelText}>{event?.interest.name} · {event?.startTime}</Label></View>}
             </View>
           </Marker>
         })}
