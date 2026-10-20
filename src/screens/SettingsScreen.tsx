@@ -1,7 +1,8 @@
 import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
+import { showAlert } from "../components/AppDialog"
 import { walkthroughFlags } from "../walkthrough/config"
 import { useEffect, useState, type ReactNode } from "react"
-import { Alert, Linking, StyleSheet, Switch } from "react-native"
+import { Linking, StyleSheet, Switch } from "react-native"
 import Constants from "expo-constants"
 import { Box, Field, Label, Scroll, Touch, openExternal, Reveal } from "../native/UI"
 import { DEFAULT_PREFERENCES, usePreferences, type AppPreferences } from "../native/preferences"
@@ -81,13 +82,13 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
     setMarketing(value); setError(null)
     try { setMarketing((await setMarketingConsent(value)).marketing) } catch (e) { setMarketing(!value); setError(getApiErrorMessage(e, "İzin tercihin kaydedilemedi.")) }
   }
-  const openSystemSettings = () => { void Linking.openSettings().catch(() => Alert.alert("Ayarlar açılamadı", `Telefonunun Ayarlar uygulamasından ${BRAND_NAME}’i seçebilirsin.`)) }
+  const openSystemSettings = () => { void Linking.openSettings().catch(() => showAlert("Ayarlar açılamadı", `Telefonunun Ayarlar uygulamasından ${BRAND_NAME}’i seçebilirsin.`)) }
   const endSession = async (target: "welcome" | "login") => {
     await logout()
     resetSession()
     navigate(target, { reset: true })
   }
-  const signOut = () => Alert.alert("Çıkış yapılsın mı?", "Tekrar giriş yaparak hesabına dönebilirsin.", [
+  const signOut = () => showAlert("Çıkış yapılsın mı?", "Tekrar giriş yaparak hesabına dönebilirsin.", [
     { text: "Vazgeç", style: "cancel" },
     { text: "Çıkış yap", style: "destructive", onPress: () => {
       if (busy) return
@@ -104,20 +105,20 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
       await changePassword(oldPassword, newPassword)
       setOldPassword(""); setNewPassword(""); setRepeatPassword(""); setPasswordOpen(false)
       // The server signs out every session after a password change.
-      Alert.alert("Şifren güncellendi", "Güvenliğin için yeni şifrenle tekrar giriş yap.", [{ text: "Tamam", onPress: () => { void endSession("login") } }])
+      showAlert("Şifren güncellendi", "Güvenliğin için yeni şifrenle tekrar giriş yap.", [{ text: "Tamam", onPress: () => { void endSession("login") } }])
     } catch (e) { setError(getApiErrorMessage(e, "Şifre değiştirilemedi.")) }
     finally { setBusy(false) }
   }
   const submitDelete = () => {
     if (busy) return
     if (!deletePassword) { setError("Hesabını silmek için şifreni gir."); return }
-    Alert.alert("Hesabın kalıcı olarak silinsin mi?", "Profilin, etkinliklerin, katılımların ve mesajların silinir. Bu işlem geri alınamaz.", [
+    showAlert("Hesabın kalıcı olarak silinsin mi?", "Profilin, etkinliklerin, katılımların ve mesajların silinir. Bu işlem geri alınamaz.", [
       { text: "Vazgeç", style: "cancel" },
       { text: "Hesabımı sil", style: "destructive", onPress: () => {
         setBusy(true); setError(null)
         void deleteAccount(deletePassword)
           .then(() => endSession("welcome"))
-          .then(() => Alert.alert("Hesabın silindi", "Seni tekrar görmek isteriz."))
+          .then(() => showAlert("Hesabın silindi", "Seni tekrar görmek isteriz."))
           .catch(e => { setError(getApiErrorMessage(e, "Hesap silinemedi.")); setBusy(false) })
       } },
     ])
@@ -185,8 +186,8 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
       </Section></Box>}
 
       <Section title="Yardım ve hakkında">
-        <Row title="Nasıl çalışır?" detail="Keşfet, katıl ve birlikte plan yap" onPress={() => Alert.alert("İlk buluşmana doğru", "Keşfet veya Harita’dan bir etkinlik seç. Ayrıntılardan katılım durumunu takip et. Katıldığın etkinliğin odası açıldığında katılımcılarla sohbet edebilirsin. Kendi planını paylaşmak için Oluştur’u kullan.")} />
-        <Row title="Bir sorun yaşıyorum" detail="Bağlantı, izin ve hesap sorunları için yardım" onPress={() => Alert.alert("Yardım", "Bağlantı sorunu varsa internet erişimini kontrol edip yeniden dene. Konum veya fotoğraf erişimi için Gizlilik ve izinler bölümünü kullan. Şifreni unuttuysan giriş ekranındaki Şifremi unuttum seçeneğinden ilerle.")} />
+        <Row title="Nasıl çalışır?" detail="Keşfet, katıl ve birlikte plan yap" onPress={() => showAlert("İlk buluşmana doğru", "Keşfet veya Harita’dan bir etkinlik seç. Ayrıntılardan katılım durumunu takip et. Katıldığın etkinliğin odası açıldığında katılımcılarla sohbet edebilirsin. Kendi planını paylaşmak için Oluştur’u kullan.")} />
+        <Row title="Bir sorun yaşıyorum" detail="Bağlantı, izin ve hesap sorunları için yardım" onPress={() => showAlert("Yardım", "Bağlantı sorunu varsa internet erişimini kontrol edip yeniden dene. Konum veya fotoğraf erişimi için Gizlilik ve izinler bölümünü kullan. Şifreni unuttuysan giriş ekranındaki Şifremi unuttum seçeneğinden ilerle.")} />
         <Row title="Web sitesi" detail={BRAND_NAME} onPress={() => void openExternal(BRAND_URL)} />
         <Row title="Uygulama sürümü" detail={`${BRAND_NAME} · ${Constants.expoConfig?.version || "1.0.0"}`} />
       </Section>
@@ -194,7 +195,7 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
       <Section title="Oturum">
         <Row title="Cihaz tercihlerini sıfırla" detail="Titreşimi açar, saydamlığı azalt seçeneğini kapatır" onPress={() => {
           if (!ready) return
-          Alert.alert("Tercihler sıfırlansın mı?", "Hesabın, fotoğrafların ve etkinliklerin silinmez.", [{ text: "Vazgeç", style: "cancel" }, { text: "Sıfırla", onPress: () => void savePreference(DEFAULT_PREFERENCES) }])
+          showAlert("Tercihler sıfırlansın mı?", "Hesabın, fotoğrafların ve etkinliklerin silinmez.", [{ text: "Vazgeç", style: "cancel" }, { text: "Sıfırla", onPress: () => void savePreference(DEFAULT_PREFERENCES) }])
         }} />
         <Row title={busy ? "İşlem sürüyor…" : "Çıkış yap"} detail="Bu cihazdaki oturumu kapat" onPress={busy ? undefined : signOut} />
       </Section>

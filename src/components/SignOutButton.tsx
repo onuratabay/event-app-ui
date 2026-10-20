@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { Alert } from "react-native"
+import { showAlert } from "./AppDialog"
+
 import { logout } from "../api/client"
 import { useStore } from "../native/Store"
 import { Label, Touch } from "../native/UI"
@@ -17,7 +18,7 @@ export default function SignOutButton({ navigate }: { navigate: NavigateFn }) {
       await logout()
       resetSession()
       navigate("welcome", { reset: true })
-    } catch { Alert.alert("Çıkış yapılamadı", "Lütfen tekrar dene.") }
+    } catch { showAlert("Çıkış yapılamadı", "Lütfen tekrar dene.") }
     finally { setBusy(false) }
   }
   return <Touch accessibilityLabel="Çıkış yap" disabled={busy} onPress={() => void signOut()} style={{ minHeight: 44, paddingHorizontal: 8, justifyContent: "center" }}>

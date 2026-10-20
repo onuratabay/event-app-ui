@@ -1,5 +1,6 @@
 import { useWalkthroughBlocker } from "../walkthrough/activity"
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions } from "react-native"
+import { showAlert } from "./AppDialog"
+import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useEffect, useState } from "react"
 import { palette } from "../theme/palette"
@@ -28,12 +29,12 @@ export default function ConnectionsSheet({ userId, title, canRemove, onClose, on
       .catch(cause => { if (active) { setPeople([]); setError(getApiErrorMessage(cause, "Bağlantılar yüklenemedi.")) } })
     return () => { active = false }
   }, [userId])
-  const remove = (person: FriendUser) => Alert.alert("Arkadaşlıktan çıkar", `${person.firstName} ${person.lastName} arkadaş listenden çıkarılsın mı?`, [
+  const remove = (person: FriendUser) => showAlert("Arkadaşlıktan çıkar", `${person.firstName} ${person.lastName} arkadaş listenden çıkarılsın mı?`, [
     { text: "Vazgeç", style: "cancel" },
     { text: "Çıkar", style: "destructive", onPress: () => {
       const previous = people
       setPeople(rows => (rows || []).filter(row => row.id !== person.id)); onRemoved?.(person.id)
-      removeFriend(person.id).catch(cause => { setPeople(previous); Alert.alert("Çıkarılamadı", getApiErrorMessage(cause)) })
+      removeFriend(person.id).catch(cause => { setPeople(previous); showAlert("Çıkarılamadı", getApiErrorMessage(cause)) })
     } },
   ])
   useWalkthroughBlocker(true)

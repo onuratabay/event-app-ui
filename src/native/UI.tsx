@@ -17,31 +17,7 @@ import React, {
   useState,
   type ReactNode,
 } from "react"
-import {
-  Alert,
-  Animated,
-  Keyboard,
-  Linking,
-  Modal,
-  Platform,
-  Pressable,
-  FlatList,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type GestureResponderEvent,
-  type ImageStyle,
-  type FlatListProps,
-  type ScrollViewProps,
-  type StyleProp,
-  type TextInputProps,
-  type TextProps,
-  type TextStyle,
-  type ViewProps,
-  type ViewStyle,
-} from "react-native"
+import { Alert, Animated, Keyboard, Linking, Modal, Platform, Pressable, FlatList, ScrollView, StyleSheet, Text, TextInput, View, type GestureResponderEvent, type ImageStyle, type FlatListProps, type ScrollViewProps, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewProps, type ViewStyle } from "react-native"
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import Svg, { type SvgProps } from "react-native-svg"
 
@@ -734,6 +710,7 @@ export async function openExternal(url: string) {
   try {
     await Linking.openURL(url)
   } catch {
+    // System alert here: UI.tsx is imported by the app dialog itself.
     Alert.alert("Bağlantı açılamadı", "Lütfen daha sonra tekrar dene.")
   }
 }

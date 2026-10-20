@@ -1,13 +1,14 @@
 import * as Clipboard from "expo-clipboard"
+import { showAlert } from "../components/AppDialog"
 
 import * as ImagePicker from "expo-image-picker"
-import { Alert } from "react-native"
+
 export async function selectPhoto(camera = false): Promise<string | null> {
   try {
     if (camera) {
       const permission = await ImagePicker.requestCameraPermissionsAsync()
       if (!permission.granted) {
-        Alert.alert(
+        showAlert(
           "Kamera izni gerekli",
           "Fotoğraf çekmek için Ayarlar’dan kamera iznini açabilirsin.",
         )
@@ -24,7 +25,7 @@ export async function selectPhoto(camera = false): Promise<string | null> {
     if (!asset.base64) throw new Error('Fotoğraf okunamadı')
     return `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
   } catch {
-    Alert.alert("Fotoğraf eklenemedi", "Lütfen tekrar dene.")
+    showAlert("Fotoğraf eklenemedi", "Lütfen tekrar dene.")
     return null
   }
 }

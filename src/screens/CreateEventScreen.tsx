@@ -1,9 +1,10 @@
 import ContextualTip from "../walkthrough/ContextualTip"
+import { showAlert } from "../components/AppDialog"
 import { ContinueButton } from "../components/ContinueButton";
 import { useWalkthroughAutostartBlocker, useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
-import { Alert } from "react-native";
+;
 import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions, getMyProposedInterests, proposeInterest } from "../api/client";
 import { isUnlimitedCapacity, mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useRef, useState } from "react";
@@ -110,14 +111,14 @@ export default function CreateEventScreen({
   const [mapTouched, setMapTouched] = useState(false);
   useWalkthroughScreenBlocker(creating || mapTouched);
   // The shared list plus your own proposals still waiting for an admin (usable only in your events).
-  const loadCatalog = () => Promise.all([getMapInterests(), getEnums('event_visibility'), getMyProposedInterests().catch(() => [])]).then(([a, v, mine]) => { const own = Array.isArray(mine) ? mine : []; setActivities([...a, ...own.filter(item => !a.some(row => row.id === item.id))]); setVisibilities(v); }).catch(error => Alert.alert('Seçenekler yüklenemedi', getApiErrorMessage(error)));
+  const loadCatalog = () => Promise.all([getMapInterests(), getEnums('event_visibility'), getMyProposedInterests().catch(() => [])]).then(([a, v, mine]) => { const own = Array.isArray(mine) ? mine : []; setActivities([...a, ...own.filter(item => !a.some(row => row.id === item.id))]); setVisibilities(v); }).catch(error => showAlert('Seçenekler yüklenemedi', getApiErrorMessage(error)));
   // Personal suggestions are optional; the category defaults remain if they cannot load.
   const [personalSuggestions, setPersonalSuggestions] = useState<string[]>([]);
   useEffect(() => { void loadCatalog(); getSuggestions().then(result => setPersonalSuggestions(result.items)).catch(() => {}); }, []);
   const removeSuggestion = (text: string) => {
     const previous = personalSuggestions;
     setPersonalSuggestions(items => items.filter(item => item !== text));
-    dismissSuggestion(text).then(result => setPersonalSuggestions(result.items)).catch(error => { setPersonalSuggestions(previous); Alert.alert('Öneri silinemedi', getApiErrorMessage(error)); });
+    dismissSuggestion(text).then(result => setPersonalSuggestions(result.items)).catch(error => { setPersonalSuggestions(previous); showAlert('Öneri silinemedi', getApiErrorMessage(error)); });
   };
   const ACTIVITIES = activities.map(a => ({ label: a.name, icon: '✨' }));
   const PRIVACIES = visibilities.filter(v => PRIVACY_OPTIONS[v.enum]).map(v => ({ label: v.name, enum: v.enum, ...PRIVACY_OPTIONS[v.enum] }));
@@ -130,7 +131,7 @@ export default function CreateEventScreen({
   // "Uygun kişilerden davet et"; everyone picked gets an invitation to accept or decline.
   const chooseInviteOnly = (label: string) => {
     setData(p => ({ ...p, privacy: label }));
-    if (friends === null) getActiveFriends().then(result => setFriends(result.items.map(item => item.user))).catch(error => { setFriends([]); Alert.alert('Arkadaşlar yüklenemedi', getApiErrorMessage(error)); });
+    if (friends === null) getActiveFriends().then(result => setFriends(result.items.map(item => item.user))).catch(error => { setFriends([]); showAlert('Arkadaşlar yüklenemedi', getApiErrorMessage(error)); });
   };
   // Many friends: searched by first/last name and scrolled inside their own panel.
   const [friendQuery, setFriendQuery] = useState("");
@@ -174,9 +175,9 @@ export default function CreateEventScreen({
       const interest = await proposeInterest(proposalName.trim(), proposalLevels);
       setActivities(list => list.some(row => row.id === interest.id) ? list : [...list, interest]);
       setProposalOpen(false); setProposalName(""); setProposalLevels(null);
-      if (interest.existing) Alert.alert("Bu ilgi alanı zaten var", `“${interest.name}” seçildi.`);
+      if (interest.existing) showAlert("Bu ilgi alanı zaten var", `“${interest.name}” seçildi.`);
       chooseActivity(interest.name, interest.levels.length > 0);
-    } catch (error) { Alert.alert("İlgi alanı eklenemedi", getApiErrorMessage(error)); }
+    } catch (error) { showAlert("İlgi alanı eklenemedi", getApiErrorMessage(error)); }
     finally { setProposing(false); }
   };
   // Opened from a cancelled event: its details fill the form once the catalogs load, and the
@@ -209,7 +210,7 @@ export default function CreateEventScreen({
       if (visibility) { if (visibility.enum === INVITE_ONLY) chooseInviteOnly(visibility.name); else setData(p => ({ ...p, privacy: visibility.name })); }
       setCopiedFrom(true);
       setStep(activity ? 2 : 0);
-    }).catch(error => Alert.alert("Etkinlik bilgileri yüklenemedi", getApiErrorMessage(error)));
+    }).catch(error => showAlert("Etkinlik bilgileri yüklenemedi", getApiErrorMessage(error)));
   }, [activities, visibilities, copyFromEventId]);
   // Opened from an idea on an empty Discover: the activity is picked as soon as the catalog loads.
   const appliedInitial = useRef(false);
@@ -224,12 +225,12 @@ export default function CreateEventScreen({
     const interest = activities.find(i => i.name === data.activity), level = levels.find(i => i.name === data.level), visibility = visibilities.find(i => i.name === data.privacy);
     const needsLevel = levels.length > 0;
     const missing = [!interest && 'etkinlik türü', needsLevel && !level && 'seviye', !place && 'konum', !visibility && 'görünürlük'].filter(Boolean);
-    if (!interest || needsLevel && !level || !visibility || !place) { Alert.alert('Eksik bilgi', `Şunları seç: ${missing.join(', ')}.`); return; }
+    if (!interest || needsLevel && !level || !visibility || !place) { showAlert('Eksik bilgi', `Şunları seç: ${missing.join(', ')}.`); return; }
     const inviteOnly = visibility.enum === INVITE_ONLY;
     // Invitees may be friends or people from the availability pool; pool picks need no friendship.
-    if (inviteOnly && !invitedIds.length && !poolIds.length) { Alert.alert('Davet listesi boş', 'Uygun kişilerden ya da arkadaşlarından en az bir kişi seç.'); return; }
-    if (isPastStart(data.date, data.time)) { Alert.alert('Geçmiş tarih', 'Etkinlik zamanı geçmiş. Tarih ve saati ileri bir zamana güncelle.'); setStep(2); return; }
-    if (data.description.trim().length < MIN_DESCRIPTION_LENGTH) { Alert.alert('Açıklama gerekli', `Etkinliği en az ${MIN_DESCRIPTION_LENGTH} karakterle açıkla.`); setStep(4); return; }
+    if (inviteOnly && !invitedIds.length && !poolIds.length) { showAlert('Davet listesi boş', 'Uygun kişilerden ya da arkadaşlarından en az bir kişi seç.'); return; }
+    if (isPastStart(data.date, data.time)) { showAlert('Geçmiş tarih', 'Etkinlik zamanı geçmiş. Tarih ve saati ileri bir zamana güncelle.'); setStep(2); return; }
+    if (data.description.trim().length < MIN_DESCRIPTION_LENGTH) { showAlert('Açıklama gerekli', `Etkinliği en az ${MIN_DESCRIPTION_LENGTH} karakterle açıkla.`); setStep(4); return; }
     setCreating(true);
     try {
       const date = displayDate(data.date);
@@ -240,10 +241,10 @@ export default function CreateEventScreen({
       // Friends picked on the preview were invited with the event; the pool invite skips them.
       const poolInvites = inviteOnly ? poolIds.filter(id => !invitedIds.includes(id)) : poolIds;
       // The event already exists here; a failed invite must not look like a failed creation.
-      if (poolInvites.length) await inviteEventCandidates(event.id, poolInvites).catch(error => Alert.alert('Etkinlik oluşturuldu', `Davetler gönderilemedi: ${getApiErrorMessage(error)} Etkinlik detayındaki "Davet et" ile tekrar deneyebilirsin.`));
+      if (poolInvites.length) await inviteEventCandidates(event.id, poolInvites).catch(error => showAlert('Etkinlik oluşturuldu', `Davetler gönderilemedi: ${getApiErrorMessage(error)} Etkinlik detayındaki "Davet et" ile tekrar deneyebilirsin.`));
       // The creation flow leaves history entirely; back from the new event's detail goes home.
       navigate('event-detail', { eventId: event.id, aboveHome: true });
-    } catch (error) { Alert.alert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
+    } catch (error) { showAlert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
     finally { setCreating(false); }
   };
   const next = () => setStep(s => s + 1);

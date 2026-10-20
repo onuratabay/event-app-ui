@@ -1,4 +1,5 @@
-import { Alert, Linking, Platform } from "react-native"
+import { Linking, Platform } from "react-native"
+import { showAlert } from "../components/AppDialog"
 
 export interface Destination { name: string; latitude?: number; longitude?: number }
 
@@ -38,7 +39,7 @@ export function openDirections(place: Destination) {
     void openOrWeb(url, place)
     return
   }
-  Alert.alert("Yol tarifi", place.name, [
+  showAlert("Yol tarifi", place.name, [
     ...iosNavigationApps(place).map(app => ({ text: app.name, onPress: () => void openOrWeb(app.url, place) })),
     { text: "Vazgeç", style: "cancel" as const },
   ])

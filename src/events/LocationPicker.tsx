@@ -1,6 +1,7 @@
 import * as Location from "expo-location"
+import { showAlert } from "../components/AppDialog"
 import { useRef, useState } from "react"
-import { Alert, Platform, StyleSheet } from "react-native"
+import { Platform, StyleSheet } from "react-native"
 import MapView, { Marker } from "react-native-maps"
 import CityPicker from "../components/CityPicker"
 import { GlassInput } from "../components/GlassUI"
@@ -100,13 +101,13 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
     if (!text || busy) return
     setBusy("search")
     try {
-      if (!await canGeocode()) { Alert.alert("Konum izni gerekli", "Adres aramak için konum izni ver ya da haritaya dokunarak noktayı kendin seç."); return }
+      if (!await canGeocode()) { showAlert("Konum izni gerekli", "Adres aramak için konum izni ver ya da haritaya dokunarak noktayı kendin seç."); return }
       const found = (await Location.geocodeAsync(city ? `${text}, ${city}, Türkiye` : `${text}, Türkiye`)).slice(0, 3).map(point)
-      if (!found.length) Alert.alert("Adres bulunamadı", "Farklı yazmayı dene ya da haritaya dokunarak noktayı seç.")
+      if (!found.length) showAlert("Adres bulunamadı", "Farklı yazmayı dene ya da haritaya dokunarak noktayı seç.")
       else if (found.length === 1) choose(found[0], text)
       // Several hits are told apart by their street and district rather than raw coordinates.
       else setResults(await Promise.all(found.map(async hit => ({ ...hit, label: await describe(hit) }))))
-    } catch { Alert.alert("Adres aranamadı", "Bağlantını kontrol et ya da haritaya dokunarak noktayı seç.") }
+    } catch { showAlert("Adres aranamadı", "Bağlantını kontrol et ya da haritaya dokunarak noktayı seç.") }
     finally { setBusy(null) }
   }
   // Suggestions appear from the first letter; when the server has no place search, "Ara" geocodes instead.
@@ -122,7 +123,7 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
       setQuery(""); setResults([])
       focus(target, POINT_DELTA)
       onChange({ ...target, city: found, district: place.district, address: place.address })
-    } catch { Alert.alert("Yer seçilemedi", "Bağlantını kontrol et ya da haritaya dokunarak noktayı seç.") }
+    } catch { showAlert("Yer seçilemedi", "Bağlantını kontrol et ya da haritaya dokunarak noktayı seç.") }
   }
   // Tapping a venue on the Google map picks it with its name (Apple Maps does not report venue taps).
   const pickVenue = (name: string, target: Point) => {
@@ -142,11 +143,11 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
     if (busy) return
     setBusy("locate")
     try {
-      if (!(await Location.requestForegroundPermissionsAsync()).granted) { Alert.alert("Konum izni verilmedi", "Sorun değil: haritaya dokunarak buluşma noktasını seçebilirsin."); return }
+      if (!(await Location.requestForegroundPermissionsAsync()).granted) { showAlert("Konum izni verilmedi", "Sorun değil: haritaya dokunarak buluşma noktasını seçebilirsin."); return }
       const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
       focus(coords, POINT_DELTA)
       await pick(coords)
-    } catch { Alert.alert("Konum alınamadı", "Haritaya dokunarak buluşma noktasını seçebilirsin.") }
+    } catch { showAlert("Konum alınamadı", "Haritaya dokunarak buluşma noktasını seçebilirsin.") }
     finally { setBusy(null) }
   }
 

@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import { showAlert } from "../components/AppDialog";
 import { useWalkthroughAutostartBlocker } from "../walkthrough/activity";
 import CityPicker from "../components/CityPicker";
 import SignOutButton from "../components/SignOutButton";
@@ -12,7 +13,7 @@ import { CheckIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, InstagramIcon, ScrollI
 import { ReferencePicker } from "../components/ReferencePicker";
 import { registerForPush, type PushState } from "../services/push";
 import { updateStoreUser, useStore } from "../native/Store";
-import { Alert, RefreshControl, StyleSheet, View } from "react-native";
+import { RefreshControl, StyleSheet, View } from "react-native";
 import { clearSessionCache, logout, getApiErrorMessage, getCurrentUser, getLegalDocuments, login, redeemAccessCode, register, type ApiUser, type LegalDocumentSummary } from "../api/client";
 import { useOpenLegal } from "../legal/links";
 import { gatedScreen } from "../native/access";
@@ -144,7 +145,7 @@ function ExitAction({ navigate }: { navigate: NavigateFn }) {
     setBusy(false);
     navigate("welcome", { reset: true });
   };
-  return <NavAction label="Başvurudan çık" disabled={busy} onPress={() => Alert.alert("Çıkış yap", "Başvurundan çıkıp ilk ekrana döneceksin. Aynı e-posta ve şifreyle kaldığın yerden devam edebilirsin.", [{ text: "Vazgeç", style: "cancel" }, { text: "Çıkış yap", style: "destructive", onPress: () => void exit() }])}>Çıkış</NavAction>;
+  return <NavAction label="Başvurudan çık" disabled={busy} onPress={() => showAlert("Çıkış yap", "Başvurundan çıkıp ilk ekrana döneceksin. Aynı e-posta ve şifreyle kaldığın yerden devam edebilirsin.", [{ text: "Vazgeç", style: "cancel" }, { text: "Çıkış yap", style: "destructive", onPress: () => void exit() }])}>Çıkış</NavAction>;
 }
 
 const INSTAGRAM_REQUIRED = "Devam etmek için Instagram kullanıcı adını yaz.";

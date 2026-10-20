@@ -1,9 +1,10 @@
 import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
+import { showAlert } from "../components/AppDialog"
 import { palette } from "../theme/palette";
 import CityPicker from "../components/CityPicker";
 import { CalendarIcon, MessageIcon, StarIcon } from "../components/Icons";
 import TopNavBar, { NavAction } from "../components/TopNavBar";
-import { Alert, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { useEffect, useState } from "react";
 import { logout, updateProfile, setProfilePhoto, getMapInterests, setUserInterests, getUserProfile, getApiErrorMessage, getFriendRelationship, getAttendedEvents, getOrganizedEvents, getProfileStats, getCurrentUser, createReferenceCode, getActiveReferenceCode, type FriendRelationship } from "../api/client";
 import { GeneratedCode } from "../components/GeneratedCode";
@@ -218,7 +219,7 @@ export default function ProfileScreen({
     if (loadingInterests) return;
     setLoadingInterests(true);
     try { setInterestCatalog(await getMapInterests()); }
-    catch (error) { Alert.alert('İlgi alanları yüklenemedi', getApiErrorMessage(error)); }
+    catch (error) { showAlert('İlgi alanları yüklenemedi', getApiErrorMessage(error)); }
     finally { setLoadingInterests(false); }
   };
   const [showReferences, setShowReferences] = useState(false);
@@ -230,7 +231,7 @@ export default function ProfileScreen({
       await logout();
       resetSession();
       navigate("welcome", { reset: true });
-    } catch { Alert.alert("Çıkış yapılamadı", "Lütfen tekrar dene."); }
+    } catch { showAlert("Çıkış yapılamadı", "Lütfen tekrar dene."); }
     finally { setLoggingOut(false); }
   };
   // References come from the store: fetched on the first visit, then kept current by socket events.
@@ -244,7 +245,7 @@ export default function ProfileScreen({
         await updateProfile({ firstName: parts.join(' '), lastName });
       } else await updateProfile({ [key === 'instagram' ? 'instagramUsername' : key]: key === 'instagram' ? value.replace(/^@/, '') : value });
       setStore(p => ({ ...p, user: { ...p.user, [key]: value } }));
-    } catch (error) { Alert.alert('Profil kaydedilemedi', getApiErrorMessage(error)); throw error; }
+    } catch (error) { showAlert('Profil kaydedilemedi', getApiErrorMessage(error)); throw error; }
   };
   // Interest taps only change a local draft; "Kaydet" sends the whole list once (the server adds and removes).
   const [interestDraft, setInterestDraft] = useState<Set<string> | null>(null);
@@ -265,7 +266,7 @@ export default function ProfileScreen({
       const saved = await setUserInterests(catalog.filter(item => interestDraft.has(item.name)).map(item => item.id));
       setStore(p => ({ ...p, user: { ...p.user, interests: saved.map(item => item.name) } }));
       cancelInterests();
-    } catch (error) { Alert.alert('İlgi alanları kaydedilemedi', getApiErrorMessage(error)); }
+    } catch (error) { showAlert('İlgi alanları kaydedilemedi', getApiErrorMessage(error)); }
     finally { setSavingInterests(false); }
   };
   const myEvents = EVENTS.filter(e => e.host.id === user.id || e.participants.some(p => p.id === user.id));

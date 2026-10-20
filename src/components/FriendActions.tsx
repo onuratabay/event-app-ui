@@ -1,4 +1,5 @@
-import { Alert, StyleSheet } from "react-native"
+import { StyleSheet } from "react-native"
+import { showAlert } from "./AppDialog"
 import { useState } from "react"
 import { palette } from "../theme/palette"
 import { Box, Label, Touch } from "../native/UI"
@@ -23,11 +24,11 @@ export default function FriendActions({ userId, name, relation, onChange }: {
     const previous = relation
     setBusy(true); onChange({ ...relation, ...next })
     try { await action() }
-    catch (error) { onChange(previous); Alert.alert("İşlem tamamlanamadı", getApiErrorMessage(error)) }
+    catch (error) { onChange(previous); showAlert("İşlem tamamlanamadı", getApiErrorMessage(error)) }
     finally { setBusy(false) }
   }
   const first = name.split(" ")[0] || "Bu üye"
-  const unfriend = () => Alert.alert("Arkadaşlıktan çıkar", `${name} arkadaş listenden çıkarılsın mı?`, [
+  const unfriend = () => showAlert("Arkadaşlıktan çıkar", `${name} arkadaş listenden çıkarılsın mı?`, [
     { text: "Vazgeç", style: "cancel" },
     { text: "Çıkar", style: "destructive", onPress: () => void run({ status: "none", canRequest: true, friendCount: Math.max(0, relation.friendCount - 1) }, () => removeFriend(userId)) },
   ])

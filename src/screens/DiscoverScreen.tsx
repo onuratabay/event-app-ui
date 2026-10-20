@@ -1,10 +1,11 @@
 import EventShareSheet from "../components/EventShareSheet";
+import { showAlert } from "../components/AppDialog";
 import NotificationButton from "../components/NotificationButton";
 import ActivityIndicator from "../components/LoadingSpinner";
 import { palette } from "../theme/palette";
 import { CategoryIcon } from "../components/Icons";
 import { getApiErrorMessage, setFavorite } from "../api/client";
-import { Alert, FlatList, Platform, RefreshControl, useWindowDimensions } from "react-native";
+import { FlatList, Platform, RefreshControl, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { Line, Path, Polyline } from "react-native-svg";
 import { BrandWordmark } from "../components/Brand";
@@ -159,7 +160,7 @@ function EventCard({
       // Only the newest tap decides; a failed older request is superseded by the later one.
       if (!isLatest()) return;
       setData(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, isSaved: !value } : e) }));
-      Alert.alert('Favori kaydedilemedi', getApiErrorMessage(error));
+      showAlert('Favori kaydedilemedi', getApiErrorMessage(error));
     });
   };
   const progress = event.currentParticipants / event.minParticipants;
@@ -301,11 +302,11 @@ export default function DiscoverScreen({
     if (next !== "distance-near" && next !== "distance-far") { setSortBy(next); return; }
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
-      if (!permission.granted) { Alert.alert("Konum izni gerekli", "Mesafeye göre sıralamak için konum iznine ihtiyacımız var."); return; }
+      if (!permission.granted) { showAlert("Konum izni gerekli", "Mesafeye göre sıralamak için konum iznine ihtiyacımız var."); return; }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       setDeviceLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
       setSortBy(next);
-    } catch { Alert.alert("Konum alınamadı", "Konum servislerini açıp tekrar dene."); }
+    } catch { showAlert("Konum alınamadı", "Konum servislerini açıp tekrar dene."); }
   };
   const [sortOpen, setSortOpen] = useState(false);
   const [shareEvent, setShareEvent] = useState<AppEvent | null>(null);

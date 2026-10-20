@@ -1,4 +1,5 @@
 import ContextualTip from "../walkthrough/ContextualTip"
+import { showAlert } from "../components/AppDialog"
 import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import EventShareSheet from "../components/EventShareSheet";
 import { palette } from "../theme/palette";
@@ -10,7 +11,7 @@ import { GeneratedCode } from "../components/GeneratedCode";
 import { formatScore } from "../events/score";
 import { eventPhase, isLivePhase, isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
 import { useEffect, useState, type ReactNode } from "react";
-import { Alert, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { AtmoBackground, Avatar, GlassCard } from "../components/GlassUI";
 import { CheckIcon, ClockIcon, LocationIcon, ShareIcon, StarIcon } from "../components/Icons";
 import { openDirections } from "../native/directions";
@@ -110,7 +111,7 @@ export default function EventDetailScreen({
     if (joining) return;
     setJoining(true);
     try { const remote = await participate(event.id, join); if (join) setJustJoined(true); setStore(p => ({ ...p, events: p.events.map(e => e.id === remote.id ? mapApiEvent(remote) : e) })); }
-    catch (error) { Alert.alert('Katılım güncellenemedi', getApiErrorMessage(error)); }
+    catch (error) { showAlert('Katılım güncellenemedi', getApiErrorMessage(error)); }
     finally { setJoining(false); }
   };
   const roomReady = isRoomReady(event);
@@ -121,11 +122,11 @@ export default function EventDetailScreen({
   // Once joined, status, room entry and cancel live under the title; the action bar remains for joining
   // and for re-creating a cancelled event.
   const showActionBar = !joined || (isHost && event.status === "cancelled");
-  const confirmCancel = () => Alert.alert("Etkinliği iptal et", "Etkinlik iptal edilecek, katılımcılara bildirim gidecek ve etkinlik odasında artık mesaj gönderilemeyecek. Emin misin?", [
+  const confirmCancel = () => showAlert("Etkinliği iptal et", "Etkinlik iptal edilecek, katılımcılara bildirim gidecek ve etkinlik odasında artık mesaj gönderilemeyecek. Emin misin?", [
     { text: "Vazgeç", style: "cancel" },
     { text: "Etkinliği iptal et", style: "destructive", onPress: async () => {
       try { await cancelEvent(event.id); setStore(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, status: "cancelled", isActive: false } : e) })); }
-      catch (error) { Alert.alert("Etkinlik iptal edilemedi", getApiErrorMessage(error)); }
+      catch (error) { showAlert("Etkinlik iptal edilemedi", getApiErrorMessage(error)); }
     } },
   ]);
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
@@ -355,8 +356,8 @@ export default function EventDetailScreen({
           if (event.waitlisted) return setJoined(false);
           if (event.currentParticipants < event.maxParticipants) return setJoined(true);
           setJoining(true);
-          try { await socketAction('event:waitlist_join', { eventId: event.id }); Alert.alert('Yedek listedesin', 'Organizatör kabul ettiğinde katılımın güncellenecek.'); }
-          catch (cause) { Alert.alert('Yedek liste', cause instanceof Error ? cause.message : 'Tekrar dene.'); }
+          try { await socketAction('event:waitlist_join', { eventId: event.id }); showAlert('Yedek listedesin', 'Organizatör kabul ettiğinde katılımın güncellenecek.'); }
+          catch (cause) { showAlert('Yedek liste', cause instanceof Error ? cause.message : 'Tekrar dene.'); }
           finally { setJoining(false); }
         }} style={[actionStyles.primary, { flex: 0 }]} gradient={palette.actionGradient} enter>
             {event.waitlisted ? 'Yedek listeden ayrıl' : event.currentParticipants >= event.maxParticipants ? 'Yedek listeye katıl' : 'Katıl'}

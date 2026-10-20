@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
-import { Alert, RefreshControl, StyleSheet } from "react-native"
+import { showAlert } from "../components/AppDialog"
+import { RefreshControl, StyleSheet } from "react-native"
 import { getAdminStats, type AdminStats as AdminStatsData, decideApplication, decideInterest, decideReport, getAdminReports, getPendingInterests, type AdminReport, type PendingInterest, getApiErrorMessage, getApplicationDetail, getApplications, type ApplicationDecision, type ApplicationFilter, type ApplicationsPage, type MembershipApplication, type MembershipApplicationDetail } from "../api/client"
 import TopNavBar from "../components/TopNavBar"
 import AdminStats from "../components/AdminStats"
@@ -115,7 +116,7 @@ function PendingInterests({ reload }: { reload: number }) {
   const decide = async (item: PendingInterest, decision: "approved" | "rejected") => {
     setBusy(item.id)
     try { await decideInterest(item.id, decision); setItems(rows => rows.filter(row => row.id !== item.id)) }
-    catch (cause) { Alert.alert("İşlem yapılamadı", getApiErrorMessage(cause)) }
+    catch (cause) { showAlert("İşlem yapılamadı", getApiErrorMessage(cause)) }
     finally { setBusy(null) }
   }
   if (!items.length) return null
@@ -126,7 +127,7 @@ function PendingInterests({ reload }: { reload: number }) {
       <Label style={s.muted}>{[item.proposedBy ? `Öneren: ${item.proposedBy}` : null, appliedOn(item.createdAt), item.hasLevels ? "Seviyeli" : "Seviyesiz", `${item.eventCount} etkinlik`].filter(Boolean).join(" · ")}</Label>
       <Box style={s.actions}>
         <Touch accessibilityLabel={`${item.name} ilgi alanını onayla`} disabled={busy === item.id} disabledOpacity={0.35} onPress={() => void decide(item, "approved")} style={[s.action, s.approve]}><Label style={s.approveText}>Onayla</Label></Touch>
-        <Touch accessibilityLabel={`${item.name} ilgi alanını reddet`} disabled={busy === item.id} disabledOpacity={0.35} onPress={() => Alert.alert("Öneri reddedilsin mi?", `“${item.name}” ortak listeye eklenmez; bu adla açılmış etkinlikler aynen kalır.`, [{ text: "Vazgeç", style: "cancel" }, { text: "Reddet", style: "destructive", onPress: () => void decide(item, "rejected") }])} style={[s.action, s.reject]}><Label style={s.rejectText}>Reddet</Label></Touch>
+        <Touch accessibilityLabel={`${item.name} ilgi alanını reddet`} disabled={busy === item.id} disabledOpacity={0.35} onPress={() => showAlert("Öneri reddedilsin mi?", `“${item.name}” ortak listeye eklenmez; bu adla açılmış etkinlikler aynen kalır.`, [{ text: "Vazgeç", style: "cancel" }, { text: "Reddet", style: "destructive", onPress: () => void decide(item, "rejected") }])} style={[s.action, s.reject]}><Label style={s.rejectText}>Reddet</Label></Touch>
       </Box>
     </Box>)}
   </Box>
@@ -156,10 +157,10 @@ function ReportsSection({ navigate, reload }: { navigate: NavigateFn; reload: nu
           ? current.items.filter(row => !closed.has(row.id))
           : current.items.map(row => closed.has(row.id) ? { ...row, status: "completed" as const, targetStatus: result.targetStatus ?? row.targetStatus } : row),
       })
-    } catch (cause) { Alert.alert("İşlem yapılamadı", getApiErrorMessage(cause)) }
+    } catch (cause) { showAlert("İşlem yapılamadı", getApiErrorMessage(cause)) }
     finally { setBusy(null) }
   }
-  const deactivate = (report: AdminReport) => Alert.alert("Üye pasife alınsın mı?", `${report.targetName ?? "Üye"} uygulamayı kullanamaz; "hesabın incelemede" sayfasını görür. Bu kişi hakkındaki açık şikayetler de kapanır. Başvurulardan aktifleştirerek geri alabilirsin.`, [
+  const deactivate = (report: AdminReport) => showAlert("Üye pasife alınsın mı?", `${report.targetName ?? "Üye"} uygulamayı kullanamaz; "hesabın incelemede" sayfasını görür. Bu kişi hakkındaki açık şikayetler de kapanır. Başvurulardan aktifleştirerek geri alabilirsin.`, [
     { text: "Vazgeç", style: "cancel" },
     { text: "Pasife al ve kapat", style: "destructive", onPress: () => void act(report, "deactivate") },
   ])
@@ -285,12 +286,12 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
         // The status changed: refresh the open details (history) on the next open.
         setDetails(current => { const next = { ...current }; delete next[item.id]; return next })
         if (openId === item.id) loadDetail(item.id)
-      } catch (cause) { Alert.alert("İşlem yapılamadı", getApiErrorMessage(cause)) }
+      } catch (cause) { showAlert("İşlem yapılamadı", getApiErrorMessage(cause)) }
       finally { setBusyId(null) }
     }
     // Rejecting and taking a member passive cut access, so they ask first; approve and review are one tap.
-    if (decision === "reject") Alert.alert("Başvuru reddedilsin mi?", `${name} artık giriş yapamaz.`, [{ text: "Vazgeç", style: "cancel" }, { text: "Reddet", style: "destructive", onPress: () => void run() }])
-    else if (decision === "deactivate") Alert.alert("Üye pasife alınsın mı?", `${name} uygulamayı kullanamaz; "hesabın incelemede" sayfasını görür. Aktifleştirerek geri alabilirsin.`, [{ text: "Vazgeç", style: "cancel" }, { text: "Pasife al", style: "destructive", onPress: () => void run() }])
+    if (decision === "reject") showAlert("Başvuru reddedilsin mi?", `${name} artık giriş yapamaz.`, [{ text: "Vazgeç", style: "cancel" }, { text: "Reddet", style: "destructive", onPress: () => void run() }])
+    else if (decision === "deactivate") showAlert("Üye pasife alınsın mı?", `${name} uygulamayı kullanamaz; "hesabın incelemede" sayfasını görür. Aktifleştirerek geri alabilirsin.`, [{ text: "Vazgeç", style: "cancel" }, { text: "Pasife al", style: "destructive", onPress: () => void run() }])
     else void run()
   }
 

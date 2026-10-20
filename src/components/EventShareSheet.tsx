@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { Alert, Pressable, StyleSheet } from 'react-native'
+import { showAlert } from "./AppDialog"
+import { Pressable, StyleSheet } from 'react-native'
 import { createEventShare, getApiErrorMessage, revokeEventShare, type EventShareLink } from '../api/client'
 import { copyEvent } from '../native/media'
 import { Box, Label, Sheet, Touch } from '../native/UI'
@@ -36,7 +37,7 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
   const revoke = async () => {
     if (!link || pending.current) return
     pending.current = true; setBusy(true)
-    try { await revokeEventShare(link.code); setLink(null); setCopied(false); setAccepted(false); Alert.alert('Davet bağlantısı iptal edildi', 'Bu bağlantıyla artık misafir erişimi sağlanamaz.') }
+    try { await revokeEventShare(link.code); setLink(null); setCopied(false); setAccepted(false); showAlert('Davet bağlantısı iptal edildi', 'Bu bağlantıyla artık misafir erişimi sağlanamaz.') }
     catch (cause) { setError(getApiErrorMessage(cause)) }
     finally { pending.current = false; setBusy(false) }
   }

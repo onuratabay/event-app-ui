@@ -1,8 +1,9 @@
 import ContextualTip from "../walkthrough/ContextualTip"
+import { showAlert } from "../components/AppDialog"
 import { useWalkthroughAutostartBlocker, useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import ActivityIndicator from "../components/LoadingSpinner";
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Alert, Platform, StyleSheet, View } from "react-native"
+import { Platform, StyleSheet, View } from "react-native"
 import * as Location from "expo-location"
 import MapView, { Circle, Marker } from "react-native-maps"
 import { MAP_PROVIDER } from "../map/provider"
@@ -114,22 +115,22 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
       // Same geocoder as event creation; Android needs the permission for it, the map option does not.
       if (Platform.OS === "android" && !(await Location.requestForegroundPermissionsAsync()).granted) throw new Error("permission")
       const [found] = await Location.geocodeAsync(lastCity ? `${query}, ${lastCity.name}, Türkiye` : `${query}, Türkiye`)
-      if (!found) { Alert.alert("Adres bulunamadı", "Farklı yazmayı dene ya da haritaya dokunarak alanı seç."); return }
+      if (!found) { showAlert("Adres bulunamadı", "Farklı yazmayı dene ya da haritaya dokunarak alanı seç."); return }
       pickNamedArea({ latitude: found.latitude, longitude: found.longitude }, query)
     } catch {
-      Alert.alert("Adres aranamadı", Platform.OS === "android" ? "Arama için konum izni gerekiyor. İzin vermeden şehir seçebilir ya da haritadan alan belirleyebilirsin." : "Bağlantını kontrol edip tekrar dene.")
+      showAlert("Adres aranamadı", Platform.OS === "android" ? "Arama için konum izni gerekiyor. İzin vermeden şehir seçebilir ya da haritadan alan belirleyebilirsin." : "Bağlantını kontrol edip tekrar dene.")
     } finally { setSearching(false) }
   }
   const useMyLocation = async () => {
     if (locating) return
     setLocating(true)
     try {
-      if (!(await Location.requestForegroundPermissionsAsync()).granted) { Alert.alert("Konum izni verilmedi", "Sorun değil: haritaya dokunarak merkez noktasını kendin seçebilirsin."); return }
+      if (!(await Location.requestForegroundPermissionsAsync()).granted) { showAlert("Konum izni verilmedi", "Sorun değil: haritaya dokunarak merkez noktasını kendin seçebilirsin."); return }
       const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
       const center = { latitude: coords.latitude, longitude: coords.longitude }
       update(current => ({ ...current, area: { mode: "radius", center, radiusKm: current.area.mode === "radius" ? current.area.radiusKm : DEFAULT_RADIUS_KM } }))
       focusOn(center, area.mode === "radius" ? area.radiusKm : DEFAULT_RADIUS_KM)
-    } catch { Alert.alert("Konum alınamadı", "Haritaya dokunarak merkez noktasını seçebilirsin.") }
+    } catch { showAlert("Konum alınamadı", "Haritaya dokunarak merkez noktasını seçebilirsin.") }
     finally { setLocating(false) }
   }
 
@@ -150,7 +151,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
       resetForm()
       setNotice(editingId ? "Değişikliklerin kaydedildi." : "Kaydedildi. Uygun etkinliklerin organizatörleri artık seni davet edebilir.")
       setTab("records")
-    } catch (error) { Alert.alert("Kaydedilemedi", getApiErrorMessage(error)) }
+    } catch (error) { showAlert("Kaydedilemedi", getApiErrorMessage(error)) }
     finally { setSaving(false) }
   }
   const edit = (record: ApiAvailability) => { setDraft(fromApi(record)); setEditingId(record.id); setShowIssues(false); setNotice(null); setOpen("dates"); setTab("new") }
@@ -158,15 +159,15 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
     if (busyRecord) return
     setBusyRecord(record.id)
     try { const saved = await setAvailabilityPaused(record.id, paused); setRecords(current => ({ ...current, items: current.items.map(item => item.id === saved.id ? saved : item) })) }
-    catch (error) { Alert.alert(paused ? "Duraklatılamadı" : "Etkinleştirilemedi", getApiErrorMessage(error)) }
+    catch (error) { showAlert(paused ? "Duraklatılamadı" : "Etkinleştirilemedi", getApiErrorMessage(error)) }
     finally { setBusyRecord(null) }
   }
-  const remove = (record: ApiAvailability) => Alert.alert("Kaydı kaldır", "Bu müsaitlik kaydı kaldırılacak. Oluşturduğun etkinlikler ve kabul ettiğin katılımlar etkilenmez.", [
+  const remove = (record: ApiAvailability) => showAlert("Kaydı kaldır", "Bu müsaitlik kaydı kaldırılacak. Oluşturduğun etkinlikler ve kabul ettiğin katılımlar etkilenmez.", [
     { text: "Vazgeç", style: "cancel" },
     { text: "Kaldır", style: "destructive", onPress: async () => {
       setBusyRecord(record.id)
       try { await deleteAvailability(record.id); setRecords(current => ({ ...current, items: current.items.filter(item => item.id !== record.id) })); if (editingId === record.id) resetForm() }
-      catch (error) { Alert.alert("Kaldırılamadı", getApiErrorMessage(error)) }
+      catch (error) { showAlert("Kaldırılamadı", getApiErrorMessage(error)) }
       finally { setBusyRecord(null) }
     } },
   ])
@@ -197,7 +198,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
       const [found] = await Location.geocodeAsync(`${name}, Türkiye`)
       if (!found) throw new Error("not found")
       chooseCity({ name, latitude: found.latitude, longitude: found.longitude })
-    } catch { Alert.alert("Şehir bulunamadı", Platform.OS === "android" ? "Şehri haritada göstermek için konum izni gerekiyor. İlçe aramasıyla ya da haritaya dokunarak da alan seçebilirsin." : "Bağlantını kontrol edip tekrar dene.") }
+    } catch { showAlert("Şehir bulunamadı", Platform.OS === "android" ? "Şehri haritada göstermek için konum izni gerekiyor. İlçe aramasıyla ya da haritaya dokunarak da alan seçebilirsin." : "Bağlantını kontrol edip tekrar dene.") }
     finally { setLocatingCity(false) }
   }
   const wholeCity = () => {
@@ -221,7 +222,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
       const city = matchCity(place.name) || matchCity(suggestion.title)
       if (city) { chooseCity(CITY_PRESETS.find(item => item.name === city) ?? { name: city, ...center }); return }
       pickNamedArea(center, place.name || suggestion.title)
-    } catch { Alert.alert("Yer seçilemedi", "Bağlantını kontrol et ya da haritaya dokunarak alan belirle.") }
+    } catch { showAlert("Yer seçilemedi", "Bağlantını kontrol et ya da haritaya dokunarak alan belirle.") }
   }
   // Removes the chosen area entirely (no city, no circle) and zooms the map back out.
   const clearArea = () => {

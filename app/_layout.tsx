@@ -22,6 +22,7 @@ import { ErrorNoticeProvider } from "../src/components/ErrorNotice"
 import ApiLoadingOverlay from "../src/components/ApiLoadingOverlay"
 import AppBottomNav from "../src/components/AppBottomNav"
 import OverlayHost from "../src/components/OverlayHost"
+import AppDialogHost from "../src/components/AppDialog"
 import AccessGuard from "../src/components/AccessGuard"
 import LegalConsentGate from "../src/components/LegalConsentGate"
 import PushOpenHandler from "../src/components/PushOpenHandler"
@@ -83,6 +84,8 @@ export default function RootLayout() {
               <AppBottomNav />
               {/* Panels above the bottom bar, in the same window (e.g. message options). */}
               <OverlayHost />
+              {/* Alerts and confirmations in the app's own look (showAlert). */}
+              <AppDialogHost />
               <AccessGuard />
               <LegalConsentGate />
               <PushOpenHandler />

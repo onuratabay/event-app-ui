@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import { showAlert } from "../components/AppDialog";
 import { CloseIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import SignOutButton from "../components/SignOutButton";
@@ -6,7 +7,7 @@ import { gatedScreen } from "../native/access";
 import { useEffect, useState } from "react";
 import { AtmoBackground, InterestChip } from "../components/GlassUI";
 import { CameraIcon, ImageIcon } from "../components/Icons";
-import { Alert } from "react-native";
+;
 import { completeProfile, getMapInterests, setUserInterests, setProfilePhoto, getApiErrorMessage } from "../api/client";
 import { selectPhoto } from "../native/media";
 import { updateStoreUser, useStore } from "../native/Store";
@@ -28,7 +29,7 @@ export default function InterestsScreen({
   } = useStore();
   const [catalog, setCatalog] = useState<Array<{ id: string; name: string }>>([]);
   const [saving, setSaving] = useState(false);
-  useEffect(() => { getMapInterests().then(setCatalog).catch(error => Alert.alert('İlgi alanları yüklenemedi', getApiErrorMessage(error))); }, []);
+  useEffect(() => { getMapInterests().then(setCatalog).catch(error => showAlert('İlgi alanları yüklenemedi', getApiErrorMessage(error))); }, []);
   const INTERESTS = catalog.map(i => i.name);
   const save = async () => {
     if (saving) return;
@@ -46,7 +47,7 @@ export default function InterestsScreen({
         void refreshEvents().catch(() => {});
       } else if (gatedScreen(store.user.status)) { navigate('onboarding-3', { reset: true }); return; }
       navigate('discover', { reset: true });
-    } catch (error) { Alert.alert('Profil kaydedilemedi', getApiErrorMessage(error)); }
+    } catch (error) { showAlert('Profil kaydedilemedi', getApiErrorMessage(error)); }
     finally { setSaving(false); }
   };
   const ME = store.user;

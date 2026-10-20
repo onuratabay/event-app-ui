@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { showAlert } from "../components/AppDialog";
 import { useFocusEffect } from "expo-router";
 import { BellIcon, CheckIcon, MessageIcon, StarIcon, UsersIcon } from "../components/Icons";
 import { useBottomNavInset } from "../components/BottomNav";
@@ -8,7 +9,7 @@ import { EventInvitations } from "../components/EventInvitations";
 import { AtmoBackground } from "../components/GlassUI";
 import TopNavBar, { NavAction } from "../components/TopNavBar";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Alert } from "react-native";
+;
 import { getNotifications, readAllNotifications, readNotification, getEvent, getApiErrorMessage, hasSession, deleteAllNotifications, getIncomingFriendRequests, getReferenceRequests, getInvitations, declineFriendRequest, respondToReference, participate, type AppNotification } from "../api/client";
 import { mapApiEvent, useStore } from "../native/Store";
 import { onSocket } from "../services/socket";
@@ -100,12 +101,12 @@ export default function NotificationsScreen({ navigate }: { navigate: NavigateFn
       finally { release(); }
     };
     const waiting = [friends.length ? `${friends.length} arkadaşlık isteği` : "", references.length ? `${references.length} referans isteği` : "", invitations.length ? `${invitations.length} etkinlik daveti` : ""].filter(Boolean);
-    if (waiting.length) Alert.alert("Onay bekleyen istekler var", `${waiting.join(", ")} yanıtını bekliyor. Bunları da reddetmek ister misin?`, [
+    if (waiting.length) showAlert("Onay bekleyen istekler var", `${waiting.join(", ")} yanıtını bekliyor. Bunları da reddetmek ister misin?`, [
       { text: "Vazgeç", style: "cancel", onPress: release },
       { text: "Sadece bildirimleri sil", onPress: () => void run(false) },
       { text: "Reddet ve tümünü sil", style: "destructive", onPress: () => void run(true) },
     ], { cancelable: true, onDismiss: release });
-    else Alert.alert("Tüm bildirimler silinsin mi?", "Bu işlem geri alınamaz.", [
+    else showAlert("Tüm bildirimler silinsin mi?", "Bu işlem geri alınamaz.", [
       { text: "Vazgeç", style: "cancel", onPress: release },
       { text: "Tümünü sil", style: "destructive", onPress: () => void run(false) },
     ], { cancelable: true, onDismiss: release });

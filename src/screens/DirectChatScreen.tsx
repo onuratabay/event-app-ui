@@ -1,6 +1,7 @@
 import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
+import { showAlert } from "../components/AppDialog"
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { deleteDirectMessage, editDirectMessage, reportUser, getApiErrorMessage, getDirectMessages, markDirectRead, openDirectConversation, sendDirectMessage, type DirectConversation, type DirectMessage } from "../api/client";
 import { useBottomNavInset } from "../components/BottomNav";
@@ -190,8 +191,8 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
     options: REPORT_REASONS.map(reason => ({ label: reason, onPress: () => {
       if (!conversation) return;
       void reportUser(conversation.user.id, `Mesaj şikayeti (${reason}) · birebir sohbet: "${line.text.slice(0, 500)}"`)
-        .then(() => Alert.alert("Şikayetin alındı", "Ekibimiz inceleyecek. Teşekkürler."))
-        .catch(cause => Alert.alert("Şikayet gönderilemedi", getApiErrorMessage(cause)));
+        .then(() => showAlert("Şikayetin alındı", "Ekibimiz inceleyecek. Teşekkürler."))
+        .catch(cause => showAlert("Şikayet gönderilemedi", getApiErrorMessage(cause)));
     } })),
   });
   const openActions = (line: ChatLine) => {
@@ -208,14 +209,14 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
     if (!editing || !conversationId || !text || saving) return;
     setSaving(true);
     try { upsert([await editDirectMessage(conversationId, editing.id, text)]); setEditing(null); setInput(""); }
-    catch (cause) { Alert.alert("Mesaj düzenlenemedi", getApiErrorMessage(cause)); }
+    catch (cause) { showAlert("Mesaj düzenlenemedi", getApiErrorMessage(cause)); }
     finally { setSaving(false); }
   };
   // "Sil" in the options deletes at once (no second confirmation); a failure brings the message back.
   const removeMessage = (line: ChatLine) => {
     if (!conversationId || line.senderId !== meId || line.deleted || line.pending || line.failed) return;
     upsert([{ ...line, text: "", deleted: true }]);
-    deleteDirectMessage(conversationId, line.id).then(saved => upsert([saved])).catch(cause => { upsert([line]); Alert.alert("Mesaj silinemedi", getApiErrorMessage(cause)); });
+    deleteDirectMessage(conversationId, line.id).then(saved => upsert([saved])).catch(cause => { upsert([line]); showAlert("Mesaj silinemedi", getApiErrorMessage(cause)); });
   };
   const retry = (line: ChatLine) => { setMessages(prev => prev.map(row => row.id === line.id ? { ...row, pending: true, failed: false } : row)); deliver(line); };
   const loadOlder = async () => {

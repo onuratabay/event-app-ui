@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import { showAlert } from "../components/AppDialog";
 import { MessageIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { Circle, Path, Polyline, Rect } from "react-native-svg";
@@ -14,7 +15,7 @@ import { Avatar } from "../components/GlassUI";
 import { onSocket } from "../services/socket";
 import { applyLocalReads, cachedChatList, forgetConversation, hydrateChatCache, rememberChatList } from "../services/chat-cache";
 import { useScreenActive } from "../native/useScreenActive";
-import { Alert, RefreshControl } from "react-native";
+import { RefreshControl } from "react-native";
 interface Props {
   navigate: NavigateFn;
 }
@@ -74,14 +75,15 @@ export default function RoomsScreen({
     if (cacheKey) rememberChatList(cacheKey, next);
     return next;
   });
-  const removeChat = (chat: DirectConversation, name: string) => Alert.alert("Sohbet silinsin mi?", `${name} ile tüm mesajlar senin için silinir; ${chat.user.firstName} kendi mesajlarını görmeye devam eder. Yeni bir mesaj gelirse sohbet yalnızca yeni mesajlarla yeniden görünür.`, [
+  const removeChat = (chat: DirectConversation, name: string) => showAlert("Sohbet silinsin mi?", `${name} ile tüm mesajlar senin için silinir; ${chat.user.firstName} kendi mesajlarını görmeye devam eder. Yeni bir mesaj gelirse sohbet yalnızca yeni mesajlarla yeniden görünür.`, [
     { text: "Vazgeç", style: "cancel" },
-    { text: "Sohbeti sil", style: "destructive", onPress: () => {
-      const previous = chats;
-      dropChat(chat.id);
-      deleteDirectConversation(chat.id).catch(error => { setChats(previous); if (cacheKey) rememberChatList(cacheKey, previous); Alert.alert("Sohbet silinemedi", getApiErrorMessage(error)); });
-    } },
+    { text: "Sohbeti sil", style: "destructive", onPress: () => deleteChat(chat) },
   ]);
+  const deleteChat = (chat: DirectConversation) => {
+    const previous = chats;
+    dropChat(chat.id);
+    deleteDirectConversation(chat.id).catch(error => { setChats(previous); if (cacheKey) rememberChatList(cacheKey, previous); showAlert("Sohbet silinemedi", getApiErrorMessage(error)); });
+  };
   // Coming back to the page, a new message, a friendship change or a reconnect refreshes the chats.
   const screenActive = useScreenActive();
   const firstFocus = useRef(true);

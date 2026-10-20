@@ -1,4 +1,5 @@
 import ContextualTip from "../walkthrough/ContextualTip"
+import { showAlert } from "../components/AppDialog"
 import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
@@ -7,7 +8,7 @@ import { useScreenActive } from '../native/useScreenActive';
 import { onSocket, retainEvent, socketAction, socketConnected } from '../services/socket';
 import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Alert, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions } from "react-native";
+import { ScrollView, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions } from "react-native";
 import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
@@ -113,7 +114,7 @@ export default function EventRoomScreen({
     const apply = (value?: string) => setStore(p => ({ ...p, events: p.events.map(e => e.id === event.id ? { ...e, roomName: value } : e) }));
     setRenaming(true); apply(name || undefined);
     try { const result = await renameRoom(event.id, name); apply(result.roomName || undefined); setRoomNameDraft(null); }
-    catch (cause) { apply(previous); Alert.alert("Oda adı değiştirilemedi", getApiErrorMessage(cause)); }
+    catch (cause) { apply(previous); showAlert("Oda adı değiştirilemedi", getApiErrorMessage(cause)); }
     finally { setRenaming(false); }
   };
   const [pinnedOpen, setPinnedOpen] = useState(false);
@@ -278,7 +279,7 @@ export default function EventRoomScreen({
       if (sending) return;
       setSending(true);
       try { upsert([mapMessage(await editMessage(eventId, editing.id, text))]); setEditing(null); setInput(''); }
-      catch (cause) { Alert.alert('Mesaj düzenlenemedi', getApiErrorMessage(cause)); }
+      catch (cause) { showAlert('Mesaj düzenlenemedi', getApiErrorMessage(cause)); }
       finally { setSending(false); }
       return;
     }
@@ -297,14 +298,14 @@ export default function EventRoomScreen({
   const removeMessage = (msg: RoomMessage) => {
     if (!eventId) return;
     upsert([{ ...msg, text: "", deleted: true }]);
-    void deleteMessage(eventId, msg.id).then(saved => upsert([mapMessage(saved)])).catch(cause => { upsert([msg]); Alert.alert('Mesaj silinemedi', getApiErrorMessage(cause)); });
+    void deleteMessage(eventId, msg.id).then(saved => upsert([mapMessage(saved)])).catch(cause => { upsert([msg]); showAlert('Mesaj silinemedi', getApiErrorMessage(cause)); });
   };
   const report = (msg: RoomMessage) => setSheet({
     title: `${firstName(msg.user.id)} kullanıcısını neden şikayet ediyorsun?`,
     options: REPORT_REASONS.map(reason => ({ label: reason, onPress: () => {
       void reportUser(msg.user.id, `Sohbet şikayeti (${reason}) · ${event ? roomTitle(event) : ""}: "${msg.text.slice(0, 500)}"`)
-        .then(() => Alert.alert("Şikayetin alındı", "Ekibimiz inceleyecek. Teşekkürler."))
-        .catch(cause => Alert.alert("Şikayet gönderilemedi", getApiErrorMessage(cause)));
+        .then(() => showAlert("Şikayetin alındı", "Ekibimiz inceleyecek. Teşekkürler."))
+        .catch(cause => showAlert("Şikayet gönderilemedi", getApiErrorMessage(cause)));
     } })),
   });
   const openActions = (msg: RoomMessage) => {
@@ -324,13 +325,13 @@ export default function EventRoomScreen({
     const next = value ? [...new Set([...previous, eventId])] : previous.filter(id => id !== eventId);
     setStore(p => ({ ...p, mutedRooms: next }));
     try { await putPreference('mutedRooms', { ids: next }); }
-    catch (cause) { setStore(p => ({ ...p, mutedRooms: previous })); Alert.alert('Ayar kaydedilemedi', getApiErrorMessage(cause)); }
+    catch (cause) { setStore(p => ({ ...p, mutedRooms: previous })); showAlert('Ayar kaydedilemedi', getApiErrorMessage(cause)); }
   };
   const runOwnerAction = async (name: string, payload: Record<string, unknown>) => {
     if (!eventId || busy) return false;
     setBusy(true);
     try { await socketAction(name, { eventId, ...payload }); return true; }
-    catch (cause) { Alert.alert('İşlem yapılamadı', getApiErrorMessage(cause, cause instanceof Error ? cause.message : undefined)); return false; }
+    catch (cause) { showAlert('İşlem yapılamadı', getApiErrorMessage(cause, cause instanceof Error ? cause.message : undefined)); return false; }
     finally { setBusy(false); }
   };
   if (!event) return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}><TopNavBar navigate={navigate} fallback="rooms" title="Etkinlik Odası" /><Box style={{ paddingTop: 96, paddingHorizontal: 20 }}><Label>{error || 'Etkinlik yükleniyor…'}</Label></Box></Box>;
