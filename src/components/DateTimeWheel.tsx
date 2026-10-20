@@ -8,32 +8,46 @@ import { GlassFill } from "./GlassFill"
 const ROW = 44
 const pad = (value: number) => String(value).padStart(2, "0")
 const months = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
-function Wheel({ values, labels, value, onChange, label }: { values: number[]; labels?: string[]; value: number; onChange: (value: number) => void; label: string }) {
+// Cyclic wheels (hours, minutes) repeat their values so they run on: 22 · 23 · 00 · 01 and 58 · 59 · 00 · 01.
+// The list holds a few copies and, after each scroll, jumps back to the same value in the middle copy (unseen),
+// so it never reaches an end.
+const COPIES = 5
+function Wheel({ values, labels, value, onChange, label, cyclic = false }: { values: number[]; labels?: string[]; value: number; onChange: (value: number) => void; label: string; cyclic?: boolean }) {
   const ref = useRef<ScrollView>(null)
-  const index = Math.max(0, values.indexOf(value))
+  const count = values.length
+  const base = cyclic ? Math.floor(COPIES / 2) * count : 0
+  const rows = cyclic ? Array.from({ length: COPIES * count }, (_, i) => values[i % count]) : values
+  const index = base + Math.max(0, values.indexOf(value))
   const initialOffset = useRef({ x: 0, y: index * ROW }).current
   // Keep February and short months in range when the month/year changes.
   useEffect(() => {
     if (!values.includes(value)) onChange(values[values.length - 1])
   }, [values.length, value])
   useEffect(() => { ref.current?.scrollTo({ y: index * ROW, animated: false }) }, [values.length])
+  const settle = (offsetY: number) => {
+    const row = Math.max(0, Math.min(rows.length - 1, Math.round(offsetY / ROW)))
+    const position = row % count
+    if (cyclic && row !== base + position) ref.current?.scrollTo({ y: (base + position) * ROW, animated: false })
+    onChange(values[position])
+  }
   return <View style={s.column}>
     <View pointerEvents="none" style={s.selection} />
     <ScrollView ref={ref} style={s.wheel} contentContainerStyle={{ paddingVertical: ROW * 2 }}
       contentOffset={initialOffset} snapToInterval={ROW} decelerationRate="fast" bounces={false}
       showsVerticalScrollIndicator={false} onScrollEndDrag={event => {
-        if (Math.abs(event.nativeEvent.velocity?.y || 0) < .01) {
-          const next = Math.max(0, Math.min(values.length - 1, Math.round(event.nativeEvent.contentOffset.y / ROW)))
-          onChange(values[next])
-        }
-      }} onMomentumScrollEnd={event => {
-        const next = Math.max(0, Math.min(values.length - 1, Math.round(event.nativeEvent.contentOffset.y / ROW)))
-        onChange(values[next])
-      }}>
-      {values.map((item, i) => <Pressable key={item} accessibilityRole="button" accessibilityLabel={`${label}: ${labels?.[i] || pad(item)}`}
-        accessibilityState={{ selected: item === value }} onPress={() => { onChange(item); ref.current?.scrollTo({ y: i * ROW, animated: true }) }} style={s.option}>
-        <Text allowFontScaling={false}numberOfLines={1} style={[s.text, item === value && s.active]}>{labels?.[i] || pad(item)}</Text>
-      </Pressable>)}
+        if (Math.abs(event.nativeEvent.velocity?.y || 0) < .01) settle(event.nativeEvent.contentOffset.y)
+      }} onMomentumScrollEnd={event => settle(event.nativeEvent.contentOffset.y)}>
+      {rows.map((item, i) => {
+        const text = labels?.[i % count] || pad(item)
+        return <Pressable key={i} accessibilityRole="button" accessibilityLabel={`${label}: ${text}`}
+          accessibilityState={{ selected: item === value }} onPress={() => {
+            onChange(item); ref.current?.scrollTo({ y: i * ROW, animated: true })
+            // After the scroll, the same value moves back to the middle copy (unseen).
+            if (cyclic && i !== base + i % count) setTimeout(() => ref.current?.scrollTo({ y: (base + i % count) * ROW, animated: false }), 300)
+          }} style={s.option}>
+          <Text allowFontScaling={false}numberOfLines={1} style={[s.text, item === value && s.active]}>{text}</Text>
+        </Pressable>
+      })}
     </ScrollView>
   </View>
 }
@@ -69,9 +83,9 @@ export default function DateTimeWheel({ mode, value, onConfirm, onClose }: { mod
         </View>
         <View style={s.row}>
           {mode === "time" ? <>
-            <Wheel label="Saat" values={Array.from({ length: 24 }, (_, i) => i)} value={hour} onChange={setHour} />
+            <Wheel label="Saat" cyclic values={Array.from({ length: 24 }, (_, i) => i)} value={hour} onChange={setHour} />
             <Text allowFontScaling={false}style={s.separator}>:</Text>
-            <Wheel label="Dakika" values={Array.from({ length: 60 }, (_, i) => i)} value={minute} onChange={setMinute} />
+            <Wheel label="Dakika" cyclic values={Array.from({ length: 60 }, (_, i) => i)} value={minute} onChange={setMinute} />
           </> : <>
             <Wheel label="Gün" values={Array.from({ length: dayCount }, (_, i) => i + 1)} value={Math.min(day, dayCount)} onChange={setDay} />
             <Wheel label="Ay" values={Array.from({ length: 12 }, (_, i) => i + 1)} labels={months} value={month} onChange={setMonth} />
