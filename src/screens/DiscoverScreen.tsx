@@ -293,7 +293,8 @@ export default function DiscoverScreen({
   // "Senin etkinliklerin": the user's own events, which come from their own list (the feed may leave them out).
   const EVENTS = sortBy === "mine"
     ? store.events.filter(event => !!store.user.id && event.host.id === store.user.id)
-    : store.events.filter(event => feedIds.has(event.id));
+    // An invite-only event you organize or accepted shows at once (the next feed load brings it too).
+    : store.events.filter(event => feedIds.has(event.id) || event.inviteOnly && (event.joined || !!store.user.id && event.host.id === store.user.id));
   // Distance sorts use where the user is right now; asked only when such a sort is chosen.
   const [deviceLocation, setDeviceLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const chooseSort = async (next: SortOption) => {

@@ -70,8 +70,9 @@ export default function EventDetailScreen({
   // The invitation stays open until the event is full: up to the maximum, or for as long as it waits
   // for participants when no maximum was set. Only the organizer invites (the server enforces it).
   const canInvite = !!event && event.host.id === store.user.id && event.status === "waiting_participants" && startsAt(event) > new Date()
-    // Without a maximum, pool invitations are only needed until the minimum is reached.
-    && event.currentParticipants < (isUnlimitedCapacity(event.maxParticipants) ? event.minParticipants : event.maxParticipants);
+    // Without a maximum, pool invitations are only needed until the minimum is reached; an invite-only event
+    // keeps inviting (friends too) until it is full.
+    && event.currentParticipants < (isUnlimitedCapacity(event.maxParticipants) && !event.inviteOnly ? event.minParticipants : event.maxParticipants);
   // People in the availability pool who match this event and wait for an invitation; refreshed after the invite sheet closes.
   const [waitingCount, setWaitingCount] = useState(0);
   useEffect(() => {
@@ -250,7 +251,7 @@ export default function EventDetailScreen({
                 <Box style={[[ui.flex1]]}>
                   <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>Davet açık</Label>
                   <Label style={[[ui.textXs, ui.textWhite55, ui.mt05]]}>
-                    {waitingCount > 0 ? `Takviminde bu tarih, saat ve yer için uygun ${waitingCount} kişi var` : "Şu anda takviminde bu tarih, saat ve yer için uygun kimse yok"}
+                    {event.inviteOnly ? (waitingCount > 0 ? `Arkadaşlarını ya da takviminde uygun ${waitingCount} kişiyi davet edebilirsin` : "Arkadaşlarını davet edebilirsin; durumlarını da buradan görürsün") : waitingCount > 0 ? `Takviminde bu tarih, saat ve yer için uygun ${waitingCount} kişi var` : "Şu anda takviminde bu tarih, saat ve yer için uygun kimse yok"}
                   </Label>
                 </Box>
                 {/* Opens the people whose calendar (Etkinlik Takvimim) is open for this date, time, place and activity. */}
@@ -365,7 +366,7 @@ export default function EventDetailScreen({
           </Touch>}
 
       </Box>}
-      {inviteOpen && <InviteCandidatesSheet eventId={event.id} onClose={() => setInviteOpen(false)} />}
+      {inviteOpen && <InviteCandidatesSheet eventId={event.id} inviteOnly={!!event.inviteOnly} onClose={() => setInviteOpen(false)} />}
     </Box>;
 }
 

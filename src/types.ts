@@ -65,6 +65,8 @@ export interface AppEvent {
   joined?: boolean
   duration?: string
   privacy?: string
+  /** "Sadece Davet": never in Discover; the organizer invites friends and pool candidates. */
+  inviteOnly?: boolean
 }
 
 export interface ChatMessage {

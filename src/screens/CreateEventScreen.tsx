@@ -4,7 +4,7 @@ import { useWalkthroughAutostartBlocker, useWalkthroughScreenBlocker } from "../
 import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
 import { Alert } from "react-native";
-import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, getUserSettings, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions, getMyProposedInterests, proposeInterest } from "../api/client";
+import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions, getMyProposedInterests, proposeInterest } from "../api/client";
 import { isUnlimitedCapacity, mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useRef, useState } from "react";
 import { Avatar, AtmoBackground, Checkbox, GlassCard, GlassFill, GlassInput, GlassTextarea } from "../components/GlassUI";
@@ -76,7 +76,7 @@ const INVITE_ONLY = "invite_only";
 // "Önerilenler" is not offered to users; the remaining options get their own icon and copy.
 const PRIVACY_OPTIONS: Record<string, { icon: typeof GlobeIcon; desc: string }> = {
   public: { icon: GlobeIcon, desc: "Herkes görebilir ve katılabilir." },
-  [INVITE_ONLY]: { icon: UserPlusIcon, desc: "Yalnızca davet ettiğin arkadaşların görür." },
+  [INVITE_ONLY]: { icon: UserPlusIcon, desc: "Keşfette yalnızca sen ve daveti kabul edenler görür." },
 };
 const REQUIREMENTS_SUGGESTIONS: {
   [key: string]: string[];
@@ -124,14 +124,18 @@ export default function CreateEventScreen({
   // The server also enforces the limit on create; a failed check does not block the form.
   const [createBlocked, setCreateBlocked] = useState<string | null>(null);
   useEffect(() => { canCreateEvent().then(result => setCreateBlocked(result.canCreate ? null : result.message || "Şu an yeni etkinlik oluşturamazsın.")).catch(() => {}); }, []);
-  const [canInvite, setCanInvite] = useState(false);
   const [friends, setFriends] = useState<FriendUser[] | null>(null);
   const [invitedIds, setInvitedIds] = useState<string[]>([]);
-  useEffect(() => { getUserSettings().then(settings => setCanInvite(settings.canCreateInviteOnly)).catch(() => {}); }, []);
+  // Invite-only is open to everyone. The friends list loads here and is shown on the preview, under
+  // "Uygun kişilerden davet et"; everyone picked gets an invitation to accept or decline.
   const chooseInviteOnly = (label: string) => {
     setData(p => ({ ...p, privacy: label }));
     if (friends === null) getActiveFriends().then(result => setFriends(result.items.map(item => item.user))).catch(error => { setFriends([]); Alert.alert('Arkadaşlar yüklenemedi', getApiErrorMessage(error)); });
   };
+  // Many friends: searched by first/last name and scrolled inside their own panel.
+  const [friendQuery, setFriendQuery] = useState("");
+  const friendNeedle = friendQuery.trim().toLocaleLowerCase("tr");
+  const shownFriends = !friends ? [] : !friendNeedle ? friends : friends.filter(friend => `${friend.firstName} ${friend.lastName}`.toLocaleLowerCase("tr").includes(friendNeedle));
   const toggleInvite = (id: string) => setInvitedIds(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
   const [step, setStep] = useState(0);
   useWalkthroughAutostartBlocker(step > 0);
@@ -223,17 +227,20 @@ export default function CreateEventScreen({
     if (!interest || needsLevel && !level || !visibility || !place) { Alert.alert('Eksik bilgi', `Şunları seç: ${missing.join(', ')}.`); return; }
     const inviteOnly = visibility.enum === INVITE_ONLY;
     // Invitees may be friends or people from the availability pool; pool picks need no friendship.
-    if (inviteOnly && !invitedIds.length && !poolIds.length) { Alert.alert('Davet listesi boş', 'Arkadaşlarından ya da aşağıdaki takvim havuzundan en az bir kişi seç.'); return; }
+    if (inviteOnly && !invitedIds.length && !poolIds.length) { Alert.alert('Davet listesi boş', 'Uygun kişilerden ya da arkadaşlarından en az bir kişi seç.'); return; }
     if (isPastStart(data.date, data.time)) { Alert.alert('Geçmiş tarih', 'Etkinlik zamanı geçmiş. Tarih ve saati ileri bir zamana güncelle.'); setStep(2); return; }
     if (data.description.trim().length < MIN_DESCRIPTION_LENGTH) { Alert.alert('Açıklama gerekli', `Etkinliği en az ${MIN_DESCRIPTION_LENGTH} karakterle açıkla.`); setStep(4); return; }
     setCreating(true);
     try {
       const date = displayDate(data.date);
       const event = await createEvent({ clientRequestId: creationRequestId.current, interestId: interest.id, ...(level ? { levelId: level.id } : {}), visibilityId: visibility.id, date, startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: place.latitude, longitude: place.longitude, locationName: placeLabel(data.location, place), minParticipants: data.minParticipants, maxParticipants: data.maxParticipants ?? UNLIMITED_PARTICIPANTS, description: data.description.trim(), ...(inviteOnly ? { invitedUserIds: invitedIds } : {}), ...(data.coverImage ? (data.coverImage.startsWith("/photos/") && copyFromEventId ? { coverFromEventId: copyFromEventId } : { coverPhoto: data.coverImage }) : {}) });
-      // The creator sees the new event at the top of Discover right away.
+      // The creator sees the new event at the top of Discover right away (an invite-only one too: its
+      // organizer and the members who accept see it there, nobody else).
       setStore(p => ({ ...p, events: [mapApiEvent(event), ...p.events.filter(e => e.id !== event.id)], feedIds: [event.id, ...p.feedIds.filter(id => id !== event.id)] }));
+      // Friends picked on the preview were invited with the event; the pool invite skips them.
+      const poolInvites = inviteOnly ? poolIds.filter(id => !invitedIds.includes(id)) : poolIds;
       // The event already exists here; a failed invite must not look like a failed creation.
-      if (poolIds.length) await inviteEventCandidates(event.id, poolIds).catch(error => Alert.alert('Etkinlik oluşturuldu', `Davetler gönderilemedi: ${getApiErrorMessage(error)} Etkinlik detayındaki "Davet et" ile tekrar deneyebilirsin.`));
+      if (poolInvites.length) await inviteEventCandidates(event.id, poolInvites).catch(error => Alert.alert('Etkinlik oluşturuldu', `Davetler gönderilemedi: ${getApiErrorMessage(error)} Etkinlik detayındaki "Davet et" ile tekrar deneyebilirsin.`));
       // The creation flow leaves history entirely; back from the new event's detail goes home.
       navigate('event-detail', { eventId: event.id, aboveHome: true });
     } catch (error) { Alert.alert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
@@ -266,7 +273,7 @@ export default function CreateEventScreen({
   // No step continues while one of its required fields is empty.
   const stepIncomplete = step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !place || step === 4 && !descriptionValid || step === 5 && missingCover;
   const missingInvitees = isInviteOnly && !invitedIds.length && !poolIds.length;
-  const hasStickyBar = step === 6 && isInviteOnly || step === 2 || step === 3 || step === 4 || step === 5;
+  const hasStickyBar = step === 2 || step === 3 || step === 4 || step === 5;
   const suggestions = personalSuggestions.length ? personalSuggestions : REQUIREMENTS_SUGGESTIONS[data.activity] || REQUIREMENTS_SUGGESTIONS.default;
   if (createBlocked) {
     return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
@@ -328,16 +335,38 @@ export default function CreateEventScreen({
             return <PoolCandidatesPicker selected={poolIds} onChange={setPoolIds} draft={{ interestId: interest.id, ...(level ? { levelId: level.id } : {}), date: displayDate(data.date), startTime: data.time, ...(data.durationMinutes ? { durationMinutes: data.durationMinutes } : {}), latitude: place.latitude, longitude: place.longitude }} />;
           })()}
 
+          {/* Invite-only: your friends can be picked too; each gets an invitation to accept or decline. */}
+          {isInviteOnly && <Box style={[[ui.spaceY3, ui.mb4]]}>
+              <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider]]}>
+                Arkadaşlarından davet et{invitedIds.length ? ` · ${invitedIds.length} seçili` : ""}
+              </Label>
+              <Label style={[[ui.textXs, ui.textWhite40]]}>Seçtiğin arkadaşlarına etkinlik oluşturulunca davet gider; kabul ederlerse katılımcı olurlar.</Label>
+              {friends === null ? <Label style={[[ui.textSm, ui.textWhite40]]}>Arkadaşların yükleniyor…</Label> : !friends.length ? <Label style={[[ui.textSm, ui.textWhite40]]}>Henüz aktif arkadaşın yok.</Label> : <>
+              <Field accessibilityLabel="Arkadaşlarında ara" placeholder="İsim veya soyisim ara" value={friendQuery} onChangeText={setFriendQuery} autoCapitalize="words" autoCorrect={false} returnKeyType="search" glass />
+              {!shownFriends.length ? <Label style={[[ui.textSm, ui.textWhite40]]}>Bu isimde bir arkadaşın yok.</Label> : <Scroll style={{ maxHeight: 320 }} nestedScrollEnabled keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8 }}>
+              {shownFriends.map(friend => {
+            const name = `${friend.firstName} ${friend.lastName}`.trim();
+            const chosen = invitedIds.includes(friend.id);
+            return <Touch key={friend.id} accessibilityRole="checkbox" accessibilityLabel={`${name} davet et`} accessibilityState={{ checked: chosen }} onPress={() => toggleInvite(friend.id)} style={[[ui.wFull, ui.p3, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap3, ui.border, chosen ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={chosen ? "rgba(105,120,255,.16)" : undefined} />
+                    <Checkbox checked={chosen} />
+                    <Avatar uri={friend.profilePhoto || ""} name={name} size="sm" />
+                    <Label style={[[ui.textSm, ui.textWhite85], { flex: 1, textAlign: "left" }]}>{name}</Label>
+                  </Touch>;
+          })}
+              </Scroll>}
+              </>}
+            </Box>}
+
           {missingCover && <Label style={[[ui.textXs, ui.mb3], { color: palette.error }]}>
               Yeni bir ilgi alanı seçtin; kapak fotoğrafı yüklemeden etkinlik oluşturamazsın.
             </Label>}
           {missingInvitees && <Label style={[[ui.textXs, ui.mb3], { color: palette.error }]}>
-              Sadece davetlilere açık bir etkinlik için arkadaşlarından ya da yukarıdaki takvim havuzundan en az bir kişi seç.
+              Sadece davetlilere açık bir etkinlik için uygun kişilerden ya da arkadaşlarından en az bir kişi seç.
             </Label>}
           <Touch onPress={publish} disabled={creating || missingInvitees || missingCover} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.fontSemibold, ui.textBase, ui.mb4], {
           color: palette.text
         }, (missingInvitees || missingCover) && { opacity: .45 }]} gradient={["#4d5bcb", "#6651c9"]}>
-            {poolIds.length ? `Etkinliği Oluştur · ${poolIds.length} kişiyi davet et` : "Etkinliği Oluştur"}
+            {(() => { const count = new Set([...poolIds, ...(isInviteOnly ? invitedIds : [])]).size; return count ? `Etkinliği Oluştur · ${count} kişiyi davet et` : "Etkinliği Oluştur"; })()}
           </Touch>
         </Box>
       </Scroll>
@@ -632,8 +661,7 @@ export default function CreateEventScreen({
                 {PRIVACIES.map(p => {
               const Icon = p.icon;
               const selected = data.privacy === p.label;
-              const locked = p.enum === INVITE_ONLY && !canInvite;
-              return <Touch key={p.label} disabled={locked} onPress={() => p.enum === INVITE_ONLY ? chooseInviteOnly(p.label) : selectAndNext("privacy", p.label)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap4, ui.border, selected ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={selected ? "rgba(105,120,255,.16)" : undefined} />
+              return <Touch key={p.label} onPress={() => { if (p.enum === INVITE_ONLY) { chooseInviteOnly(p.label); setTimeout(next, 180); } else selectAndNext("privacy", p.label); }} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap4, ui.border, selected ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={selected ? "rgba(105,120,255,.16)" : undefined} />
                       <Box style={[[ui.w10, ui.h10, ui.roundedXl, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.flexShrink0, selected ? [ui.textC8a44a] : [ui.textWhite35]], {
                   backgroundColor: selected ? "rgba(105,120,255,0.10)" : "rgba(255,255,255,0.05)",
                   borderWidth: 1,
@@ -646,28 +674,12 @@ export default function CreateEventScreen({
                           {p.label}
                         </Label>
                         <Label style={[[ui.textXs, ui.textWhite40], { textAlign: "left" }]}>
-                          {locked ? "Bu seçenek hesabında açık değil." : p.desc}
+                          {p.desc}
                         </Label>
                       </Box>
                     </Touch>;
             })}
               </Box>
-              {isInviteOnly && <Box style={[[ui.spaceY3], { marginTop: 24 }]}>
-                  <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider]]}>
-                    Arkadaşlarını davet et{invitedIds.length ? ` · ${invitedIds.length} seçili` : " · isteğe bağlı"}
-                  </Label>
-                  <Label style={[[ui.textXs, ui.textWhite40]]}>Arkadaş olman gerekmeyen, bu etkinliğe uygun kişileri bir sonraki adımda takvim havuzundan da davet edebilirsin.</Label>
-                  {friends === null ? <Label style={[[ui.textSm, ui.textWhite40]]}>Arkadaşların yükleniyor…</Label> : !friends.length ? <Label style={[[ui.textSm, ui.textWhite40]]}>Henüz aktif arkadaşın yok.</Label> : friends.map(friend => {
-                const name = `${friend.firstName} ${friend.lastName}`.trim();
-                const chosen = invitedIds.includes(friend.id);
-                return <Touch key={friend.id} accessibilityRole="checkbox" accessibilityLabel={`${name} davet et`} accessibilityState={{ checked: chosen }} onPress={() => toggleInvite(friend.id)} style={[[ui.wFull, ui.p3, ui.rounded2xl, ui.flex, ui.itemsCenter, ui.gap3, ui.border, chosen ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={chosen ? "rgba(105,120,255,.16)" : undefined} />
-                        {/* The checkbox on the left makes the selection obvious. */}
-                        <Checkbox checked={chosen} />
-                        <Avatar uri={friend.profilePhoto || ""} name={name} size="sm" />
-                        <Label style={[[ui.textSm, ui.textWhite85], { flex: 1, textAlign: "left" }]}>{name}</Label>
-                      </Touch>;
-              })}
-                </Box>}
             </Box>}
         </Box>
       </Scroll>

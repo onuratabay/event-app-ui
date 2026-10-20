@@ -583,6 +583,16 @@ export interface EventCandidate { user: { id: string; firstName: string; lastNam
 export const getEventCandidateCount = (eventId: string) => request<{ count: number }>(`/events/${eventId}/candidates/count`, { background: true })
 export const getEventCandidates = (eventId: string) => request<{ capacity: { confirmed: number; max: number; spotsLeft: number }; items: EventCandidate[] }>(`/events/${eventId}/candidates`)
 // An invitation is not a seat: invitees still pass the capacity check when they accept.
+export type FriendInviteStatus = 'none' | 'invited' | 'expired' | 'confirmed' | 'waitlisted' | 'declined'
+export interface FriendInvite { user: { id: string; firstName: string; lastName: string; profilePhoto: string | null }; status: FriendInviteStatus; canInvite: boolean }
+/** "Sadece Davet" events: the organizer's friends with their status in this event. */
+export const getEventFriendInvites = (eventId: string) => request<{ items: FriendInvite[] }>(`/events/${eventId}/friend-invites`, { background: true })
+/** Invites friends (again, for those who declined or let the invitation expire); sent 20 at a time. */
+export async function inviteEventFriends(eventId: string, userIds: string[]) {
+  let invited = 0
+  for (let i = 0; i < userIds.length; i += 20) invited += (await request<{ invited: number }>(`/events/${eventId}/friend-invites`, { method: 'POST', body: JSON.stringify({ userIds: userIds.slice(i, i + 20) }) })).invited
+  return { invited }
+}
 export const inviteEventCandidates = (eventId: string, userIds: string[]) => request<{ invited: number; expiresAt: string }>(`/events/${eventId}/invitations`, { method: 'POST', body: JSON.stringify({ userIds }) })
 // Before the event exists: pool members who fit the creation form's draft. Read-only; invitations go out after creation.
 export interface CandidateDraft { interestId: string; levelId?: string; date: string; startTime: string; durationMinutes?: number; latitude: number; longitude: number }

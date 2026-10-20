@@ -165,6 +165,7 @@ export function mapApiEvent(event: Awaited<ReturnType<typeof getEvents>>["items"
     waitlisted: event.viewerParticipationStatus === 'waitlisted',
     invited: event.viewerParticipationStatus === 'invited',
     invitationExpiresAt: event.viewerInvitationExpiresAt || undefined,
+    inviteOnly: event.visibility?.enum === 'invite_only',
     createdAt: event.createdAt,
     lastMessageAt: event.lastMessageAt || undefined,
     unreadCount: event.unreadCount || 0,
