@@ -12,6 +12,7 @@ import { MAP_PROVIDER } from "../map/provider"
 import { PlaceSuggestionList, usePlaceSuggestions } from "../map/PlaceSuggestions"
 import type { PlaceSuggestion } from "../api/client"
 import { DARK_MAP_PROPS } from "../map/darkStyle"
+import { BaseTiles, BaseTilesCredit } from "../map/BaseTiles"
 import { Box, Field, Label, Touch } from "../native/UI"
 import { palette } from "../theme/palette"
 
@@ -171,8 +172,10 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
       <MapView ref={map} provider={MAP_PROVIDER} testID="event-location-map" style={StyleSheet.absoluteFill} initialRegion={initialRegion} {...DARK_MAP_PROPS}
         showsUserLocation={false} toolbarEnabled={false} onPress={event => void pick(event.nativeEvent.coordinate)}
         onPoiClick={event => pickVenue(event.nativeEvent.name, event.nativeEvent.coordinate)}>
+        <BaseTiles />
         {value && <Marker coordinate={point(value)} draggable pinColor={palette.blue} onDragEnd={event => void pick(event.nativeEvent.coordinate)} />}
       </MapView>
+      <BaseTilesCredit />
     </Box>
     <Label style={value ? s.picked : s.hint}>
       {value ? `📍 ${region || "Seçilen nokta"}` : busy === "city" ? "Şehir bulunuyor…" : "Buluşma noktasını seçmek için haritada bir mekana ya da noktaya dokun."}

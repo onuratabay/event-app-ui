@@ -8,6 +8,7 @@ import * as Location from "expo-location"
 import MapView, { Circle, Marker } from "react-native-maps"
 import { MAP_PROVIDER } from "../map/provider"
 import { DARK_MAP_PROPS } from "../map/darkStyle"
+import { BaseTiles, BaseTilesCredit } from "../map/BaseTiles"
 import { createAvailability, deleteAvailability, getApiErrorMessage, getAvailabilities, getMapInterests, setAvailabilityPaused, updateAvailability, type ApiAvailability } from "../api/client"
 import { useBottomNavInset } from "../components/BottomNav"
 import { AtmoBackground, GlassCard, GlassFill } from "../components/GlassUI"
@@ -350,9 +351,11 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
         <PlaceSuggestionList items={regions.items} onPick={item => void pickRegion(item)} />
         <Box style={s.mapFrame}>
           <MapView ref={map} provider={MAP_PROVIDER} testID="availability-map" {...DARK_MAP_PROPS} style={StyleSheet.absoluteFill} initialRegion={areaCenter ? { ...areaCenter, latitudeDelta: deltaFor(areaRadiusKm), longitudeDelta: deltaFor(areaRadiusKm) } : INITIAL_REGION} onPress={event => pickCenter(event.nativeEvent.coordinate)}>
+            <BaseTiles />
             {areaCenter && <Circle center={areaCenter} radius={areaRadiusKm * 1000} strokeColor="rgba(185,195,255,.9)" fillColor="rgba(105,120,255,.18)" strokeWidth={2} />}
             {area.mode === "radius" && area.center && <Marker coordinate={area.center} pinColor={palette.blue} />}
           </MapView>
+          <BaseTilesCredit />
         </Box>
         <Touch disabled={locating} onPress={() => void useMyLocation()} style={s.addButton}>
           <Box style={s.row}><LocationIcon size={15} style={{ color: palette.accent }} /><Label style={s.link}>{locating ? "Konum alınıyor…" : "Konumumu kullan (isteğe bağlı)"}</Label></Box>

@@ -63,7 +63,7 @@ Module._load = function (id, parent, isMain) {
     getForegroundPermissionsAsync: async () => ({ granted: global.__testForegroundLocationPermission === true }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
     Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => global.__testCurrentPosition ? global.__testCurrentPosition() : ({ coords: { latitude: 39.92, longitude: 32.85 } }), geocodeAsync: async () => [{ latitude: 39.92, longitude: 32.85 }], reverseGeocodeAsync: async () => global.__testReverseGeocode || [],
   }
-  if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker", Circle: "Circle" }
+  if (id === "react-native-maps") return { __esModule: true, default: "MapView", Marker: "Marker", Circle: "Circle", UrlTile: "UrlTile" }
   if (id === "expo-constants") return { __esModule: true, default: { expoConfig: { hostUri: "192.168.1.15:8081" } } }
   if (id === "react-native")
     return {

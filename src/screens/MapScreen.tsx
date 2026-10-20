@@ -13,6 +13,7 @@ import { apiDate, applyDiscoveryFilters, categoryVisual, dateRange, placeBounds,
 import MapView, { Marker, type Region } from "react-native-maps"
 import { MAP_PROVIDER } from "../map/provider"
 import { DARK_MAP_PROPS } from "../map/darkStyle"
+import { BaseTiles, BaseTilesCredit } from "../map/BaseTiles"
 import { useBottomNavInset } from "../components/BottomNav"
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg"
 import { getApiErrorMessage, getMapEvents, getMapInterests, type ApiEvent } from "../api/client"
@@ -215,6 +216,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
         onMapReady={() => setReady(true)} onRegionChange={setRegion} onRegionChangeComplete={setRegion}
         onPanDrag={() => { centered.current = true }}
         onPress={() => setSelected([])} legalLabelInsets={{ top: 0, left: 8, right: 8, bottom: navInset + 8 }}>
+        <BaseTiles />
         {markerOpacity > 0 && clusters.map(feature => {
           const [longitude, latitude] = feature.geometry.coordinates
           const props = feature.properties
@@ -251,6 +253,7 @@ export default function MapScreen({ navigate }: { navigate: NavigateFn }) {
           </Marker>
         })}
       </MapView>
+      <BaseTilesCredit bottom={navInset + 4} />
       {mode === "heat" && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: heatOpacity }]}>
         <Svg width={size.width} height={size.height}>
           <Defs>
