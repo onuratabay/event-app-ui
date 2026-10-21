@@ -79,34 +79,33 @@ export default function WelcomeScreen({
       {/* Bottom fade */}
       <Box style={[[ui.fixed, ui.inset0], {}]} gradient={["rgba(8,11,24,0.12)", "transparent", "rgba(8,11,24,0.72)", "rgba(8,11,24,0.98)"]} gradientDirection="down" />
 
-      {/* Middle decorative element */}
-      <Box style={[[ui.relative, ui.flex1, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.px8]]}>
-        <Box style={[[ui.relative, ui.itemsCenter]]}>
+      {/* Upper part: the brand, headline and quote sit centred in the free space, over the glass shapes. */}
+      <Box style={[[ui.relative, ui.flex1, ui.flexCol, ui.justifyCenter, ui.px8], { paddingTop: 56 }]}>
+        <Box style={[[ui.relative]]}>
           {/* Glass floating shapes */}
           <Box style={[[ui.fixed, ui.Top8, ui.Right12, ui.w28, ui.h28, ui.rounded2xl, ui.rotate12, ui.opacity40], {
           backgroundColor: "rgba(105,120,255,0.08)",
           borderWidth: 1,
           borderColor: "rgba(105,120,255,0.15)"
-        }]} glass />
+      }]} glass />
           <Box style={[[ui.fixed, ui.Bottom4, ui.Left8, ui.w20, ui.h20, ui.roundedFull, ui.opacity30], {
           backgroundColor: "rgba(146,125,255,0.10)",
           borderWidth: 1,
           borderColor: "rgba(146,125,255,0.15)"
-        }]} glass />
+      }]} glass />
+          <Box style={[[ui.spaceY4]]} enter>
+            <BrandWordmark />
+            <Box style={{ position: "relative", zIndex: 5 }}>
+              <Label adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={[[ui.fontDisplay, ui.text5xl, ui.textWhite], { fontStyle: "italic", lineHeight: 52, textShadowColor: "rgba(0,0,0,.45)", textShadowRadius: 12 }]}>Meet real</Label>
+              <Label adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={[[ui.fontDisplay, ui.text5xl], { color: "#c7ceff", fontStyle: "italic", lineHeight: 52, textShadowColor: "rgba(0,0,0,.5)", textShadowRadius: 12 }]}>moments.</Label>
+            </Box>
+            <EditorialQuote>Gerçek bağlantılar, ortak deneyimler ve güven üzerine kurulmuş özel bir topluluk.</EditorialQuote>
+          </Box>
         </Box>
       </Box>
 
-      {/* Bottom content */}
+      {/* Lower part: the actions and the footnote, clear of Android's system navigation bar. */}
       <Box style={[[ui.relative, ui.px8, ui.spaceY8], { paddingBottom: 48 + safeBottom }]}>
-        <Box style={[[ui.spaceY4]]} enter>
-          <BrandWordmark />
-          <Box style={{ position: "relative", zIndex: 5 }}>
-            <Label adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={[[ui.fontDisplay, ui.text5xl, ui.textWhite], { fontStyle: "italic", lineHeight: 52, textShadowColor: "rgba(0,0,0,.45)", textShadowRadius: 12 }]}>Meet real</Label>
-            <Label adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={[[ui.fontDisplay, ui.text5xl], { color: "#c7ceff", fontStyle: "italic", lineHeight: 52, textShadowColor: "rgba(0,0,0,.5)", textShadowRadius: 12 }]}>moments.</Label>
-          </Box>
-          <EditorialQuote>Gerçek bağlantılar, ortak deneyimler ve güven üzerine kurulmuş özel bir topluluk.</EditorialQuote>
-        </Box>
-
         <Box style={[[ui.spaceY3]]} enter>
           <Touch onPress={() => navigate("onboarding-1")} style={[[ui.wFull, ui.py4, ui.rounded2xl, ui.textBase, ui.fontSemibold, ui.trackingWide], {
           color: palette.text

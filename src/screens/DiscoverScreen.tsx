@@ -12,6 +12,8 @@ import { BrandWordmark } from "../components/Brand";
 import FeedHeaderBackdrop from "../components/FeedHeaderBackdrop";
 import HeaderIconButton from "../components/HeaderIconButton";
 import { HeartButton, RippleButton, SpringButton } from "../components/Expressive";
+import FeedAdCard from "../ads/FeedAdCard";
+import { adsModule, nativeUnitId, withAdSlots } from "../ads/ads";
 import { AtmoBackground, FilterChip } from "../components/GlassUI";
 import { CalendarIcon, SearchIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
 import { eventPhase, isRoomReady, participantCount, useStore, type EventPhase } from "../native/Store";
@@ -325,6 +327,8 @@ export default function DiscoverScreen({
   });
   const sortedEvents = sortFeed(visibleEvents, sortBy, { interests: store.user.interests, location: deviceLocation });
   const isCustomSort = sortBy !== "recommended";
+  // Native ads sit between event cards (see withAdSlots); where ads cannot run (Expo Go, no ad unit) the list is events only.
+  const feedItems = withAdSlots(sortedEvents, !!adsModule() && !!nativeUnitId());
   // Pull down reloads only the feed (/events); account and personal lists load elsewhere.
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const pullToRefresh = async () => {
@@ -349,9 +353,9 @@ export default function DiscoverScreen({
         <EventList
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingTop: 112, paddingHorizontal: 20, paddingBottom: 112, flexGrow: visibleEvents.length ? 0 : 1 }}
-          data={sortedEvents}
-          keyExtractor={event => event.id}
-          renderItem={({ item: event, index }) => <Box style={{ marginBottom: 16 }}><EventCard event={event} index={index} onPress={() => navigate("event-detail", {
+          data={feedItems}
+          keyExtractor={item => item.id}
+          renderItem={({ item: event, index }) => "ad" in event ? <FeedAdCard /> : <Box style={{ marginBottom: 16 }}><EventCard event={event} index={index} onPress={() => navigate("event-detail", {
             eventId: event.id
           })} onShare={() => setShareEvent(event)} /></Box>}
           ListEmptyComponent={!store.feedLoaded ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 48 }} /> : <DiscoverEmptyState interests={store.user.interests} filterLabel={sortBy === "mine" ? "Senin etkinliklerin" : activeFilter !== "Sana Özel" && EVENTS.some(isOpenForFeed) ? activeFilter : undefined}

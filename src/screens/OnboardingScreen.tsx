@@ -364,7 +364,8 @@ function Step1({
       const status = (response.user as { status?: { enum: string } }).status?.enum;
       setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}`, status } }));
       // A resumed account that is already further along goes where its status belongs.
-      const next = status && status !== "profile_incomplete" ? gatedScreen(status, response.user as { instagramUsername?: string | null }) ?? "discover" : "onboarding-2";
+      // A new application confirms the phone number by SMS code before its next step.
+      const next = status && status !== "profile_incomplete" ? gatedScreen(status, response.user as { instagramUsername?: string | null }) ?? "discover" : "phone-verify";
       if (mounted.current) navigate(next);
     } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
     finally { if (mounted.current) setCreating(false); }

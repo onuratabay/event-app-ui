@@ -2,11 +2,9 @@ import { palette } from "../theme/palette";
 import { showAlert } from "../components/AppDialog";
 import { MessageIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
-import { Circle, Path, Polyline, Rect } from "react-native-svg";
-import { ComingSoonCard } from "../components/Expressive";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
 import { byLatestMessage, isEventMember, isRoomReady, roomTitle, useStore } from "../native/Store";
-import { Box, Label, Picture, Scroll, Touch, Vector } from "../native/UI";
+import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import { useEffect, useRef, useState } from "react";
@@ -240,21 +238,6 @@ export default function RoomsScreen({
           </Box>
         </Box>
 
-        {/* Coming soon features */}
-        <Box style={[[ui.px5, ui.mb6, ui.spaceY3]]}>
-          <Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-            Yakında
-          </Label>
-          <ComingSoonCard accent="violet" icon={<Vector width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(178,174,248,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                <Circle cx="12" cy="10" r="3" />
-              </Vector>} title="Canlı Konum Paylaşımı" subtitle="Buluşma noktasını gerçek zamanlı görün, geç kalma." />
-          <ComingSoonCard accent="gold" icon={<Vector width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(105,120,255,0.9)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <Rect x="3" y="3" width="18" height="18" rx="2" />
-                <Circle cx="8.5" cy="8.5" r="1.5" />
-                <Polyline points="21 15 16 10 5 21" />
-              </Vector>} title="Etkinlik Fotoğraf Galerisi" subtitle="Anlarını toplulukla paylaş, sonradan tekrar yaşa." />
-        </Box>
       </Scroll>
 
     </Box>;

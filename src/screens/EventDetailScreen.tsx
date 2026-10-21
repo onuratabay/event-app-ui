@@ -66,7 +66,6 @@ export default function EventDetailScreen({
   useWalkthroughScreenBlocker(joining);
   const [loadError, setLoadError] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [actionHeight, setActionHeight] = useState(72);
   const remaining = useRemaining(event?.invited ? event.invitationExpiresAt : null);
   // The invitation stays open until the event is full: up to the maximum, or for as long as it waits
   // for participants when no maximum was set. Only the organizer invites (the server enforces it).
@@ -119,9 +118,15 @@ export default function EventDetailScreen({
   const isHost = event.host.id === store.user.id;
   // The organizer may cancel only before the start; members are notified and the room closes.
   const canCancel = isHost && participationOpen;
-  // Once joined, status, room entry and cancel live under the title; the action bar remains for joining
-  // and for re-creating a cancelled event.
-  const showActionBar = !joined || (isHost && event.status === "cancelled");
+  const inviteExpired = remaining !== null && remaining <= 0;
+  const joinOrWaitlist = async () => {
+    if (event.waitlisted) return setJoined(false);
+    if (event.currentParticipants < event.maxParticipants) return setJoined(true);
+    setJoining(true);
+    try { await socketAction('event:waitlist_join', { eventId: event.id }); showAlert('Yedek listedesin', 'Organizatör kabul ettiğinde katılımın güncellenecek.'); }
+    catch (cause) { showAlert('Yedek liste', cause instanceof Error ? cause.message : 'Tekrar dene.'); }
+    finally { setJoining(false); }
+  };
   const confirmCancel = () => showAlert("Etkinliği iptal et", "Etkinlik iptal edilecek, katılımcılara bildirim gidecek ve etkinlik odasında artık mesaj gönderilemeyecek. Emin misin?", [
     { text: "Vazgeç", style: "cancel" },
     { text: "Etkinliği iptal et", style: "destructive", onPress: async () => {
@@ -132,7 +137,7 @@ export default function EventDetailScreen({
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="discover" title={event.title} subtitle={`${event.date} · ${event.time}`} floating right={<NavAction label="Paylaş" onPress={() => setShareOpen(true)}><ShareIcon size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} style={{ color: palette.text }} /></NavAction>} />
-      <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol], { paddingBottom: (showActionBar ? actionHeight : 0) + 20 + navInset }]}>
+      <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol], { paddingBottom: 20 + navInset }]}>
         {/* Cover image header */}
         <Box style={[[ui.relative, ui.h72, ui.flexShrink0]]}>
           <FadingCover uri={event.coverImage} label={event.title} />
@@ -153,27 +158,56 @@ export default function EventDetailScreen({
                 <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mt1, ui.leadingTight]]}>
                   {event.title}
                 </Label>
-                {joined && <Box walkthroughId={showActionBar ? undefined : "event-action"} style={[[ui.mt2]]}>
-                  <Box style={detailStyles.hostRow}>
-                    <Box style={detailStyles.hostBadge}>
-                      <CheckIcon size={12} strokeWidth={2.2} style={{ color: palette.success }} />
-                      <Label style={detailStyles.hostBadgeText}>{isHost ? "Düzenleyensin" : "Katıldın"}</Label>
+                {/* Every participation action lives here under the title, as small in-page buttons. */}
+                <Box walkthroughId="event-action" style={[[ui.mt2]]}>
+                  {joined ? <>
+                    <Box style={detailStyles.hostRow}>
+                      <Box style={detailStyles.hostBadge}>
+                        <CheckIcon size={12} strokeWidth={2.2} style={{ color: palette.success }} />
+                        <Label style={detailStyles.hostBadgeText}>{isHost ? "Düzenleyensin" : "Katıldın"}</Label>
+                      </Box>
+                      <Box style={detailStyles.rowActions}>
+                        {roomReady && <Touch accessibilityLabel="Odaya Katıl" onPress={() => navigate("event-room", { eventId: event.id })} style={detailStyles.roomChip} gradient={palette.actionGradient}>
+                          Odaya Katıl →
+                        </Touch>}
+                        {/* A cancelled event stays cancelled; the organizer starts a new one from its details. */}
+                        {isHost && event.status === "cancelled" && <Touch accessibilityLabel="Güncelle ve yeniden oluştur" onPress={() => navigate("create-event", { eventId: event.id })} style={detailStyles.roomChip} gradient={palette.actionGradient}>
+                          Güncelle ve yeniden oluştur
+                        </Touch>}
+                        {canCancel && <Touch accessibilityLabel="Etkinliği iptal et" onPress={confirmCancel} style={detailStyles.cancelChip}>
+                          İptal et
+                        </Touch>}
+                        {!isHost && participationOpen && <Touch accessibilityLabel="Katılımı iptal et" disabled={joining} onPress={() => setJoined(false)} style={detailStyles.cancelChip}>
+                          {joining ? "Bekle…" : "İptal Et"}
+                        </Touch>}
+                      </Box>
                     </Box>
-                    <Box style={detailStyles.rowActions}>
-                      {roomReady && <Touch accessibilityLabel="Odaya Katıl" onPress={() => navigate("event-room", { eventId: event.id })} style={detailStyles.roomChip} gradient={palette.actionGradient}>
-                        Odaya Katıl →
-                      </Touch>}
-                      {canCancel && <Touch accessibilityLabel="Etkinliği iptal et" onPress={confirmCancel} style={detailStyles.cancelChip}>
-                        İptal et
-                      </Touch>}
-                      {!isHost && participationOpen && <Touch accessibilityLabel="Katılımı iptal et" disabled={joining} onPress={() => setJoined(false)} style={detailStyles.cancelChip}>
-                        {joining ? "Bekle…" : "İptal Et"}
-                      </Touch>}
+                    {!participationOpen && !isHost && <Label accessibilityRole="text" style={[[ui.textXs, ui.mt2, ui.textWhite50]]}>{frozenNote}</Label>}
+                    <ContextualTip id="participation" when={justJoined} />
+                  </> : <>
+                    <Box style={detailStyles.hostRow}>
+                      <Label style={detailStyles.countText}>{`${participantCount(event.currentParticipants, event.maxParticipants)} kişi`}</Label>
+                      {/* Outside the participation window the buttons stay, disabled, with the reason below. */}
+                      <Box style={detailStyles.rowActions}>
+                        {event.invited ? <>
+                          <Touch accessibilityLabel="Daveti kabul et" disabled={joining || !participationOpen || inviteExpired} onPress={() => setJoined(true)} style={detailStyles.roomChip} gradient={palette.actionGradient}>
+                            Daveti kabul et
+                          </Touch>
+                          <Touch accessibilityLabel="Reddet" disabled={joining || !participationOpen} onPress={() => setJoined(false)} style={detailStyles.neutralChip}>
+                            Reddet
+                          </Touch>
+                        </> : <Touch accessibilityLabel={event.waitlisted ? "Yedek listeden ayrıl" : event.currentParticipants >= event.maxParticipants ? "Yedek listeye katıl" : "Katıl"} disabled={joining || !participationOpen} onPress={() => void joinOrWaitlist()} style={detailStyles.roomChip} gradient={palette.actionGradient}>
+                          {joining ? "Bekle…" : event.waitlisted ? "Yedek listeden ayrıl" : event.currentParticipants >= event.maxParticipants ? "Yedek listeye katıl" : "Katıl"}
+                        </Touch>}
+                      </Box>
                     </Box>
-                  </Box>
-                  {!participationOpen && !isHost && <Label accessibilityRole="text" style={[[ui.textXs, ui.mt2, ui.textWhite50]]}>{frozenNote}</Label>}
-                  <ContextualTip id="participation" when={justJoined} />
-                </Box>}
+                    {event.invited && remaining !== null && <Label accessibilityLiveRegion="polite" style={[[ui.textXs, ui.mt2], { color: remaining > 0 ? palette.accent : palette.error }]}>
+                      {remaining > 0 ? `Davete yanıt için ${remainingLabel(remaining)}` : "Bu davetin süresi doldu."}
+                    </Label>}
+                    {!participationOpen && <Label accessibilityRole="text" style={[[ui.textXs, ui.mt2, ui.textWhite50]]}>{frozenNote}</Label>}
+                    <ContextualTip id="invitations" when={!!event.invited} />
+                  </>}
+                </Box>
               </Box>
             </Box>
 
@@ -338,35 +372,6 @@ export default function EventDetailScreen({
 
       {shareOpen && <EventShareSheet event={event} onClose={() => setShareOpen(false)} />}
 
-      {/* Compact action bar with an opaque surface so scrolling text cannot show through. */}
-      {showActionBar && <Box walkthroughId="event-action" onLayout={event => setActionHeight(event.nativeEvent.layout.height)} style={[actionStyles.bar, { bottom: navInset }]}>
-        <ContextualTip id="invitations" when={!!event.invited && !joined} />
-        {!participationOpen && !joined && <Label accessibilityRole="text" style={[[ui.textXs, ui.mb2, ui.textWhite50]]}>{frozenNote}</Label>}
-        {event.invited && !joined && remaining !== null && <Label accessibilityLiveRegion="polite" style={[[ui.textXs, ui.mb2], { color: remaining > 0 ? palette.accent : palette.error }]}>
-            {remaining > 0 ? `Davete yanıt için ${remainingLabel(remaining)}` : "Bu davetin süresi doldu."}
-          </Label>}
-        {event.invited && !joined ? <Box style={actionStyles.row} enter>
-            <Touch disabled={joining || !participationOpen || remaining !== null && remaining <= 0} onPress={() => setJoined(true)} style={actionStyles.primary} gradient={palette.actionGradient}>
-              Daveti kabul et
-            </Touch>
-            <Touch disabled={joining || !participationOpen} onPress={() => setJoined(false)} style={actionStyles.secondary}>
-              Reddet
-            </Touch>
-          </Box> : !joined ? <Touch disabled={joining || !participationOpen} onPress={async () => {
-          if (event.waitlisted) return setJoined(false);
-          if (event.currentParticipants < event.maxParticipants) return setJoined(true);
-          setJoining(true);
-          try { await socketAction('event:waitlist_join', { eventId: event.id }); showAlert('Yedek listedesin', 'Organizatör kabul ettiğinde katılımın güncellenecek.'); }
-          catch (cause) { showAlert('Yedek liste', cause instanceof Error ? cause.message : 'Tekrar dene.'); }
-          finally { setJoining(false); }
-        }} style={[actionStyles.primary, { flex: 0 }]} gradient={palette.actionGradient} enter>
-            {event.waitlisted ? 'Yedek listeden ayrıl' : event.currentParticipants >= event.maxParticipants ? 'Yedek listeye katıl' : 'Katıl'}
-          </Touch> : <Touch accessibilityLabel="Güncelle ve yeniden oluştur" onPress={() => navigate("create-event", { eventId: event.id })} style={actionStyles.primary} gradient={palette.actionGradient}>
-            {/* A cancelled event stays cancelled; the organizer starts a new one from its details. */}
-            Güncelle ve yeniden oluştur
-          </Touch>}
-
-      </Box>}
       {inviteOpen && <InviteCandidatesSheet eventId={event.id} inviteOnly={!!event.inviteOnly} onClose={() => setInviteOpen(false)} />}
     </Box>;
 }
@@ -383,28 +388,15 @@ const detailStyles = StyleSheet.create({
     minHeight: 32, paddingHorizontal: 14, borderRadius: 999,
     color: palette.text, fontSize: 12, fontFamily: "Outfit-SemiBold",
   },
+  countText: { color: "rgba(241,245,249,.55)", fontSize: 12, fontFamily: "Outfit-Medium" },
+  neutralChip: {
+    minHeight: 32, paddingHorizontal: 12, borderRadius: 999,
+    backgroundColor: palette.elevated, borderWidth: 1, borderColor: palette.border,
+    color: palette.text, fontSize: 12, fontFamily: "Outfit-Medium",
+  },
   cancelChip: {
     minHeight: 32, paddingHorizontal: 12, borderRadius: 999,
     backgroundColor: palette.elevated, borderWidth: 1, borderColor: palette.border,
     color: palette.error, fontSize: 12, fontFamily: "Outfit-Medium",
-  },
-});
-const actionStyles = StyleSheet.create({
-  bar: {
-    position: "absolute", left: 12, right: 12, zIndex: 40,
-    padding: 12, borderRadius: 22, backgroundColor: palette.surface,
-    borderWidth: 1, borderColor: "rgba(183,197,255,.20)",
-    shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 }, elevation: 12,
-  },
-  row: { flexDirection: "row", alignItems: "center", gap: 10 },
-  primary: {
-    flex: 1, minHeight: 48, paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 14, color: palette.text, fontSize: 14, fontFamily: "Outfit-SemiBold",
-  },
-  secondary: {
-    flex: 1, minHeight: 48, paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 14, backgroundColor: palette.elevated,
-    borderWidth: 1, borderColor: palette.border, color: palette.text, fontSize: 14,
   },
 });

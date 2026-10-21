@@ -5,7 +5,7 @@ import type { Screen } from "../types"
 import BottomNav, { useKeyboardVisible } from "./BottomNav"
 
 // The bottom bar appears on every screen except these pre-app (sign-in and onboarding) routes.
-const HIDDEN_ROUTES = new Set(["/", "/welcome", "/login", "/forgot-password", "/onboarding-1", "/onboarding-2", "/onboarding-3", "/approval", "/interests", "/legal", "/admin", "/app-guide"])
+const HIDDEN_ROUTES = new Set(["/", "/welcome", "/login", "/forgot-password", "/onboarding-1", "/phone-verify", "/onboarding-2", "/onboarding-3", "/approval", "/interests", "/legal", "/admin", "/app-guide"])
 
 export default function AppBottomNav() {
   const pathname = usePathname()

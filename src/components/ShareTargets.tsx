@@ -42,8 +42,12 @@ export const SHARE_TARGETS: Target[] = [
 ]
 
 /** The message every target sends: title, time, place and the guest link. */
-export const shareMessage = (event: { title: string; date: string; time: string; location: string }, url: string) =>
-  `${event.title}\n${event.date} · ${event.time}\n${event.location}\nMisafir olarak katıl: ${url}`
+/** "21 Ekim 23:40", the moment an invite stops working. */
+export const inviteExpiry = (expiresAt: string) =>
+  new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(expiresAt))
+// The link sits on its own last line so WhatsApp and others build their event card (preview) from it.
+export const shareMessage = (event: { title: string; date: string; time: string; location: string }, url: string, expiresAt?: string) =>
+  `${event.title}\n${event.date} · ${event.time}\n${event.location}${expiresAt ? `\nDavet ${inviteExpiry(expiresAt)} tarihine kadar geçerli (24 saat).` : ""}\nMisafir olarak katıl:\n${url}`
 
 const open = async (app: string, web?: string) => {
   try { await Linking.openURL(app) } catch { if (web) await Linking.openURL(web); else throw new Error('unavailable') }

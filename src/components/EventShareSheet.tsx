@@ -5,7 +5,8 @@ import { createEventShare, getApiErrorMessage, revokeEventShare, type EventShare
 import { copyEvent } from '../native/media'
 import { Box, Label, Sheet, Touch } from '../native/UI'
 import { CheckIcon, CloseIcon } from './Icons'
-import { shareMessage, shareTo, ShareTargetGrid, type ShareTargetId } from './ShareTargets'
+import { inviteExpiry, shareMessage, shareTo, ShareTargetGrid, type ShareTargetId } from './ShareTargets'
+import { remainingLabel, useRemaining } from '../availability/countdown'
 import { palette } from '../theme/palette'
 import { GlassFill } from './GlassFill'
 import type { AppEvent } from '../types'
@@ -17,6 +18,7 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
   const pending = useRef(false)
+  const remaining = useRemaining(link?.expiresAt)
   const run = async (target: ShareTargetId) => {
     if (!accepted || pending.current) return
     pending.current = true; setBusy(true); setError('')
@@ -30,7 +32,7 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
     }
     try {
       if (target === 'copy') { await copyEvent(invite.url); setCopied(true) }
-      else await shareTo(target, shareMessage(event, invite.url), invite.url, event.title)
+      else await shareTo(target, shareMessage(event, invite.url, invite.expiresAt), invite.url, event.title)
     } catch { setError('Bu uygulama açılamadı. “Diğer” ile paylaşabilir ya da bağlantıyı kopyalayabilirsin.') }
     finally { pending.current = false; setBusy(false) }
   }
@@ -57,8 +59,12 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
         <Box style={[s.checkbox, accepted && s.checked]}>{accepted && <CheckIcon size={16} style={{ color: palette.text }} />}</Box>
         <Label style={s.consentText}>Bu bağlantıyla gelen misafirlerin etkinliğe katılım sorumluluğunu kabul ediyorum.</Label>
       </Touch>
-      <Label style={s.note}>{accepted ? 'Bir uygulama seç; kişisel davet bağlantın oluşturulup mesaja eklenir. Misafirler yalnızca bu etkinliği görür.' : 'Paylaşmak için önce onay kutusunu işaretle.'}</Label>
+      <Label style={s.note}>{accepted ? 'Bir uygulama seç; 24 saat geçerli kişisel davet bağlantın oluşturulup mesaja eklenir. Misafirler yalnızca bu etkinliği görür.' : 'Paylaşmak için önce onay kutusunu işaretle.'}</Label>
       <ShareTargetGrid disabled={!accepted || busy} onPick={target => void run(target)} />
+      {/* The invite works for 24 hours; its end and a live countdown are shown once it exists. */}
+      {link && remaining !== null ? <Label accessibilityLiveRegion="polite" style={[s.validity, remaining <= 0 && { color: palette.error }]}>
+        {remaining > 0 ? `Davet ${inviteExpiry(link.expiresAt)} tarihine kadar geçerli · ${remainingLabel(remaining)}` : 'Bu davetin süresi doldu. Yeni bir bağlantı için paylaşımı yeniden aç.'}
+      </Label> : null}
       {copied ? <Label accessibilityLiveRegion="polite" style={s.copied}>Bağlantı kopyalandı</Label> : null}
       {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
       {link && <Touch disabled={busy} onPress={() => void revoke()} style={s.revoke}>Bu davet bağlantısını iptal et</Touch>}
@@ -78,6 +84,7 @@ const s = StyleSheet.create({
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1, borderColor: palette.accent, alignItems: 'center', justifyContent: 'center' }, checked: { backgroundColor: palette.blue },
   consentText: { flex: 1, color: palette.text, fontSize: 13, lineHeight: 20, textAlign: 'left' },
   note: { color: palette.muted, fontSize: 12, lineHeight: 18 },
+  validity: { color: palette.accent, fontSize: 12, lineHeight: 18, textAlign: 'center' },
   copied: { color: palette.success, fontSize: 12, lineHeight: 18, textAlign: 'center' },
   error: { color: palette.error, fontSize: 12, lineHeight: 18 },
   revoke: { alignSelf: 'center', color: palette.muted, fontSize: 12, minHeight: 36 },

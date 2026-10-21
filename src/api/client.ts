@@ -612,6 +612,9 @@ export interface EventShareLink { url: string; code: string; expiresAt: string; 
 export const createEventShare = (eventId: string) => request<EventShareLink>(`/events/${encodeURIComponent(eventId)}/share`, { method: 'POST', body: JSON.stringify({ acceptResponsibility: true }) })
 /** The organizer's 24-hour event code (EWT-…); accepting guest responsibility is part of creating it. */
 export const createEventCode = (eventId: string) => request<EventShareLink>(`/events/${encodeURIComponent(eventId)}/share`, { method: 'POST', body: JSON.stringify({ acceptResponsibility: true, kind: 'code' }) })
+/** SMS check of the account's phone: send a 4-digit code (Verimor), then confirm it on the server. */
+export const sendPhoneCode = () => request<{ sent: boolean; expiresAt: string; resendAfter: number }>('/users/me/phone-verification/send', { method: 'POST' })
+export const verifyPhoneCode = (code: string) => request<{ verified: boolean }>('/users/me/phone-verification/verify', { method: 'POST', body: JSON.stringify({ code }) })
 export const createReferenceCode = () => request<{ code: string; expiresAt: string }>('/references/codes', { method: 'POST' })
 export const getActiveReferenceCode = () => request<{ code: { code: string; expiresAt: string } | null }>('/references/codes/active', { background: true }).then(result => result.code)
 export const revokeEventShare = (code: string) => request(`/sharing/links/${encodeURIComponent(code)}`, { method: 'DELETE' })

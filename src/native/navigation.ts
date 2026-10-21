@@ -3,7 +3,7 @@ import { useCallback } from "react"
 import type { NavigateFn } from "../types"
 // Back never lands on sign-in pages. A finished event-creation flow is removed from history when the
 // event opens (aboveHome), so an unfinished one stays reachable like any other page.
-const NO_RETURN = new Set(["index", "welcome", "login", "forgot-password", "onboarding-1", "onboarding-2", "onboarding-3", "approval"])
+const NO_RETURN = new Set(["index", "welcome", "login", "forgot-password", "onboarding-1", "phone-verify", "onboarding-2", "onboarding-3", "approval"])
 type NavState = { index?: number; routes?: Array<{ name: string; state?: NavState }> }
 /**
  * Route name of the page below the current one, or null when there is none.

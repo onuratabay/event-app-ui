@@ -35,13 +35,17 @@ function GuestInviteField() {
     finally { setBusy(false) }
   }
   const filled = !!input.trim()
+  const [shown, setShown] = useState(false)
+  // A secondary path: one quiet button until it is needed, then the code field in its place.
+  if (!shown) return <Touch accessibilityLabel="Ewent davet kodum var" onPress={() => setShown(true)} glass style={styles.inviteToggle}>
+    <Label style={styles.inviteToggleText}>Ewent davet kodum var</Label>
+  </Touch>
   return <Box>
-    <Label style={styles.fieldLabel}>Ewent davet kodum var</Label>
     <Box style={styles.phoneRow}>
       <Box style={[styles.inputFrame, { flex: 1 }]}>
         <GlassFill radius={16} {...INPUT_FROST} />
         <Field value={input} onChangeText={text => { setInput(text); setError("") }} placeholder="EWT-… veya davet bağlantısı" accessibilityLabel="Ewent davet kodu"
-          autoCapitalize="none" autoCorrect={false} returnKeyType="go" onSubmitEditing={() => void open()} style={styles.input} />
+          autoFocus autoCapitalize="none" autoCorrect={false} returnKeyType="go" onSubmitEditing={() => void open()} style={styles.input} />
       </Box>
       <Touch accessibilityLabel="Daveti aç" disabled={busy || !filled} disabledOpacity={0.7} onPress={() => void open()} glass
         style={[styles.inviteButton, filled && styles.inviteButtonOn]}>{busy ? "…" : "Aç"}</Touch>
@@ -163,22 +167,22 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
             {showPassword ? <EyeOffIcon style={styles.passwordIcon} /> : <EyeIcon style={styles.passwordIcon} />}
           </Touch>
         </Box>
-        <Touch accessibilityLabel="Şifremi unuttum" onPress={() => navigate("forgot-password")} style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}><Label style={{ color: "#c7ceff", fontFamily: "Outfit-Medium", fontSize: 14 }}>Şifremi unuttum</Label></Touch>
+        <Touch accessibilityLabel="Şifremi unuttum" onPress={() => navigate("forgot-password")} style={{ alignSelf: "flex-end", minHeight: 40, justifyContent: "center", paddingHorizontal: 8, marginTop: -4 }}><Label style={{ color: "#c7ceff", fontFamily: "Outfit-Medium", fontSize: 14 }}>Şifremi unuttum</Label></Touch>
+        {/* The sign-in form ends with its action; other ways in follow below "veya". */}
+        <Touch
+          onPress={submit}
+          disabled={busy}
+          style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.fontSemibold, { color: palette.text, marginTop: 4, minHeight: 54, justifyContent: "center" }]]}
+          gradient={palette.actionGradient}
+        >
+          {busy ? "Bağlanıyor..." : "Giriş Yap"}
+        </Touch>
         <Box style={styles.divider}>
           <Box style={styles.dividerLine} />
           <Label style={styles.dividerText}>veya</Label>
           <Box style={styles.dividerLine} />
         </Box>
         <GuestInviteField />
-        {/* Every input first; the actions close the form. */}
-        <Touch
-          onPress={submit}
-          disabled={busy}
-          style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.fontSemibold, { color: palette.text, marginTop: 24, minHeight: 54, justifyContent: "center" }]]}
-          gradient={palette.actionGradient}
-        >
-          {busy ? "Bağlanıyor..." : "Giriş Yap"}
-        </Touch>
         <Touch onPress={() => navigate("welcome")} style={[[ui.p3, ui.textCenter, ui.textWhite50]]}>
           Vazgeç
         </Touch>
@@ -190,7 +194,7 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
 const styles = StyleSheet.create({
   page: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 28, paddingTop: 88, paddingBottom: 36 },
   form: { width: "100%", maxWidth: 440, alignSelf: "center", gap: 10 },
-  heading: { gap: 12, marginBottom: 28 },
+  heading: { gap: 12, marginBottom: 20 },
   heroTitle: { color: palette.text, fontFamily: "Fraunces", fontSize: 36, lineHeight: 45, letterSpacing: -0.7, paddingVertical: 2 },
   eyebrow: { color: palette.accent, fontSize: 11, letterSpacing: 4, fontFamily: "Outfit-Medium", marginBottom: 8 },
   fieldLabel: { color: "#b6b0ae", fontSize: 12, fontFamily: "Outfit-Medium", marginTop: 6, marginLeft: 4 },
@@ -203,11 +207,13 @@ const styles = StyleSheet.create({
   phoneRow: { flexDirection: "row", gap: 8 },
   countryCode: { width: 72 },
   countryCodeInner: { flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", borderRadius: 16, borderWidth: 1, borderColor: palette.glassBorder },
-  divider: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 },
+  divider: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 6 },
   dividerLine: { flex: 1, height: 1, backgroundColor: palette.glassBorder },
   dividerText: { color: "rgba(241,245,249,.4)", fontSize: 12 },
   inviteButton: { minHeight: 56, paddingHorizontal: 20, borderRadius: 16, borderWidth: 1, borderColor: palette.glassBorder, backgroundColor: palette.glass, justifyContent: "center", color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15 },
   inviteButtonOn: { borderColor: "rgba(105,120,255,.55)", backgroundColor: palette.selected, color: palette.accent },
+  inviteToggle: { minHeight: 52, borderRadius: 16, borderWidth: 1, borderColor: palette.glassBorder, backgroundColor: palette.glass, alignItems: "center", justifyContent: "center" },
+  inviteToggleText: { color: palette.text, fontFamily: "Outfit-Medium", fontSize: 15 },
   inviteError: { color: palette.error, fontSize: 12, marginTop: 6, marginLeft: 4 },
   countryCodeText: { color: "#f4f5ff", fontSize: 15, fontFamily: "Outfit-Medium" },
 })

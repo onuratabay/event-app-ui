@@ -23,6 +23,9 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     urls.push(url)
     if (options.body) bodies.push({ path, body: JSON.parse(options.body) })
     if (path === "/auth/register" && registerConflict) return { ok: false, status: 409, text: async () => JSON.stringify({ statusCode: 409, errors: [{ field: "phoneNumber", message: "Bu telefon numarası zaten kayıtlı" }] }) }
+    if (path === "/users/me/phone-verification/send") return { ok: true, status: 200, json: async () => ({ sent: true, expiresAt: new Date(Date.now() + 300000).toISOString(), resendAfter: 60 }) }
+    if (path === "/users/me/phone-verification/verify") return JSON.parse(options.body).code === "1111" ? { ok: true, status: 200, json: async () => ({ verified: true }) }
+      : { ok: false, status: 400, text: async () => JSON.stringify({ statusCode: 400, errors: [{ field: null, message: "Kod hatalı. Tekrar dene." }] }) }
     if (path === "/access-codes/redeem") {
       const code = JSON.parse(options.body).code.toUpperCase()
       if (code === "REF-ABC123") return { ok: true, status: 200, json: async () => ({ target: "reference", status: "profile_incomplete" }) }
@@ -65,10 +68,26 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     if (status !== "approved") assert(!calls.includes("/events"), `${status} never loads the in-app feed`)
     await act(async () => login.unmount())
   }
+  // SMS check: the page asks the server for a code on open; a wrong code is explained, the right one opens the next step.
+  let verified
+  storage.set("event-app:access-token", "a"); calls.length = 0
+  const verify = await mount("PhoneVerify", { navigate: route => { verified = route } })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  assert(calls.includes("/users/me/phone-verification/send"), "Opening the page sends the SMS code")
+  const codeField = () => verify.root.findAll(n => n.props.accessibilityLabel === "Doğrulama kodu" && typeof n.props.onChangeText === "function")[0]
+  await act(async () => { codeField().props.onChangeText("1234"); await new Promise(resolve => setTimeout(resolve, 20)) })
+  assert(text(verify.toJSON()).includes("Kod hatalı"), "A wrong code is explained")
+  assert.equal(verified, undefined)
+  await act(async () => { codeField().props.onChangeText("1111"); await new Promise(resolve => setTimeout(resolve, 20)) })
+  assert.deepEqual(bodies.filter(row => row.path === "/users/me/phone-verification/verify").at(-1).body, { code: "1111" }, "The server checks the code")
+  assert.equal(verified, "onboarding-2", "The right code continues the application")
+  await act(async () => verify.unmount())
   // Under the sign-in form, "veya" offers an Ewent invite code; anything else is explained under the input.
   storage.clear()
   const inviteLogin = await mount("Login", { navigate: () => {} })
   assert(text(inviteLogin.toJSON()).includes("veya") && text(inviteLogin.toJSON()).includes("Ewent davet kodum var"))
+  assert(!inviteLogin.root.findAll(n => n.props.accessibilityLabel === "Ewent davet kodu").length, "The invite field stays folded until asked for")
+  await tap(inviteLogin, "Ewent davet kodum var")
   await act(async () => inviteLogin.root.findAll(n => n.props.accessibilityLabel === "Ewent davet kodu" && typeof n.props.onChangeText === "function")[0].props.onChangeText("REF-ABC"))
   await tap(inviteLogin, "Aç")
   assert(text(inviteLogin.toJSON()).includes("Geçerli bir Ewent davet kodu"), "Only invite codes open from the login screen")
@@ -162,7 +181,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await tap(registration, "KVKK Aydınlatma Metni")
   await tap(registration, "ticari elektronik ileti")
   await tap(registration, "Devam Et")
-  assert.equal(registered, "onboarding-2", "Registration continues with the reference step")
+  assert.equal(registered, "phone-verify", "Registration continues with the phone check, then the reference step")
   const signUp = bodies.find(row => row.path === "/auth/register").body
   assert.deepEqual(signUp.acceptedDocuments, [{ type: "terms", version: 1 }, { type: "privacy", version: 1 }, { type: "marketing", version: 3 }], "Opting in records the marketing text version too")
   assert.equal(signUp.marketingConsent, true)
@@ -188,7 +207,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   let resumed = await mount("Onboarding", { step: 1, navigate: route => { registered = route } })
   await fillAndSubmit(resumed)
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
-  assert.equal(registered, "onboarding-2", "The existing unfinished application continues after a sign-in with the same password")
+  assert.equal(registered, "phone-verify", "The existing unfinished application continues after a sign-in with the same password")
   assert.deepEqual(bodies.filter(row => row.path === "/auth/login").at(-1).body, { phoneNumber: "+905320000000", password: "Password1!", language: "tr" })
   await act(async () => resumed.unmount())
   storage.clear(); registered = undefined; loginFails = true

@@ -27,6 +27,6 @@ export default function NotificationButton({ onPress }: { onPress: () => void })
   return <HeaderIconButton plain label={count ? `Bildirimler, ${count} okunmamış` : "Bildirimler"} onPress={onPress}>
     <BellIcon size={20} strokeWidth={1.8} style={{ color: palette.text }} />
     {/* Anchored past the bell's top-right corner so it only overlaps the corner, not the bell. */}
-    <CountBadge count={count} solid style={{ position: "absolute", top: -8, left: 14 }} />
+    <CountBadge count={count} solid style={{ position: "absolute", top: -9, left: 13 }} />
   </HeaderIconButton>;
 }

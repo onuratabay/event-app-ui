@@ -375,7 +375,7 @@ async function tap(tree, label) {
   await tap(registration, "KVKK Aydınlatma Metni")
   assert(text(registration.toJSON()).includes("Onaylandı"), "The card header confirms the required consents")
   await tap(registration, "Devam Et")
-  assert.equal(destination, "onboarding-2")
+  assert.equal(destination, "phone-verify", "A new account confirms its phone number first")
   assert.deepEqual(registrationRequest.body.acceptedDocuments, [{ type: "terms", version: 2 }, { type: "community", version: 1 }, { type: "privacy", version: 1 }, { type: "kvkk", version: 1 }], "The accepted server versions are sent; marketing stays opt-in")
   assert.equal(registrationRequest.body.marketingConsent, false)
   assert.equal(registrationRequest.url, "http://192.168.1.15:3000/auth/register")
@@ -398,6 +398,7 @@ async function tap(tree, label) {
   await require("./check-legal.cjs")({ mount, tap, act, text, storage })
   await require("./check-admin.cjs")({ mount, tap, act, text, storage })
   await require("./check-places.cjs")({ act, text, storage })
+  await require("./check-ads.cjs")()
   await require("./check-forms.cjs")({ act })
   await require("./check-walkthrough.cjs")({ act, text, audit, storage })
   const names = [
