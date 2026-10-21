@@ -7,6 +7,7 @@ import { Box, Label, Picture, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import EditorialQuote from "../components/EditorialQuote";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 interface Props {
   navigate: NavigateFn;
 }
@@ -14,6 +15,8 @@ export default function WelcomeScreen({
   navigate
 }: Props) {
   const checkingSession = useSignedOutEntry(navigate);
+  // Android draws edge to edge: the bottom block keeps clear of the system navigation bar.
+  const safeBottom = useSafeAreaInsets().bottom;
   if (checkingSession) return null;
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground variant="violet" />
@@ -94,7 +97,7 @@ export default function WelcomeScreen({
       </Box>
 
       {/* Bottom content */}
-      <Box style={[[ui.relative, ui.px8, ui.pb12, ui.spaceY8]]}>
+      <Box style={[[ui.relative, ui.px8, ui.spaceY8], { paddingBottom: 48 + safeBottom }]}>
         <Box style={[[ui.spaceY4]]} enter>
           <BrandWordmark />
           <Box style={{ position: "relative", zIndex: 5 }}>
