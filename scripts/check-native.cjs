@@ -76,6 +76,7 @@ Module._load = function (id, parent, isMain) {
       ScrollView: "ScrollView",
       TextInput: "TextInput",
       Modal: "Modal",
+      Image: "Image",
       Switch: "Switch",
       Platform: { OS: process.env.TEST_PLATFORM || "ios" },
       useWindowDimensions: () => ({ width: global.__testWindowWidth || 390, height: 844, scale: 3, fontScale: 1 }),
@@ -118,6 +119,8 @@ Module._load = function (id, parent, isMain) {
   if (id === "expo-haptics") return { impactAsync: async () => {}, ImpactFeedbackStyle: { Light: "light" } }
   if (id === "expo-image") return { Image: "Image" }
   if (id === "expo-linear-gradient") return { LinearGradient: "LinearGradient" }
+  if (id === "react-native-view-shot") return { captureRef: async () => { global.__capturedCard = true; return "file:///tmp/ewent-card.png" } }
+  if (id === "expo-sharing") return { isAvailableAsync: async () => true, shareAsync: async (uri, options) => { global.__sharedFile = { uri, options } } }
   if (id === "@react-native-masked-view/masked-view") return { __esModule: true, default: "MaskedView" }
   if (id === "expo-blur") return { BlurView: "BlurView", BlurTargetView: "BlurTargetView" }
   if (id === "react-native-safe-area-context") return { SafeAreaView: "View", useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }) }

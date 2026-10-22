@@ -62,6 +62,14 @@ module.exports = async ({ act, text, storage, tap, audit }) => {
   await press(tree, 'Diğer')
   assert(global.__lastShare.message.includes(`https://ewent.app/e/${code}`))
   assert.equal(requests.filter(row => row.path.endsWith('/share')).length, 1, 'The same panel reuses its accepted link')
+  // "Kartı paylaş" captures the event card as an image and shares it with the invite text (iOS: one share).
+  global.__capturedCard = false
+  await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Kartı paylaş').props.onPress(); await new Promise(resolve => setTimeout(resolve, 120)) })
+  assert(global.__capturedCard, 'The card is captured as an image')
+  assert.equal(global.__lastShare.url, 'file:///tmp/ewent-card.png', 'The image is shared')
+  assert(global.__lastShare.message.includes(`https://ewent.app/e/${code}`) && global.__lastShare.message.includes('24 saat'), 'with the invite link and its validity')
+  assert(text(tree.toJSON()).includes('tarihine kadar geçerli'), 'The card and the screen show until when the invite works')
+  assert.equal(requests.filter(row => row.path.endsWith('/share')).length, 1, 'The card reuses the accepted link')
   await act(async () => tree.unmount())
 
   global.__testParams = { code }
