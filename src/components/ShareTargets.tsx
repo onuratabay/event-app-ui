@@ -1,9 +1,9 @@
-import { Linking, Platform, Share, StyleSheet } from 'react-native'
+import { Linking, Share, StyleSheet } from 'react-native'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
 import { Box, Label, Touch } from '../native/UI'
 import { palette } from '../theme/palette'
 
-export type ShareTargetId = 'whatsapp' | 'instagram' | 'telegram' | 'x' | 'facebook' | 'sms' | 'email' | 'copy' | 'more'
+export type ShareTargetId = 'whatsapp' | 'telegram' | 'x' | 'facebook' | 'email' | 'copy' | 'more'
 type Target = { id: ShareTargetId; name: string; color: string; glyph: React.ReactNode }
 
 const W = '#ffffff'
@@ -12,11 +12,6 @@ export const SHARE_TARGETS: Target[] = [
   { id: 'whatsapp', name: 'WhatsApp', color: '#25D366', glyph: <>
     <Path d="M12 3.2a8.8 8.8 0 0 0-7.6 13.2L3.2 20.8l4.5-1.2A8.8 8.8 0 1 0 12 3.2Z" fill="none" stroke={W} strokeWidth={1.8} strokeLinejoin="round" />
     <Path d="M9.2 7.6c.3 0 .6 0 .8.5l.8 1.9c.1.3 0 .5-.1.7l-.6.7c.6 1.2 1.6 2.2 2.8 2.8l.7-.6c.2-.2.4-.2.7-.1l1.9.8c.4.2.5.5.4.9-.2 1-1.1 1.6-2 1.5-3.3-.4-6.3-3.4-6.7-6.7-.1-.9.5-1.8 1.3-2.4Z" fill={W} />
-  </> },
-  { id: 'instagram', name: 'Instagram', color: '#E1306C', glyph: <>
-    <Rect x={4} y={4} width={16} height={16} rx={4.6} fill="none" stroke={W} strokeWidth={1.9} />
-    <Circle cx={12} cy={12} r={3.8} fill="none" stroke={W} strokeWidth={1.9} />
-    <Circle cx={16.8} cy={7.2} r={1.1} fill={W} />
   </> },
   { id: 'telegram', name: 'Telegram', color: '#229ED9', glyph: <>
     <Path d="M20.5 4.5 3.6 11.1c-.8.3-.8 1.4 0 1.7l4.1 1.4 1.6 5c.2.7 1.1.9 1.6.4l2.4-2.2 4.2 3.1c.6.4 1.4.1 1.6-.6l2.7-13.2c.2-.8-.6-1.5-1.3-1.2Z" fill={W} />
@@ -28,8 +23,6 @@ export const SHARE_TARGETS: Target[] = [
   </> },
   { id: 'facebook', name: 'Facebook', color: '#1877F2', glyph:
     <Path d="M13.6 21v-7.4h2.5l.4-2.9h-2.9V8.9c0-.8.3-1.4 1.4-1.4h1.6V4.9c-.3 0-1.2-.1-2.3-.1-2.3 0-3.8 1.4-3.8 3.9v2.1H7.9v2.9h2.6V21Z" fill={W} /> },
-  { id: 'sms', name: 'Mesajlar', color: '#34C759', glyph:
-    <Path d="M12 4.5c-4.7 0-8.5 3.1-8.5 7 0 2.2 1.2 4.1 3.1 5.4l-.7 2.9 3.3-1.7c.9.2 1.8.4 2.8.4 4.7 0 8.5-3.1 8.5-7s-3.8-7-8.5-7Z" fill={W} /> },
   { id: 'email', name: 'E-posta', color: '#5b6cf0', glyph: <>
     <Rect x={3.5} y={6} width={17} height={12.5} rx={2.4} fill="none" stroke={W} strokeWidth={1.9} />
     <Path d="m4.5 7.5 7.5 5.8 7.5-5.8" fill="none" stroke={W} strokeWidth={1.9} strokeLinejoin="round" />
@@ -55,7 +48,8 @@ const open = async (app: string, web?: string) => {
 
 /**
  * Opens one platform with the invite prefilled. Apps that are not installed fall back to their web
- * share page, and Instagram (which takes no prefilled text) gets the system share sheet.
+ * share page. Instagram and text messages have no reliable prefilled-text link; they are reached
+ * through "Kartı paylaş" or "Diğer" (the system share sheet).
  * `copy` is handled by the caller.
  */
 export async function shareTo(target: ShareTargetId, message: string, url: string, title: string) {
@@ -65,7 +59,6 @@ export async function shareTo(target: ShareTargetId, message: string, url: strin
     case 'telegram': return open(`tg://msg_url?url=${link}&text=${text}`, `https://t.me/share/url?url=${link}&text=${text}`)
     case 'x': return open(`twitter://post?message=${text}`, `https://x.com/intent/post?text=${text}`)
     case 'facebook': return Linking.openURL(`https://www.facebook.com/sharer/sharer.php?u=${link}`)
-    case 'sms': return Linking.openURL(Platform.OS === 'ios' ? `sms:&body=${text}` : `sms:?body=${text}`)
     case 'email': return Linking.openURL(`mailto:?subject=${encodeURIComponent(title)}&body=${text}`)
     default: await Share.share({ title, message })
   }
