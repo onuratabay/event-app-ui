@@ -18,7 +18,9 @@ export default function FeedAdCard() {
       const ads = adsModule(), unit = nativeUnitId()
       if (!ads || !unit || !(await prepareAds())) return
       try {
-        loaded = await ads.NativeAd.createForAdRequest(unit, { startVideoMuted: true })
+        // Landscape media fills the card's cover like an event photo; Google's AdChoices icon sits top right,
+        // clear of our "Reklam" label on the left.
+        loaded = await ads.NativeAd.createForAdRequest(unit, { startVideoMuted: true, aspectRatio: 2 /* LANDSCAPE */, adChoicesPlacement: 1 /* TOP_RIGHT */ })
         if (active) setAd(loaded); else loaded.destroy()
       } catch { /* No fill or a network error: the slot simply stays empty. */ }
     })()

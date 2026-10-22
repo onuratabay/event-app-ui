@@ -24,10 +24,15 @@ export function withAdSlots<T extends { id: string }>(items: T[], enabled: boole
 const TEST_NATIVE = Platform.OS === "ios" ? "ca-app-pub-3940256099942544/3986624511" : "ca-app-pub-3940256099942544/2247696110"
 const realNative = Platform.OS === "ios" ? process.env.EXPO_PUBLIC_ADMOB_NATIVE_IOS : process.env.EXPO_PUBLIC_ADMOB_NATIVE_ANDROID
 
-/** The native ad unit for this platform; null in a release build that has no real unit configured. */
+/**
+ * The native ad unit for this platform. Development and test builds always get Google's test unit, even
+ * when the real one is set (clicking your own live ads can get the AdMob account closed); a release build without
+ * a real unit shows no ads.
+ */
 export function nativeUnitId(): string | null {
-  if (realNative?.trim()) return realNative.trim()
-  return __DEV__ ? TEST_NATIVE : null
+  // EXPO_PUBLIC_ADS_TEST=1 (EAS preview and development environments) keeps test builds on test ads too.
+  if (__DEV__ || process.env.EXPO_PUBLIC_ADS_TEST === "1") return TEST_NATIVE
+  return realNative?.trim() || null
 }
 
 let sdk: Ads | null | undefined
