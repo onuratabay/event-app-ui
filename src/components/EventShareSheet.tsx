@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { showAlert } from "./AppDialog"
-import { Image, Modal, Platform, Share, StyleSheet, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { Image, Modal, Platform, Share, StatusBar, StyleSheet, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { captureRef } from 'react-native-view-shot'
 import * as Sharing from 'expo-sharing'
@@ -34,6 +34,10 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
   const pending = useRef(false)
   const card = useRef<View>(null)
   const remaining = useRemaining(link?.expiresAt)
+  // The modal is its own window: SafeAreaView inside it got no insets on Android, so the header (and ✕)
+  // slid under the status bar. The app's insets are applied directly, at least the status bar height.
+  const insets = useSafeAreaInsets()
+  const top = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 0) + 8
 
   // Creates (once) the invite link, then runs the share action with it.
   const withLink = async (action: (invite: EventShareLink) => Promise<void>) => {
@@ -78,13 +82,13 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
   const close = () => { if (!busy) onClose() }
 
   return <Modal visible animationType="slide" presentationStyle="fullScreen" statusBarTranslucent onRequestClose={close}>
-    <SafeAreaView edges={['top', 'bottom']} style={s.screen}>
+    <View style={[s.screen, { paddingTop: top, paddingBottom: insets.bottom }]}>
       <Box style={s.header}>
         <Box style={s.headerCopy}>
           <Label style={s.title}>Etkinliği paylaş</Label>
           <Label style={s.subtitle} numberOfLines={1}>{event.title}</Label>
         </Box>
-        <Touch accessibilityLabel="Paylaşımı kapat" disabled={busy} onPress={close} style={s.close}><CloseIcon size={20} style={{ color: palette.text }} /></Touch>
+        <Touch accessibilityLabel="Paylaşımı kapat" disabled={busy} onPress={close} hitSlop={12} style={s.close}><CloseIcon size={22} style={{ color: palette.text }} /></Touch>
       </Box>
       <Scroll style={s.scroll}>
         {/* The card that is captured and shared as an image. */}
@@ -127,8 +131,9 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
         {notice ? <Label accessibilityLiveRegion="polite" style={s.copied}>{notice}</Label> : null}
         {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
         {link && <Touch disabled={busy} onPress={() => void revoke()} style={s.revoke}>Bu davet bağlantısını iptal et</Touch>}
+        <Touch accessibilityLabel="Kapat" disabled={busy} onPress={close} style={s.done}>Kapat</Touch>
       </Scroll>
-    </SafeAreaView>
+    </View>
   </Modal>
 }
 const s = StyleSheet.create({
@@ -137,7 +142,7 @@ const s = StyleSheet.create({
   headerCopy: { flex: 1, minWidth: 0, gap: 2 },
   title: { color: palette.text, fontSize: 22, fontFamily: 'Fraunces' },
   subtitle: { color: palette.accent, fontSize: 14, fontFamily: 'Outfit-Medium' },
-  close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  close: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.glass, borderWidth: 1, borderColor: palette.glassBorder },
   scroll: { flex: 1, paddingHorizontal: 20, paddingBottom: 32, gap: 16 },
   card: { borderRadius: 24, overflow: 'hidden', backgroundColor: palette.surface, borderWidth: 1, borderColor: 'rgba(205,214,255,.18)' },
   cover: { height: 220, backgroundColor: palette.elevated },
@@ -163,5 +168,6 @@ const s = StyleSheet.create({
   validity: { color: palette.accent, fontSize: 12, lineHeight: 18, textAlign: 'center' },
   copied: { color: palette.success, fontSize: 12, lineHeight: 18, textAlign: 'center' },
   error: { color: palette.error, fontSize: 12, lineHeight: 18 },
+  done: { minHeight: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.elevated, borderWidth: 1, borderColor: palette.border, color: palette.text, fontSize: 15, fontFamily: 'Outfit-SemiBold', marginTop: 4 },
   revoke: { alignSelf: 'center', color: palette.muted, fontSize: 12, minHeight: 36 },
 })
