@@ -8,6 +8,8 @@ import { clearChatCache } from "../services/chat-cache"
 export const API_URL = resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, __DEV__ ? Constants.expoConfig?.hostUri : undefined, Platform.OS)
 /** Photos come as signed server paths ("/photos/users/…?v=…&s=…"); images load them from the API host and cache them on disk. */
 export const photoUri = (uri: string) => uri.startsWith("/photos/") ? `${API_URL.replace(/\/+$/, "")}${uri}` : uri
+/** This build's version (app.json "version"); sent with every request so the server knows which app is calling. */
+export const APP_VERSION = Constants.expoConfig?.version ?? "0.0.0"
 class ApiConnectionError extends Error {}
 const ACCESS_TOKEN_KEY = "event-app:access-token"
 const REFRESH_TOKEN_KEY = "event-app:refresh-token"
@@ -111,6 +113,8 @@ async function request<T>(path: string, requestOptions: RequestOptions = {}, ret
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      "X-App-Version": APP_VERSION,
+      "X-App-Platform": Platform.OS,
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(options.headers || {}),
     },
@@ -349,6 +353,9 @@ export function getMapInterests(_signal?: AbortSignal) {
   return cached("interests", 6 * HOURS, () => request<Array<{ id: string; name: string; slug: string; levels?: InterestLevel[]; requiresCover?: boolean }>>("/interests", { headers: { "Accept-Language": "tr" } }))
 }
 
+export interface VersionPolicy { minimumVersion: { ios: string; android: string }; storeUrl: { ios: string | null; android: string | null } }
+/** Forced update: the lowest supported version per platform and the store links (public, no session needed). */
+export const getVersionPolicy = () => request<VersionPolicy>("/app/version-policy", { background: true, guest: true, timeoutMs: 6000 }, false)
 export function forgotPassword(email: string) {
   return request<{ message: string }>("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email: email.trim(), language: "tr" }) }, false)
 }

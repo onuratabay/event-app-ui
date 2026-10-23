@@ -411,6 +411,7 @@ async function tap(tree, label) {
   await require("./check-session.cjs")({ mount, tap, act, text, storage })
   await require("./check-access.cjs")({ mount, tap, act, text, storage })
   await require("./check-password-reset.cjs")({ mount, tap, act, text, storage })
+  await require("./check-version-policy.cjs")({ act, text })
   await require("./check-server-state.cjs")({ mount, tap, act, text, storage })
   await require("./check-availability.cjs")({ mount, tap, act, text, storage })
   await require("./check-legal.cjs")({ mount, tap, act, text, storage })

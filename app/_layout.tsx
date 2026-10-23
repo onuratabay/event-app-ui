@@ -28,6 +28,7 @@ import LegalConsentGate from "../src/components/LegalConsentGate"
 import PushOpenHandler from "../src/components/PushOpenHandler"
 import HardwareBack from "../src/components/HardwareBack"
 import HistoryLimit from "../src/components/HistoryLimit"
+import UpdateRequired from "../src/components/UpdateRequired"
 import { WalkthroughProvider } from "../src/walkthrough/WalkthroughProvider"
 void SplashScreen.preventAutoHideAsync()
 // Full-screen forms whose own Scroll keeps the focused field above the keyboard. The keyboard slides over
@@ -91,6 +92,8 @@ export default function RootLayout() {
               <PushOpenHandler />
               <HardwareBack />
               <HistoryLimit />
+              {/* Forced update: covers everything when this build is below the server's minimum version. */}
+              <UpdateRequired />
             </WalkthroughProvider></GuestRouteBoundary></StoreProvider></GuestProvider></BlurSurface>
             </View>
           </KeyboardAvoidingView>
