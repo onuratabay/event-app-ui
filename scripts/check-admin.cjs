@@ -8,7 +8,7 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   const settle = (ms = 30) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) })
   const press = async (tree, label) => { const node = tree.root.findAllByType('Pressable').find(item => item.props.accessibilityLabel === label); assert(node, `Missing control: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })) }
   const adminCalls = () => server.requests.filter(row => row.path.startsWith('/admin/'))
-  storage.clear(); storage.set('event-app:access-token', 'valid-session')
+  storage.clear(); storage.set('event-app.access-token', 'valid-session')
 
   // A member never reaches the panel and the app sends no admin request.
   server.user.role = 'member'
@@ -220,7 +220,7 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   await require('../src/api/client.ts').logout()
   assert(!server.pushTokens.has('ExponentPushToken[test-device]'), 'Signing out removes the device token')
   global.__testNotifications = undefined
-  storage.set('event-app:access-token', 'valid-session')
+  storage.set('event-app.access-token', 'valid-session')
 
   // Tapping "Sana uygun bir etkinlik oluşturuldu" opens that event, once the member's session is in.
   {

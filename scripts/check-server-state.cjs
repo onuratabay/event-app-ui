@@ -8,7 +8,7 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
     if (name === 'chat:message') return server.saveMessage(payload.text)
     return {}
   })
-  storage.clear(); storage.set('event-app:access-token', 'valid-session')
+  storage.clear(); storage.set('event-app.access-token', 'valid-session')
   const legacy = { user: { id: server.user.id, bio: 'Eski profil' }, events: [] }
   storage.set('event-app:v1', JSON.stringify(legacy))
   let tree = await mount('Profile')

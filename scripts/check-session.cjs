@@ -12,8 +12,8 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await act(waitForSplash)
   assert.equal(route, "welcome")
   await act(async () => tree.unmount())
-  storage.set("event-app:access-token", "old-access")
-  storage.set("event-app:refresh-token", "refresh")
+  storage.set("event-app.access-token", "old-access")
+  storage.set("event-app.refresh-token", "refresh")
   tree = await mount("Splash", { navigate: next => { route = next } })
   await act(waitForSplash)
   assert.equal(route, "discover")
@@ -80,7 +80,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   {
     // Reported: "Burak · Tuğçe · Sen/Katıldın" with 2 participants. While the slow personal lists load,
     // the signed-in user must already be known, so they appear once (as "Sen"), never also by name.
-    storage.set("event-app:access-token", "duo-test")
+    storage.set("event-app.access-token", "duo-test")
     let releaseMine
     const mineGate = new Promise(resolve => { releaseMine = resolve })
     const duo = { id: "duo-1", owner: { id: "host", firstName: "Burak", lastName: "D" }, interest: { id: "padel", slug: "padel", name: "Padel" }, level: null, date: "01/10/2030", startTime: "18:30", durationMinutes: 60, latitude: 39.9, longitude: 32.8, locationName: "Kort", minParticipants: 2, maxParticipants: 100000, confirmedParticipantCount: 2, participants: [{ id: "host", firstName: "Burak", lastName: "D", profilePhoto: null }, { id: "tugce", firstName: "Tuğçe", lastName: "Y", profilePhoto: null }], coverPhoto: null, description: "", requirements: null, status: { enum: "waiting_participants" }, isFavorite: false, viewerParticipationStatus: "confirmed" }
@@ -119,7 +119,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   }
   await Promise.all([api.getEvents(), api.getEvents()])
   assert.equal(refreshCount, 1, "Concurrent 401s share a refresh")
-  assert.equal(storage.get("event-app:access-token"), "new-access")
+  assert.equal(storage.get("event-app.access-token"), "new-access")
   // A refresh completing after explicit logout must not recreate the session.
   let releaseRefresh, startedRefresh
   const started = new Promise(resolve => { startedRefresh = resolve })

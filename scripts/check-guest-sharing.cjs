@@ -41,7 +41,7 @@ module.exports = async ({ act, text, storage, tap, audit }) => {
   assert.equal(parseGuestCode('11111111'), null, 'An event ID is not an authorized guest code')
   assert.equal(redirectSystemPath({ path: `https://ewent.app/e/${code}`, initial: true }), `/guest-event?code=${code}`)
   assert.equal(redirectSystemPath({ path: 'https://ewent.app/e/invalid', initial: true }), '/guest-entry')
-  storage.clear(); storage.set('event-app:access-token', 'regular-member-token')
+  storage.clear(); storage.set('event-app.access-token', 'regular-member-token')
   const press = async (tree, label) => {
     const node = tree.root.findAllByType('Pressable').filter(node => text(node).includes(label)).sort((a, b) => text(a).length - text(b).length)[0]
     assert(node, label); await act(async () => { node.props.onPress({ stopPropagation() {} }); await new Promise(resolve => setTimeout(resolve, 20)) })
@@ -88,7 +88,7 @@ module.exports = async ({ act, text, storage, tap, audit }) => {
   const saved = JSON.parse(storage.get('event-app:guest-token'))
   assert.equal(saved.code, code); assert.equal(saved.name, 'Ayşe')
   assert(requests.filter(row => row.path.startsWith('/guest/events/')).every(row => !row.headers.Authorization), 'Guest calls never reuse a member bearer token')
-  assert.equal(storage.get('event-app:access-token'), 'regular-member-token', 'Guest credentials do not replace account credentials')
+  assert.equal(storage.get('event-app.access-token'), 'regular-member-token', 'Guest credentials do not replace account credentials')
   await act(async () => tree.unmount())
   await act(async () => { tree = create(React.createElement(GuestProvider, null, React.createElement(GuestScreen))) })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
@@ -107,7 +107,7 @@ module.exports = async ({ act, text, storage, tap, audit }) => {
   assert.equal(capturedStore.data.user.id, '', 'Guest mode never exposes the preserved member store')
   assert.equal(requests.length, beforeStartup, 'Member startup requests do not run under a guest session')
   assert.equal(require('../src/services/socket.ts').socketConnected(), false, 'Member socket is suspended in guest mode')
-  assert.equal(storage.get('event-app:access-token'), 'regular-member-token', 'Guest startup does not accidentally log out the member')
+  assert.equal(storage.get('event-app.access-token'), 'regular-member-token', 'Guest startup does not accidentally log out the member')
   await act(async () => tree.unmount())
 
   // A response for the previous link cannot overwrite the currently active guest event.
@@ -145,7 +145,7 @@ module.exports = async ({ act, text, storage, tap, audit }) => {
   memberApproved = true
   await press(tree, 'Üyeliğime dön')
   assert.equal(JSON.parse(storage.get('event-app:guest-token')).active, false, 'Returning to a verified member suspends guest mode without losing an existing guest participation')
-  assert.equal(storage.get('event-app:access-token'), 'regular-member-token')
+  assert.equal(storage.get('event-app.access-token'), 'regular-member-token')
   assert(global.__testNavigations.includes('/discover'))
   await act(async () => tree.unmount())
   let restoredGuest

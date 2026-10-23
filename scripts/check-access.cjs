@@ -27,9 +27,6 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     if (path === "/auth/register/email-code" && registerConflict) return { ok: false, status: 409, text: async () => JSON.stringify({ statusCode: 409, errors: [{ field: "phoneNumber", message: "Bu telefon numarası zaten kayıtlı" }] }) }
     if (path === "/auth/register/email-code") return { ok: true, status: 200, json: async () => ({ sent: true, expiresAt: new Date(Date.now() + 120000).toISOString(), resendAfter: 60 }) }
     if (path === "/auth/register/verify-email") return { ok: true, status: 200, json: async () => ({ emailVerificationToken: "email-proof" }) }
-    if (path === "/users/me/phone-verification/send") return { ok: true, status: 200, json: async () => ({ sent: true, expiresAt: new Date(Date.now() + 300000).toISOString(), resendAfter: 60 }) }
-    if (path === "/users/me/phone-verification/verify") return JSON.parse(options.body).code === "1111" ? { ok: true, status: 200, json: async () => ({ verified: true }) }
-      : { ok: false, status: 400, text: async () => JSON.stringify({ statusCode: 400, errors: [{ field: null, message: "Kod hatalı. Tekrar dene." }] }) }
     if (path === "/access-codes/redeem") {
       const code = JSON.parse(options.body).code.toUpperCase()
       if (code === "REF-ABC123") return { ok: true, status: 200, json: async () => ({ target: "reference", status: "profile_incomplete" }) }
@@ -72,20 +69,6 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     if (status !== "approved") assert(!calls.includes("/events"), `${status} never loads the in-app feed`)
     await act(async () => login.unmount())
   }
-  // SMS check: the page asks the server for a code on open; a wrong code is explained, the right one opens the next step.
-  let verified
-  storage.set("event-app:access-token", "a"); calls.length = 0
-  const verify = await mount("PhoneVerify", { navigate: route => { verified = route } })
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
-  assert(calls.includes("/users/me/phone-verification/send"), "Opening the page sends the SMS code")
-  const codeField = () => verify.root.findAll(n => n.props.accessibilityLabel === "Doğrulama kodu" && typeof n.props.onChangeText === "function")[0]
-  await act(async () => { codeField().props.onChangeText("1234"); await new Promise(resolve => setTimeout(resolve, 20)) })
-  assert(text(verify.toJSON()).includes("Kod hatalı"), "A wrong code is explained")
-  assert.equal(verified, undefined)
-  await act(async () => { codeField().props.onChangeText("1111"); await new Promise(resolve => setTimeout(resolve, 20)) })
-  assert.deepEqual(bodies.filter(row => row.path === "/users/me/phone-verification/verify").at(-1).body, { code: "1111" }, "The server checks the code")
-  assert.equal(verified, "onboarding-2", "The right code continues the application")
-  await act(async () => verify.unmount())
   // Under the sign-in form, "veya" offers an Ewent invite code; anything else is explained under the input.
   storage.clear()
   const inviteLogin = await mount("Login", { navigate: () => {} })
@@ -193,7 +176,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await tap(registration, "ticari elektronik ileti")
   await tap(registration, "Devam Et")
   await confirmEmail(registration)
-  assert.equal(registered, "phone-verify", "Registration continues with the phone check, then the reference step")
+  assert.equal(registered, "onboarding-2", "Registration continues with the reference step")
   const signUp = bodies.find(row => row.path === "/auth/register").body
   assert.deepEqual(signUp.acceptedDocuments, [{ type: "terms", version: 1 }, { type: "privacy", version: 1 }, { type: "marketing", version: 3 }], "Opting in records the marketing text version too")
   assert.equal(signUp.marketingConsent, true)
@@ -219,7 +202,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   let resumed = await mount("Onboarding", { step: 1, navigate: route => { registered = route } })
   await fillAndSubmit(resumed)
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
-  assert.equal(registered, "phone-verify", "The existing unfinished application continues after a sign-in with the same password")
+  assert.equal(registered, "onboarding-2", "The existing unfinished application continues after a sign-in with the same password")
   assert.deepEqual(bodies.filter(row => row.path === "/auth/login").at(-1).body, { phoneNumber: "+905320000000", password: "Password1!", language: "tr" })
   await act(async () => resumed.unmount())
   storage.clear(); registered = undefined; loginFails = true
@@ -231,7 +214,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await act(async () => resumed.unmount())
   registerConflict = false; loginFails = false
   // The application's second step has no general code field any more; event invites start from the login screen.
-  storage.set("event-app:access-token", "a"); current = "profile_incomplete"
+  storage.set("event-app.access-token", "a"); current = "profile_incomplete"
   const stepTwo = await mount("Onboarding", { step: 2, navigate: () => {} })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
   assert(!stepTwo.root.findAll(n => n.props.accessibilityLabel === "Etkinlik veya davet kodu").length && !text(stepTwo.toJSON()).includes("veya"), "No divider or invite code field on step two")
@@ -255,7 +238,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await act(async () => refStep.unmount())
 
   // Profile completion: three interests are required, the photo is not; saving approves and opens the app.
-  storage.set("event-app:access-token", "a"); current = "profile_incomplete"; calls.length = 0
+  storage.set("event-app.access-token", "a"); current = "profile_incomplete"; calls.length = 0
   let completed
   const profile = await mount("Interests", { navigate: (route, opts) => { completed = { route, opts } } })
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
@@ -274,7 +257,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await act(async () => profile.unmount())
 
   // With a photo, "Değiştir" lines up with the texts beside the photo instead of being centred.
-  storage.set("event-app:access-token", "a"); current = "profile_incomplete"; global.__testProfilePhoto = "data:image/png;base64,iVBORw0KGgo="
+  storage.set("event-app.access-token", "a"); current = "profile_incomplete"; global.__testProfilePhoto = "data:image/png;base64,iVBORw0KGgo="
   const withPhoto = await mount("Interests")
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   const change = withPhoto.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Fotoğrafı değiştir")
@@ -289,7 +272,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   {
     const api = require("../src/api/client.ts")
     api.clearSessionCache()
-    storage.set("event-app:access-token", "a"); current = "approved"; calls.length = 0
+    storage.set("event-app.access-token", "a"); current = "approved"; calls.length = 0
     const count = path => calls.filter(item => item === path).length
     await Promise.all([api.getMapInterests(), api.getMapInterests()])
     await api.getMapInterests()
@@ -303,7 +286,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     await api.getUserSettings(); await api.getUserSettings()
     assert.equal(count("/users/me/settings"), 1, "Account settings are cached")
     await api.logout()
-    storage.set("event-app:access-token", "a")
+    storage.set("event-app.access-token", "a")
     await api.getUserSettings()
     assert.equal(count("/users/me/settings"), 2, "Signing out drops the account's cached settings")
     await api.getMapInterests()
@@ -311,7 +294,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   }
 
   // Saved sessions resolve the same way on startup.
-  storage.set("event-app:access-token", "a"); current = "profile_incomplete"
+  storage.set("event-app.access-token", "a"); current = "profile_incomplete"
   let splashRoute
   const splash = await mount("Splash", { navigate: route => { splashRoute = route } })
   await act(() => new Promise(resolve => setTimeout(resolve, 2900)))
@@ -332,7 +315,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     await act(async () => guard.unmount())
   }
   // Profile: the city is changed with the same select and saved to the account.
-  storage.set("event-app:access-token", "a"); current = "approved"; bodies.length = 0
+  storage.set("event-app.access-token", "a"); current = "approved"; bodies.length = 0
   const ownProfile = await mount("Profile")
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   const profileCity = ownProfile.root.findAllByType("Pressable").find(n => String(n.props.accessibilityLabel).startsWith("Şehir:"))
@@ -392,7 +375,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Discover lists only feed events; a joined event that is not in the feed shows up in Rooms instead.
   global.__testJoinedEvent = { id: "joined-only", owner: { id: "host", firstName: "Ev", lastName: "Sahibi" }, interest: { id: "kahve", slug: "kahve", name: "Kahve" }, level: null, date: "01/12/2030", startTime: "10:00", durationMinutes: 60, locationName: "Kadıköy", latitude: 41, longitude: 29, minParticipants: 3, maxParticipants: 6, coverPhoto: null, description: "Sadece katıldığım", requirements: null, confirmedParticipantCount: 2, participants: [], isFavorite: false, status: { enum: "waiting_participants", name: "Katılımcı bekleniyor" }, viewerParticipationStatus: "confirmed" }
-  storage.set("event-app:access-token", "a"); current = "approved"
+  storage.set("event-app.access-token", "a"); current = "approved"
   const feedOnly = await mount("Discover")
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   assert(!text(feedOnly.toJSON()).includes("Kadıköy"), "Discover does not show events that only come from the personal lists")
@@ -451,7 +434,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Profile: references are fetched on the first visit only and then kept current by socket events.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const { StoreProvider } = require("../src/native/Store.tsx")
     const ProfileScreen = require("../src/screens/ProfileScreen.tsx").default
     let showProfile = true, root
@@ -482,7 +465,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Search: date range filter asks the server; the start can never be before today.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     global.__testDateEvents = [{ ...cardBase, id: "dated", interest: { id: "yoga", slug: "yoga", name: "Yoga" }, locationName: "Moda Sahili", confirmedParticipantCount: 1, minParticipants: 2, date: "05/11/2030" }]
     const search = await mount("Search")
     await act(() => new Promise(resolve => setTimeout(resolve, 50)))
@@ -525,7 +508,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Search by interest: the user's own interests come first, and picking one never flashes the unfiltered list.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const previousFetch = global.fetch
     let release
     const gate = new Promise(resolve => { release = resolve })
@@ -555,7 +538,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Friends: send from a member's profile, never twice but withdrawable; approve/decline incoming; count under "Bağlantı".
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const previousFetch = global.fetch
     let relation = { status: "none", canRequest: true, friendCount: 4 }
     const sent = []
@@ -672,7 +655,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
       if (new URL(url).pathname.endsWith("/favorite")) { order.push(options.method); if (order.length === 1) await gate; return { ok: true, status: 204, json: async () => ({}) } }
       return previousFetch(url, options)
     }
-    storage.set("event-app:access-token", "a")
+    storage.set("event-app.access-token", "a")
     const first = api.setFavorite("fav-1", true)
     const second = api.setFavorite("fav-1", false)
     await new Promise(resolve => setTimeout(resolve, 20))
@@ -688,7 +671,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Another member's profile always shows "Benimle Tanışmadan Önce Bil", filled or empty.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const other = { id: "other-user", firstName: "Ece", lastName: "Kaya", city: "İzmir", bio: "Hafta sonu tırmanışçısı 🧗", instagramUsername: null, rank: 4, profilePhoto: null, interests: [{ id: "padel", name: "Padel" }] }
     for (const [bio, expected] of [[other.bio, "Hafta sonu tırmanışçısı 🧗"], ["", "Ece henüz kendinden bahsetmemiş."]]) {
       global.__testOtherProfile = { ...other, bio }
@@ -704,7 +687,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Opening a room starts messages, seen-by and activity together; none waits for another.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const previousFetch = global.fetch
     const started = []
     let releaseMessages
@@ -731,7 +714,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Rooms open with the latest 20 messages; scrolling to the top fetches the previous 20.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const previousFetch = global.fetch
     const messageUrls = []
     const page = (from, count) => Array.from({ length: count }, (_, i) => ({ id: `m${from + i}`, text: `mesaj ${from + i}`, createdAt: new Date(Date.UTC(2030, 0, 1, 0, from + i)).toISOString(), user: { id: "u", firstName: "Ece", lastName: "K" } }))
@@ -811,7 +794,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Chat: no global loader, and a sent message shows at once while delivery runs in the background.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const { apiLoading } = require("../src/api/loading.ts")
     let busy = 0
     const unsubscribe = apiLoading.subscribe(count => { busy = Math.max(busy, count) })
@@ -869,7 +852,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Name/photo once per same-sender run; times merge only within the same minute.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const previousFetch = global.fetch
     const at = minute => new Date(Date.UTC(2030, 0, 1, 7, minute)).toISOString()
     const msg = (id, who, minute) => ({ id, text: `t-${id}`, createdAt: new Date(Date.parse(at(minute)) + ["a2"].includes(id) * 20000).toISOString(), user: { id: who, firstName: who, lastName: "X" } })
@@ -891,7 +874,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // A just-sent message sorts last even though the server writes "+03:00" times and the device "Z".
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const previousFetch = global.fetch
     const pad = n => String(n).padStart(2, "0")
     const plus3 = date => { const t = new Date(date.getTime() + 3 * 3600000); return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}T${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}:${pad(t.getUTCSeconds())}.000+03:00` }
@@ -922,7 +905,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Room participants: sorted by name, active/passive from presence, tap opens the profile.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const previousFetch = global.fetch
     const fakeSocket = require("./mock-socket.cjs")
     fakeSocket.setAction(async name => name === "event:presence" ? ["ali"] : {})
@@ -961,7 +944,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   // Live messages: a failed room join is retried, and "room:message" on the user's own channel
   // fetches the newest page when the chat event never arrives.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const previousFetch = global.fetch
     const fakeSocket = require("./mock-socket.cjs")
     let joins = 0
@@ -999,7 +982,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
 
   // Room name: only the organizer can change it; every member sees the new name live.
   {
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const previousFetch = global.fetch
     const fakeSocket = require("./mock-socket.cjs")
     fakeSocket.setAction(async name => name === "event:presence" ? [] : {})
@@ -1053,7 +1036,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   }
 
   // Rooms reloads only the user's own, joined and favourite events and the one-to-one chats (on open and on pull).
-  storage.set("event-app:access-token", "a"); current = "approved"
+  storage.set("event-app.access-token", "a"); current = "approved"
   const roomsTree = await mount("Rooms")
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   calls.length = 0
@@ -1068,7 +1051,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     const { mergeRoomSummaries, mapApiEvent } = require("../src/native/Store.tsx")
     const room = { id: "room-only", ownerId: "host", interest: { id: "film", name: "Film" }, date: "22/10/2030", startTime: "20:30", locationName: "Sinema", status: "started", minParticipants: 2, maxParticipants: 8, confirmedParticipantCount: 3, participants: [{ id: "pending-user", firstName: "Bekleyen", lastName: "Üye" }], lastMessageAt: "2030-10-20T10:00:00.000Z", unreadCount: 2 }
     global.__testRooms = [room]
-    storage.set("event-app:access-token", "a"); current = "approved"
+    storage.set("event-app.access-token", "a"); current = "approved"
     const onlyRooms = await mount("Rooms")
     await act(() => new Promise(resolve => setTimeout(resolve, 50)))
     assert(text(onlyRooms.toJSON()).includes("Film · 22/10/2030"), "A room from /events/rooms appears in the list")
@@ -1084,7 +1067,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   }
 
   // Pulling the home feed down reloads it from the server.
-  storage.set("event-app:access-token", "a"); current = "approved"
+  storage.set("event-app.access-token", "a"); current = "approved"
   const home = await mount("Discover")
   await act(() => new Promise(resolve => setTimeout(resolve, 50)))
   const pull = () => home.root.findAll(n => n.props.refreshControl)[0].props.refreshControl

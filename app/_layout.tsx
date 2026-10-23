@@ -34,7 +34,7 @@ void SplashScreen.preventAutoHideAsync()
 // Full-screen forms whose own Scroll keeps the focused field above the keyboard. The keyboard slides over
 // their fixed background instead of the root shrinking the whole screen (which lifted the backdrop and
 // pushed the fields up twice).
-const SCREEN_OWNS_KEYBOARD = new Set(["/login", "/phone-verify"])
+const SCREEN_OWNS_KEYBOARD = new Set(["/login"])
 export default function RootLayout() {
   const pathname = usePathname()
   const [loaded, error] = useFonts({

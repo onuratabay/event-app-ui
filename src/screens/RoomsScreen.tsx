@@ -1,6 +1,6 @@
 import { palette } from "../theme/palette";
 import { showAlert } from "../components/AppDialog";
-import { MessageIcon } from "../components/Icons";
+import { MessageIcon, PlusIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
 import { AtmoBackground, GlassCard } from "../components/GlassUI";
 import { byLatestMessage, isEventMember, isRoomReady, roomTitle, useStore } from "../native/Store";
@@ -13,7 +13,7 @@ import { Avatar } from "../components/GlassUI";
 import { onSocket } from "../services/socket";
 import { applyLocalReads, cachedChatList, forgetConversation, hydrateChatCache, rememberChatList } from "../services/chat-cache";
 import { useScreenActive } from "../native/useScreenActive";
-import { RefreshControl } from "react-native";
+import { AccessibilityInfo, Animated, Easing, RefreshControl } from "react-native";
 interface Props {
   navigate: NavigateFn;
 }
@@ -31,6 +31,42 @@ function MoreToggle({ total, open, onPress }: { total: number; open: boolean; on
   return <Touch accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={onPress} style={[[ui.textXs, ui.fontMedium], { color: palette.accent, alignSelf: "center", minHeight: 40, justifyContent: "center", paddingHorizontal: 12 }]}>
     {open ? "Daha az göster" : `Daha fazla göster (${total - PREVIEW_COUNT})`}
   </Touch>;
+}
+/** Playful nudges for an empty "Katılımcı Bekleyenler"; one is picked each time the screen opens. */
+const CREATE_NUDGES = [
+  { emoji: "🦗", title: "Burada cırcır böcekleri öttü…", text: "Katılımcı bekleyen bir etkinliğin yok. Bir tane kur, sessizliği sen boz!" },
+  { emoji: "🎈", title: "Balon şişirildi, parti eksik", text: "Aklındaki buluşmayı etkinliğe çevir; ilk katılımcılar seni bekliyor." },
+  { emoji: "🧭", title: "Pusula seni gösteriyor", text: "Yürüyüş, kahve, oyun gecesi… Ne olursa. Rotayı sen çiz, ekip arkandan gelsin." },
+  { emoji: "🎲", title: "Zar sende!", text: "Bir etkinlik at ortaya, kimlerin geleceğini birlikte görelim." },
+];
+/** Shown when no event of the member is waiting for participants: invites them to create one. */
+function CreateEventNudge({ navigate }: { navigate: NavigateFn }) {
+  const [nudge] = useState(() => CREATE_NUDGES[Math.floor(Math.random() * CREATE_NUDGES.length)]);
+  const bob = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    let loop: Animated.CompositeAnimation | undefined;
+    let cancelled = false;
+    void AccessibilityInfo.isReduceMotionEnabled().then(reduced => {
+      if (cancelled || reduced) return;
+      loop = Animated.loop(Animated.sequence([
+        Animated.timing(bob, { toValue: -6, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]));
+      loop.start();
+    }).catch(() => {});
+    return () => { cancelled = true; loop?.stop(); };
+  }, [bob]);
+  return <GlassCard style={[[ui.p6], { alignItems: "center" }]}>
+    <Animated.View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ marginBottom: 8, transform: [{ translateY: bob }] }}>
+      <Label style={{ fontSize: 36, lineHeight: 44 }}>{nudge.emoji}</Label>
+    </Animated.View>
+    <Label style={[[ui.textSm, ui.fontSemibold, ui.textWhite85], { textAlign: "center" }]}>{nudge.title}</Label>
+    <Label style={[[ui.textXs, ui.textWhite40, ui.mt1], { textAlign: "center", lineHeight: 18 }]}>{nudge.text}</Label>
+    <Touch accessibilityRole="button" onPress={() => navigate("create-event")} gradient={["#4d5bcb", "#6651c9"]} style={{ marginTop: 16, minHeight: 40, paddingHorizontal: 18, borderRadius: 20, flexDirection: "row", alignItems: "center", gap: 6 }}>
+      <PlusIcon size={16} style={{ color: palette.text }} />
+      <Label style={[[ui.textSm, ui.fontSemibold], { color: palette.text }]}>Etkinlik oluştur</Label>
+    </Touch>
+  </GlassCard>;
 }
 export default function RoomsScreen({
   navigate
@@ -114,7 +150,7 @@ export default function RoomsScreen({
 
         {/* Direct messages */}
         {chats.length > 0 && <Box style={[[ui.px5, ui.mb6]]}>
-          <Box style={[[ui.flex, ui.itemsCenter, ui.mb3], { justifyContent: "space-between" }]}>
+          <Box style={[[ui.flex, ui.itemsCenter, ui.mb3], { justifyContent: "space-between", marginTop: 10 }]}>
             <Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider]]}>Mesajlar</Label>
             <Label style={[[ui.text10px, ui.textWhite25]]}>Silmek için basılı tut</Label>
           </Box>
@@ -204,10 +240,10 @@ export default function RoomsScreen({
 
         {/* Forming events */}
         <Box style={[[ui.px5, ui.mb6]]}>
-          <Box walkthroughId="rooms-forming"><Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-            Katılımcı Bekleyenler</Label></Box>
+          {formingEvents.length > 0 && <Box walkthroughId="rooms-forming"><Label style={[[ui.textXs, ui.textWhite30, ui.uppercase, ui.trackingWider, ui.mb3]]}>
+            Katılımcı Bekleyenler</Label></Box>}
 
-          <Box style={[[ui.spaceY3]]}>
+          {formingEvents.length === 0 ? <CreateEventNudge navigate={navigate} /> : <Box style={[[ui.spaceY3]]}>
             {formingEvents.map(event => <Touch key={event.id} onPress={() => navigate("event-detail", {
             eventId: event.id
           })} style={[[ui.wFull, ui.textLeft]]}>
@@ -235,7 +271,7 @@ export default function RoomsScreen({
                   </Box>
                 </GlassCard>
               </Touch>)}
-          </Box>
+          </Box>}
         </Box>
 
       </Scroll>

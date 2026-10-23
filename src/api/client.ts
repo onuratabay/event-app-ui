@@ -1,9 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage"
 import { Platform } from "react-native"
 import Constants from "expo-constants"
 import { resolveApiUrl } from "./config"
 import { apiLoading } from "./loading"
 import { clearChatCache } from "../services/chat-cache"
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "./token-store"
 
 export const API_URL = resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, __DEV__ ? Constants.expoConfig?.hostUri : undefined, Platform.OS)
 /** Photos come as signed server paths ("/photos/users/…?v=…&s=…"); images load them from the API host and cache them on disk. */
@@ -11,8 +11,6 @@ export const photoUri = (uri: string) => uri.startsWith("/photos/") ? `${API_URL
 /** This build's version (app.json "version"); sent with every request so the server knows which app is calling. */
 export const APP_VERSION = Constants.expoConfig?.version ?? "0.0.0"
 class ApiConnectionError extends Error {}
-const ACCESS_TOKEN_KEY = "event-app:access-token"
-const REFRESH_TOKEN_KEY = "event-app:refresh-token"
 
 export interface ApiEvent {
   id: string
@@ -99,7 +97,7 @@ async function request<T>(path: string, requestOptions: RequestOptions = {}, ret
   const counterKey = `${options.method || 'GET'} ${path.split('?')[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ':id').replace(/EWT-[A-Za-z0-9_-]{24}/g, ':invite')}`
   if (__DEV__) apiRequestCounts[counterKey] = (apiRequestCounts[counterKey] || 0) + 1
   try {
-  const accessToken = guest ? null : await AsyncStorage.getItem(ACCESS_TOKEN_KEY)
+  const accessToken = guest ? null : await getAccessToken()
   const controller = new AbortController()
   const cancel = () => controller.abort()
   if (options.signal?.aborted) cancel()
@@ -154,7 +152,7 @@ let refreshing: Promise<boolean> | null = null
 function saveTokens(tokens: TokenResponse, expectedVersion = sessionVersion) {
   const write = tokenWrites.then(async () => {
     if (sessionVersion !== expectedVersion) return
-    await AsyncStorage.multiSet([[ACCESS_TOKEN_KEY, tokens.accessToken], [REFRESH_TOKEN_KEY, tokens.refreshToken]])
+    await setTokens(tokens.accessToken, tokens.refreshToken)
   })
   tokenWrites = write.catch(() => {})
   return write
@@ -163,7 +161,7 @@ async function refreshSession(): Promise<boolean> {
   if (refreshing) return refreshing
   const version = sessionVersion
   refreshing = (async () => {
-    const refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY)
+    const refreshToken = await getRefreshToken()
     if (!refreshToken) return false
     const tokens = await request<TokenResponse>("/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken }) }, false)
     if (version !== sessionVersion) return false
@@ -243,7 +241,7 @@ export async function logout() {
   clearSessionCache("user")
   // Saved chats belong to the account: they leave the phone with it.
   void clearChatCache()
-  const removal = tokenWrites.then(() => AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]))
+  const removal = tokenWrites.then(clearTokens)
   tokenWrites = removal.catch(() => {})
   await removal
 }
@@ -328,7 +326,7 @@ export function deleteReferenceRequest(id: string) {
 export function respondToReference(id: string, decision: "approved" | "declined") {
   return request<{ status: "approved" | "declined" }>(`/references/requests/${id}/respond`, { method: "POST", body: JSON.stringify({ decision }) })
 }
-export async function hasSession() { return Boolean((await AsyncStorage.getItem(ACCESS_TOKEN_KEY)) || (await AsyncStorage.getItem(REFRESH_TOKEN_KEY))) }
+export async function hasSession() { return Boolean((await getAccessToken()) || (await getRefreshToken())) }
 
 // Each interest lists its own levels (managed in the interest_levels table); empty means no level step.
 export interface InterestLevel { id: string; enum: string; name: string }
@@ -451,7 +449,12 @@ export const getUserInterests = () => request<Array<{ id: string; name: string }
 export const setUserInterests = (interestIds: string[]) => request<Array<{ id: string; name: string }>>('/users/me/interests', { method: 'PUT', body: JSON.stringify({ interestIds }) })
 export const updateProfile = (value: Partial<ApiUser>) => request<ApiUser>('/users/me/profile', { method: 'PATCH', body: JSON.stringify(value) })
 // The server bumps the token version, so every session (this one too) must sign in again afterwards.
-export const changePassword = (oldPassword: string, newPassword: string) => request<{ message: string }>('/users/me/password', { method: 'PATCH', body: JSON.stringify({ oldPassword, newPassword, language: 'tr' }) })
+// The server signs out every other device; this one gets a fresh token pair and stays signed in.
+export async function changePassword(oldPassword: string, newPassword: string) {
+  const response = await request<{ message: string; tokens: TokenResponse }>('/auth/password', { method: 'PATCH', body: JSON.stringify({ oldPassword, newPassword, language: 'tr' }) })
+  await saveTokens(response.tokens)
+  return response
+}
 export const deleteAccount = (password: string) => request<{ message: string }>('/users/me', { method: 'DELETE', body: JSON.stringify({ password, language: 'tr' }) })
 export const setProfilePhoto = (photo: string) => request('/users/me/photo', { method: photo ? 'PUT' : 'DELETE', ...(photo ? { body: JSON.stringify({ photo }) } : {}) })
 export const getPreferences = () => shared('user:preferences', () => request<Preferences>('/users/me/preferences', { background: true }))
@@ -564,7 +567,7 @@ export const archiveLegacyData = (value: Record<string, unknown>) => request('/u
 
 export async function getSocketToken(renew = false) {
   if (renew && !await refreshSession()) return null
-  return AsyncStorage.getItem(ACCESS_TOKEN_KEY)
+  return getAccessToken()
 }
 
 /** Light room summaries (no description/cover) for the Rooms list: one request instead of three. */
@@ -631,9 +634,6 @@ export interface EventShareLink { url: string; code: string; expiresAt: string; 
 export const createEventShare = (eventId: string) => request<EventShareLink>(`/events/${encodeURIComponent(eventId)}/share`, { method: 'POST', body: JSON.stringify({ acceptResponsibility: true }) })
 /** The organizer's 24-hour event code (EWT-…); accepting guest responsibility is part of creating it. */
 export const createEventCode = (eventId: string) => request<EventShareLink>(`/events/${encodeURIComponent(eventId)}/share`, { method: 'POST', body: JSON.stringify({ acceptResponsibility: true, kind: 'code' }) })
-/** SMS check of the account's phone: send a 4-digit code (Verimor), then confirm it on the server. */
-export const sendPhoneCode = () => request<{ sent: boolean; expiresAt: string; resendAfter: number }>('/users/me/phone-verification/send', { method: 'POST' })
-export const verifyPhoneCode = (code: string) => request<{ verified: boolean }>('/users/me/phone-verification/verify', { method: 'POST', body: JSON.stringify({ code }) })
 export const createReferenceCode = () => request<{ code: string; expiresAt: string }>('/references/codes', { method: 'POST' })
 export const getActiveReferenceCode = () => request<{ code: { code: string; expiresAt: string } | null }>('/references/codes/active', { background: true }).then(result => result.code)
 export const revokeEventShare = (code: string) => request(`/sharing/links/${encodeURIComponent(code)}`, { method: 'DELETE' })

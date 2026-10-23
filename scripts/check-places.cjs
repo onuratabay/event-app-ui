@@ -19,7 +19,7 @@ module.exports = async ({ act, text, storage }) => {
     if (parsed.pathname === '/places/kazim-1') return { ok: true, status: 200, json: async () => ({ placeId: 'kazim-1', name: 'Kazım Büfe', address: 'Moda Cd., Kadıköy/İstanbul', latitude: 40.98, longitude: 29.02, city: 'İstanbul', district: 'Kadıköy' }) }
     return { ok: true, status: 200, json: async () => ({}) }
   }
-  storage.set('event-app:access-token', 'places-test')
+  storage.set('event-app.access-token', 'places-test')
   const settle = (ms = 320) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) })
   let picked = null, venue = ''
   const render = () => React.createElement(LocationPicker, { value: picked, venue, defaultCity: 'Ankara', onChange: place => { picked = place }, onVenueChange: value => { venue = value } })

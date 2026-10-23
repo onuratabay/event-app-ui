@@ -36,7 +36,7 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   await act(async () => tree.unmount())
 
   // Settings lists every legal text and saves the optional marketing consent on the server.
-  storage.set('event-app:access-token', 'valid-session')
+  storage.set('event-app.access-token', 'valid-session')
   tree = await mount('Settings')
   await settle()
   for (const title of ['Kullanım Koşulları', 'Topluluk Kuralları', 'Gizlilik Politikası', 'KVKK Aydınlatma Metni']) assert(text(tree.toJSON()).includes(title), title)

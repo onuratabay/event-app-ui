@@ -5,7 +5,7 @@ module.exports = async ({ storage }) => {
   const api = require('../src/api/client.ts')
   const sent = []
   fake.setAction(async (name, payload) => { sent.push({ name, payload }); return [] })
-  storage.set('event-app:access-token', 'test-token')
+  storage.set('event-app.access-token', 'test-token')
   const before = fake.instances.length
   manager.startSocket('user'); manager.startSocket('user')
   assert.equal(fake.instances.length, before + 1, 'One connection per account, not one per consumer')
@@ -15,13 +15,13 @@ module.exports = async ({ storage }) => {
   const states = []
   const stopStates = manager.onSocket('connection:changed', payload => states.push(payload.connected))
   connection.connect()
-  storage.set('event-app:refresh-token', 'test-refresh')
+  storage.set('event-app.refresh-token', 'test-refresh')
   const fetchBefore = global.fetch
   global.fetch = async url => ({ ok: true, status: 200, json: async () => (String(url).endsWith('/auth/refresh') ? { accessToken: 'renewed-token', refreshToken: 'renewed-refresh' } : {}) })
   connection.connected = false; connection.emit('disconnect', 'io server disconnect')
   await new Promise(resolve => setTimeout(resolve, 20))
   global.fetch = fetchBefore
-  assert.equal(storage.get('event-app:access-token'), 'renewed-token', 'The token is renewed after a server disconnect')
+  assert.equal(storage.get('event-app.access-token'), 'renewed-token', 'The token is renewed after a server disconnect')
   assert.equal(connection.connected, true, 'The socket reconnects after renewing')
   assert.deepEqual(states.slice(-2), [false, true], 'Consumers are told when the connection drops and returns')
   stopStates()

@@ -5,6 +5,8 @@ import { useEffect, useState, type ReactNode } from "react"
 import { Linking, StyleSheet, Switch } from "react-native"
 import Constants from "expo-constants"
 import { Box, Field, Label, Scroll, Touch, openExternal, Reveal } from "../native/UI"
+import { EyeIcon, EyeOffIcon } from "../components/Icons"
+import AccountProfileForm from "../components/AccountProfileForm"
 import { DEFAULT_PREFERENCES, usePreferences, type AppPreferences } from "../native/preferences"
 import { useStore } from "../native/Store"
 import { changePassword, deleteAccount, getApiErrorMessage, getLegalConsents, getPreferences, logout, putPreference, setMarketingConsent, type NotificationPreferences } from "../api/client"
@@ -15,7 +17,7 @@ import { BRAND_NAME, BRAND_URL } from "../components/Brand"
 import { palette } from "../theme/palette"
 import { ui } from "../theme/styles"
 import type { NavigateFn } from "../types"
-import { PASSWORD_ERROR, isStrongPassword } from "../content/password"
+import { PASSWORD_ERROR, PASSWORD_RULES, isStrongPassword, passwordRules } from "../content/password"
 
 const DEFAULT_NOTIFICATIONS: Required<NotificationPreferences> = { invites: true, messages: true, reminders: true }
 
@@ -33,9 +35,16 @@ function Toggle({ title, detail, value, disabled, onChange }: { title: string; d
       trackColor={{ false: palette.elevated, true: palette.violet }} thumbColor="#ffffff" ios_backgroundColor={palette.elevated} />
   </Box>
 }
+/** A password input with the same show / hide eye as the sign-in and sign-up forms. */
 function Password({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <Field accessibilityLabel={label} placeholder={label} placeholderTextColor={palette.muted} value={value} onChangeText={onChange}
-    secureTextEntry autoCapitalize="none" autoCorrect={false} style={s.input} />
+  const [visible, setVisible] = useState(false)
+  return <Box style={s.passwordWrap}>
+    <Field accessibilityLabel={label} placeholder={label} placeholderTextColor={palette.muted} value={value} onChangeText={onChange}
+      secureTextEntry={!visible} autoCapitalize="none" autoCorrect={false} style={[s.input, s.passwordInput]} />
+    <Touch accessibilityLabel={visible ? "Şifreyi gizle" : "Şifreyi göster"} onPress={() => setVisible(current => !current)} style={s.passwordToggle}>
+      {visible ? <EyeOffIcon style={s.passwordIcon} /> : <EyeIcon style={s.passwordIcon} />}
+    </Touch>
+  </Box>
 }
 
 export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
@@ -43,8 +52,11 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
   const { data, resetSession } = useStore()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Errors of the password form show inside its panel, not at the top of the page.
+  const [passwordError, setPasswordError] = useState<string | null>(null)
   const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS)
   const [notificationsReady, setNotificationsReady] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [oldPassword, setOldPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
@@ -97,18 +109,20 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
       void endSession("welcome").catch(() => { setError("Çıkış yapılamadı. Lütfen tekrar dene."); setBusy(false) })
     } },
   ])
+  // The update button stays off until every check the app can make itself has passed.
+  const passwordReady = !!oldPassword && isStrongPassword(newPassword) && newPassword === repeatPassword
   const submitPassword = async () => {
     if (busy) return
-    if (!oldPassword || !newPassword) { setError("Mevcut ve yeni şifreni gir."); return }
-    if (!isStrongPassword(newPassword)) { setError(PASSWORD_ERROR); return }
-    if (newPassword !== repeatPassword) { setError("Yeni şifreler birbiriyle aynı değil."); return }
-    setBusy(true); setError(null)
+    if (!oldPassword || !newPassword) { setPasswordError("Mevcut ve yeni şifreni gir."); return }
+    if (!isStrongPassword(newPassword)) { setPasswordError(PASSWORD_ERROR); return }
+    if (newPassword !== repeatPassword) { setPasswordError("Şifreler uyuşmuyor."); return }
+    setBusy(true); setPasswordError(null)
     try {
       await changePassword(oldPassword, newPassword)
       setOldPassword(""); setNewPassword(""); setRepeatPassword(""); setPasswordOpen(false)
-      // The server signs out every session after a password change.
-      showAlert("Şifren güncellendi", "Güvenliğin için yeni şifrenle tekrar giriş yap.", [{ text: "Tamam", onPress: () => { void endSession("login") } }])
-    } catch (e) { setError(getApiErrorMessage(e, "Şifre değiştirilemedi.")) }
+      // This device stays signed in with fresh tokens; other devices are signed out by the server.
+      showAlert("Şifren güncellendi", "Şifren başarıyla değiştirildi.")
+    } catch (e) { setPasswordError(getApiErrorMessage(e, "Şifre değiştirilemedi.")) }
     finally { setBusy(false) }
   }
   const submitDelete = () => {
@@ -138,14 +152,19 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
       </Section>}
 
       <Section title="Hesap">
-        <Row title={data.user.name || "Profilim"} detail="Profil fotoğrafı, ad, şehir ve Instagram" onPress={() => navigate("profile")} />
-        <Row title="İlgi alanlarım" detail="Önerilen etkinlikleri belirleyen ilgi alanlarını düzenle" onPress={() => navigate("interests")} />
-        <Row title="Şifremi değiştir" detail="Mevcut şifreni doğrulayarak yeni bir şifre belirle" open={passwordOpen} onPress={() => { setPasswordOpen(!passwordOpen); setError(null) }} />
+        <Row title={data.user.name || "Profil bilgilerim"} detail="Profil fotoğrafı, ad, soyad ve şehir" open={profileOpen} onPress={() => setProfileOpen(!profileOpen)} />
+        {profileOpen && <Reveal><AccountProfileForm /></Reveal>}
+        <Row title="Şifremi değiştir" detail="Mevcut şifreni doğrulayarak yeni bir şifre belirle" open={passwordOpen} onPress={() => { setPasswordOpen(!passwordOpen); setPasswordError(null) }} />
         {passwordOpen && <Reveal><Box style={s.form}>
-          <Password label="Mevcut şifre" value={oldPassword} onChange={setOldPassword} />
-          <Password label="Yeni şifre" value={newPassword} onChange={setNewPassword} />
-          <Password label="Yeni şifre tekrar" value={repeatPassword} onChange={setRepeatPassword} />
-          <Touch disabled={busy} onPress={() => void submitPassword()} style={s.primary}><Label style={s.primaryLabel}>{busy ? "Kaydediliyor…" : "Şifreyi güncelle"}</Label></Touch>
+          <Password label="Mevcut şifre" value={oldPassword} onChange={value => { setOldPassword(value); setPasswordError(null) }} />
+          <Password label="Yeni şifre" value={newPassword} onChange={value => { setNewPassword(value); setPasswordError(null) }} />
+          <Password label="Yeni şifre tekrar" value={repeatPassword} onChange={value => { setRepeatPassword(value); setPasswordError(null) }} />
+          <Box style={s.rules} accessibilityLiveRegion="polite">
+            {PASSWORD_RULES.map(([key, text]) => { const ok = passwordRules(newPassword)[key]; return <Label key={key} style={[s.rule, { color: ok ? palette.success : "#9aa3cf" }]}>{`${ok ? "✓" : "○"} ${text}`}</Label> })}
+          </Box>
+          {!!repeatPassword && repeatPassword !== newPassword && <Label accessibilityLiveRegion="polite" style={s.formError}>Şifreler uyuşmuyor</Label>}
+          {passwordError && <Label accessibilityRole="alert" style={s.formError}>{passwordError}</Label>}
+          <Touch disabled={busy || !passwordReady} accessibilityState={{ disabled: busy || !passwordReady }} onPress={() => void submitPassword()} style={[s.primary, !passwordReady && s.primaryDisabled]}><Label style={s.primaryLabel}>{busy ? "Kaydediliyor…" : "Şifreyi güncelle"}</Label></Touch>
         </Box></Reveal>}
       </Section>
 
@@ -221,8 +240,16 @@ const s = StyleSheet.create({
   copy: { flex: 1, minWidth: 0, gap: 5 }, title: { color: palette.text, fontFamily: "Outfit-Medium", fontSize: 15 },
   detail: { color: palette.muted, fontSize: 12, lineHeight: 18 }, chevron: { color: palette.accent, fontSize: 20 },
   danger: { color: palette.error }, error: { color: palette.error, fontSize: 13, lineHeight: 19, marginTop: 12 },
+  rules: { flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 4, marginTop: -2, marginBottom: 2 },
+  rule: { fontSize: 12, lineHeight: 17 },
+  formError: { color: palette.error, fontSize: 13, lineHeight: 19 },
   form: { gap: 10, padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border },
+  passwordWrap: { position: "relative", justifyContent: "center" },
+  passwordInput: { paddingRight: 52 },
+  passwordToggle: { position: "absolute", right: 2, top: 0, bottom: 0, width: 48, alignItems: "center", justifyContent: "center" },
+  passwordIcon: { color: "#c7ceff" },
   input: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.background, paddingHorizontal: 14, color: palette.text, fontSize: 15 },
+  primaryDisabled: { opacity: .45 },
   primary: { minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#4d5bcb" },
   primaryLabel: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15 },
   destructive: { minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(243,155,175,.14)", borderWidth: 1, borderColor: "rgba(243,155,175,.4)" },

@@ -54,6 +54,8 @@ class Value {
 }
 const anim = () => ({ start() {}, stop() {} })
 const storage = new Map()
+// An installed app (token-store drops Keychain tokens left over from an earlier install otherwise).
+storage.set("event-app:installed", "1")
 Module._load = function (id, parent, isMain) {
   if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]), usePathname: () => global.__testPathname || "/discover", useLocalSearchParams: () => global.__testParams || {}, useGlobalSearchParams: () => global.__testParams || {}, useRootNavigationState: () => global.__testRootState, useRouter: () => ({ navigate: href => { global.__testMethods?.push("navigate"); global.__testNavigations?.push(href.pathname ?? href) }, replace: href => { global.__testMethods?.push("replace"); global.__testNavigations?.push(href.pathname ?? href) }, push: href => { global.__testMethods?.push("push"); global.__testNavigations?.push(href.pathname ?? href) }, back: () => global.__testNavigations?.push("back"), canGoBack: () => { let state = global.__testRootState; while (state?.routes?.[state.index ?? 0]?.state) state = state.routes[state.index ?? 0].state; return (state?.index ?? 0) > 0 }, canDismiss: () => true, dismissAll: () => global.__testNavigations?.push("dismissAll") }) }
   if (id === "socket.io-client") return require("./mock-socket.cjs")
@@ -135,7 +137,15 @@ Module._load = function (id, parent, isMain) {
         removeItem: async (k) => storage.delete(k),
         multiRemove: async (keys) => keys.forEach(key => storage.delete(key)),
         multiSet: async (entries) => entries.forEach(([k, v]) => storage.set(k, v)),
+        multiGet: async (keys) => keys.map(key => [key, storage.get(key) ?? null]),
       },
+    }
+  if (id === "expo-secure-store")
+    return {
+      AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 0,
+      getItemAsync: async (k) => storage.get(k) ?? null,
+      setItemAsync: async (k, v) => { storage.set(k, v) },
+      deleteItemAsync: async (k) => { storage.delete(k) },
     }
   if (id === "expo-image-picker")
     return { launchImageLibraryAsync: async () => ({ canceled: true }) }
@@ -393,14 +403,14 @@ async function tap(tree, label) {
   await act(async () => emailCodeField().props.onChangeText("123456"))
   await tap(registration, "Doğrula ve devam et")
   assert.equal(registrationRequest.body.emailVerificationToken, "email-proof", "Registration carries the email proof")
-  assert.equal(destination, "phone-verify", "A new account confirms its phone number first")
+  assert.equal(destination, "onboarding-2", "A new account continues with the next application step")
   assert.deepEqual(registrationRequest.body.acceptedDocuments, [{ type: "terms", version: 2 }, { type: "community", version: 1 }, { type: "privacy", version: 1 }, { type: "kvkk", version: 1 }], "The accepted server versions are sent; marketing stays opt-in")
   assert.equal(registrationRequest.body.marketingConsent, false)
   assert.equal(registrationRequest.url, "http://192.168.1.15:3000/auth/register")
   assert.equal(registrationRequest.body.birthDate, "15/06/1995")
   assert.equal(registrationRequest.body.city, "İzmir", "The chosen city is sent with the registration")
   assert.equal(registrationRequest.body.phoneNumber, "+905321234567")
-  assert.equal(storage.get("event-app:access-token"), "test-access")
+  assert.equal(storage.get("event-app.access-token"), "test-access")
   await act(async () => registration.unmount())
   global.fetch = async () => { throw new TypeError("Network request failed") }
   await assert.rejects(() => api.register({}), error => api.getApiErrorMessage(error).includes("Sunucuya bağlanılamadı"))
@@ -505,7 +515,7 @@ async function tap(tree, label) {
     const originalOwner = server.events[0].owner
     server.events[0].owner = { id: server.user.id, firstName: server.user.firstName, lastName: server.user.lastName }
     // Storage was cleared above; this check needs a signed-in user.
-    storage.set("event-app:access-token", "own-event-test")
+    storage.set("event-app.access-token", "own-event-test")
     const ownDetail = await mount("EventDetail", { eventId: EVENTS[0].id })
     await act(async () => { await new Promise(r => setTimeout(r, 150)) })
     assert(text(ownDetail.toJSON()).includes("Düzenleyen"), "The organizer card is still shown")
@@ -538,7 +548,7 @@ async function tap(tree, label) {
     assert(text(frozen.toJSON()).includes("Etkinlik iptal edildi; katılım durumu değiştirilemez."))
     await act(async () => frozen.unmount())
     Object.assign(server.events[0], { status: original.status, viewerParticipationStatus: original.viewer })
-    storage.delete("event-app:access-token")
+    storage.delete("event-app.access-token")
   }
   {
     // The detail shows the event's duration where distance used to be.
@@ -572,7 +582,7 @@ async function tap(tree, label) {
   await act(async () => { await new Promise(r=>setTimeout(r,20)) })
   assert(text(restored.toJSON()).includes("Katıldın"))
   assert(text(restored.toJSON()).includes("Odaya Katıl"), "Room opens for members once the minimum is met")
-  storage.set("event-app:access-token", "rooms-test")
+  storage.set("event-app.access-token", "rooms-test")
   server.events[0].unreadCount = 3
   const rooms = await mount("Rooms")
   await act(async () => { await new Promise(r=>setTimeout(r,50)) })
@@ -631,7 +641,7 @@ async function tap(tree, label) {
     assert(!text(room.toJSON()).includes("Odayı sessize al"), "Room settings sheet closes")
   }
   await act(async () => room.unmount())
-  storage.delete("event-app:access-token")
+  storage.delete("event-app.access-token")
   server.events[0].confirmedParticipantCount = 1
   await tap(restored, "İptal Et")
   await act(async () => restored.unmount())
@@ -766,7 +776,7 @@ async function tap(tree, label) {
     await act(async () => noMax.unmount())
   }
   assert.equal(storage.has('event-app:v1'), false, 'No domain data is written to device storage')
-  storage.set("event-app:access-token", "invite-test")
+  storage.set("event-app.access-token", "invite-test")
   assert.equal(server.events[0].levelId, 'beginner', 'Interest level is sent when the interest has levels')
   const levelless = await mount("CreateEvent")
   await act(async () => { await new Promise(r=>setTimeout(r,20)) })
@@ -853,7 +863,7 @@ async function tap(tree, label) {
     global.__testAlert = undefined
   }
   await act(async () => notifications.unmount())
-  storage.delete("event-app:access-token")
+  storage.delete("event-app.access-token")
   const routes=fs.readdirSync(path.join(__dirname,"../app"))
   for(const screen of [...names.filter(n=>n!=="Splash"&&n!=="Onboarding").map(n=>n.replace(/[A-Z]/g,(c,i)=>(i?"-":"")+c.toLowerCase())),"onboarding-1","onboarding-2","onboarding-3"]){assert(routes.includes(screen+".tsx"),`Missing route ${screen}`)}
   await act(async () => createEvent.unmount())

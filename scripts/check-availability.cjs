@@ -214,7 +214,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   await act(async () => screen.unmount())
 
   // Organizer: "Davet et" → "Uygun kişilerden davet et" on the own, waiting event only.
-  storage.set("event-app:access-token", "availability-test")
+  storage.set("event-app.access-token", "availability-test")
   server.events.push({ ...server.events[0], id: "own-event", owner: { id: server.user.id, firstName: "Sunucu", lastName: "Kullanıcısı" }, participants: [], viewerParticipationStatus: "confirmed" })
   const detail = await mount("EventDetail", { eventId: "own-event" })
   await wait(50)
@@ -309,7 +309,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   assert.equal(accepts[0].props.accessibilityState.disabled, false)
   assert.equal(accepts[1].props.accessibilityState.disabled, true, "A conflicting invite cannot be accepted")
   await act(async () => notifications.unmount())
-  storage.delete("event-app:access-token")
+  storage.delete("event-app.access-token")
   global.fetch = oldFetch
 
   // Entry points: Discover header and own profile.

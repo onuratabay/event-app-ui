@@ -24,6 +24,12 @@
     "plugins": [
       "expo-router",
       [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Profil ve etkinlik fotoğrafını seçmek için fotoğraflarına erişim gerekiyor.",
