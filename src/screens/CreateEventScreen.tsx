@@ -5,7 +5,7 @@ import { useWalkthroughAutostartBlocker, useWalkthroughScreenBlocker } from "../
 import { palette } from "../theme/palette";
 import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../components/Icons";
 ;
-import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions, getMyProposedInterests, proposeInterest } from "../api/client";
+import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions, getMyProposedInterests, proposeInterest, getInterestImages } from "../api/client";
 import { isUnlimitedCapacity, mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useRef, useState } from "react";
 import { Avatar, AtmoBackground, Checkbox, GlassCard, GlassFill, GlassInput, GlassTextarea } from "../components/GlassUI";
@@ -18,6 +18,7 @@ import { NavigateFn } from "../types";
 import TopNavBar from "../components/TopNavBar";
 import { useBottomNavInset } from "../components/BottomNav";
 import { DURATIONS, MAX_DURATION_MINUTES, formatDuration } from "../events/duration";
+import { matchingCover } from "../native/images";
 import PoolCandidatesPicker from "../availability/PoolCandidatesPicker";
 import LocationPicker, { placeLabel, type PickedPlace } from "../events/LocationPicker";
 /** Same minimum as the server's description rule. */
@@ -98,7 +99,7 @@ export default function CreateEventScreen({
     data: store,
     setData: setStore
   } = useStore();
-  const [activities, setActivities] = useState<Array<{ id: string; name: string; levels?: InterestLevel[]; status?: string; requiresCover?: boolean }>>([]);
+  const [activities, setActivities] = useState<Array<{ id: string; name: string; slug?: string; levels?: InterestLevel[]; status?: string; requiresCover?: boolean }>>([]);
   const [visibilities, setVisibilities] = useState<Array<{ id: string; name: string; enum: string }>>([]);
   const [creating, setCreating] = useState(false);
   // One id per creation attempt, kept across retries: if a slow request timed out but the server created the
@@ -150,7 +151,7 @@ export default function CreateEventScreen({
     durationMinutes: null as number | null,
     location: "",
     minParticipants: 2,
-    // No maximum while the minimum is 2; above it "Sınır koy" is the default (see the minimum card).
+    // "Sınır yok" until the organizer chooses "Sınır koy" (offered from a minimum of 2; the maximum starts at the minimum).
     maxParticipants: null as number | null,
     description: "",
     privacy: ""
@@ -220,6 +221,8 @@ export default function CreateEventScreen({
     const match = activities.find(a => a.name.toLocaleLowerCase("tr") === initialActivity.toLocaleLowerCase("tr"));
     if (match) chooseActivity(match.name);
   }, [activities, initialActivity]);
+  // The server asked for a cover this list did not mark (e.g. an outdated catalog): the cover step then requires it.
+  const [coverDemanded, setCoverDemanded] = useState<string | null>(null);
   const publish = async () => {
     if (creating) return;
     const interest = activities.find(i => i.name === data.activity), level = levels.find(i => i.name === data.level), visibility = visibilities.find(i => i.name === data.privacy);
@@ -244,7 +247,11 @@ export default function CreateEventScreen({
       if (poolInvites.length) await inviteEventCandidates(event.id, poolInvites).catch(error => showAlert('Etkinlik oluşturuldu', `Davetler gönderilemedi: ${getApiErrorMessage(error)} Etkinlik detayındaki "Davet et" ile tekrar deneyebilirsin.`));
       // The creation flow leaves history entirely; back from the new event's detail goes home.
       navigate('event-detail', { eventId: event.id, aboveHome: true });
-    } catch (error) { showAlert('Etkinlik oluşturulamadı', getApiErrorMessage(error)); }
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      if (!data.coverImage && /kapak fotoğrafı/i.test(message)) { setCoverDemanded(data.activity); setStep(5); }
+      showAlert('Etkinlik oluşturulamadı', message);
+    }
     finally { setCreating(false); }
   };
   const next = () => setStep(s => s + 1);
@@ -266,7 +273,18 @@ export default function CreateEventScreen({
   const durationChosen = customDurationOpen ? customDurationValid : !!data.durationMinutes;
   const isInviteOnly = visibilities.find(v => v.name === data.privacy)?.enum === INVITE_ONLY;
   // A new (member-proposed) interest has no default covers: uploading one is required.
-  const coverRequired = !!activities.find(a => a.name === data.activity)?.requiresCover;
+  const chosenActivity = activities.find(a => a.name === data.activity);
+  // A cover is required when the activity has no picture to fall back on: no stock image on the server and
+  // no fitting cover in the app (the generic fallback does not count). So any newly added interest without a
+  // photo, member-proposed or not, asks for one. The server's own `requiresCover` is honoured too.
+  const [noStockCover, setNoStockCover] = useState<Record<string, boolean>>({});
+  const needsStockCheck = !!chosenActivity && !matchingCover(chosenActivity.name);
+  useEffect(() => {
+    const target = chosenActivity;
+    if (!target || !needsStockCheck || target.id in noStockCover) return;
+    getInterestImages(target.id).then(images => setNoStockCover(map => ({ ...map, [target.id]: !images.length }))).catch(() => {});
+  }, [chosenActivity?.id, needsStockCheck]);
+  const coverRequired = coverDemanded === data.activity || !!chosenActivity?.requiresCover || (needsStockCheck && !!chosenActivity && noStockCover[chosenActivity.id] === true);
   const missingCover = coverRequired && !data.coverImage;
   // The message to participants is required (the server asks for at least 10 characters).
   const descriptionLength = data.description.trim().length;
@@ -512,12 +530,8 @@ export default function CreateEventScreen({
             canIncrease: data.minParticipants < MAX_PARTICIPANTS,
             change: (delta: number) => setData(p => {
               const min = Math.min(MAX_PARTICIPANTS, Math.max(MIN_PARTICIPANTS, p.minParticipants + delta));
-              // The maximum field appears once the minimum is above 2, with "Sınır koy" chosen (starting at the
-              // minimum); back at 2 it hides and the event has no maximum. A set limit never drops below the minimum.
-              const max = min === MIN_PARTICIPANTS ? null
-                : p.minParticipants === MIN_PARTICIPANTS ? min
-                : p.maxParticipants === null ? null : Math.max(min, p.maxParticipants);
-              return { ...p, minParticipants: min, maxParticipants: max };
+              // The chosen option stays; a set limit never drops below the minimum (equal = exactly that many).
+              return { ...p, minParticipants: min, maxParticipants: p.maxParticipants === null ? null : Math.max(min, p.maxParticipants) };
             })
           }, {
             label: "Maksimum",
@@ -559,18 +573,18 @@ export default function CreateEventScreen({
                     </Touch>
                   </Box>
                 </Box>)}
-              {/* Above a minimum of 2 the maximum is optional: no limit, or a cap (equal to the minimum = exactly that many). */}
-              {data.minParticipants > MIN_PARTICIPANTS && <Box>
+              {/* The maximum is optional: no limit, or a cap that starts at the minimum (equal = exactly that many). */}
+              {<Box>
                 <Label style={[[ui.textSm, ui.textWhite60, ui.mb2]]}>Maksimum katılımcı</Label>
                 <Box style={[[ui.flex, ui.gap3]]}>
                   {([[false, "Sınır yok"], [true, "Sınır koy"]] as const).map(([limited, label]) => {
                     const selected = (data.maxParticipants !== null) === limited;
-                    return <Touch key={label} accessibilityState={{ selected }} onPress={() => setData(p => ({ ...p, maxParticipants: limited ? p.maxParticipants ?? p.minParticipants : null }))} style={[[ui.flex1, ui.p3, ui.rounded2xl, ui.textCenter, ui.border, ui.textSm, selected ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>{label}</Touch>;
+                    return <Touch key={label} accessibilityState={{ selected }} onPress={() => setData(p => ({ ...p, maxParticipants: limited ? Math.max(p.minParticipants, p.maxParticipants ?? 0) : null }))} style={[[ui.flex1, ui.p3, ui.rounded2xl, ui.textCenter, ui.border, ui.textSm, selected ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>{label}</Touch>;
                   })}
                 </Box>
               </Box>}
               <Label style={[[ui.textXs, ui.textWhite40]]}>
-                {data.minParticipants === MIN_PARTICIPANTS ? "Etkinlik minimum katılımcı sayısına göre ilerler. Maksimum belirlemek için minimumu 2'nin üzerine çıkar." : data.maxParticipants === null ? "Sınır yok: minimum dolunca etkinlik hayata geçer, isteyenler katılmaya devam edebilir." : data.maxParticipants === data.minParticipants ? `Tam ${data.minParticipants} kişilik: ${data.minParticipants} kişi dolunca katılım kapanır.` : `${data.minParticipants} kişi dolunca etkinlik hayata geçer; ${data.maxParticipants} kişide katılım kapanır.`}
+                {data.maxParticipants === null ? "Sınır yok: minimum dolunca etkinlik hayata geçer, isteyenler katılmaya devam edebilir." : data.maxParticipants === data.minParticipants ? `Tam ${data.minParticipants} kişilik: ${data.minParticipants} kişi dolunca katılım kapanır.` : `${data.minParticipants} kişi dolunca etkinlik hayata geçer; ${data.maxParticipants} kişide katılım kapanır.`}
               </Label>
 
               {/* Participants and the message to them share one step. */}
@@ -618,9 +632,14 @@ export default function CreateEventScreen({
               <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
                 Etkinliğine{"\n"}bir yüz ver.
               </Label>
-              <Label style={[[ui.textSm], { color: missingCover ? palette.error : "rgba(255,255,255,.4)" }]}>
-                {coverRequired ? "Yeni bir ilgi alanı için hazır görselimiz yok; kapak fotoğrafı yüklemen zorunlu." : "İstersen atla, sana uygun bir görsel seçeriz."}
-              </Label>
+              {/* Required (new interest without stock images): a clear warning. Optional: we pick one for you. */}
+              {coverRequired ? <Box accessibilityRole="alert" style={[[ui.rounded2xl, ui.p4], { borderWidth: 1, borderColor: missingCover ? "rgba(239,68,68,.45)" : "rgba(111,208,182,.4)", backgroundColor: missingCover ? "rgba(239,68,68,.10)" : "rgba(111,208,182,.08)", gap: 4 }]}>
+                  <Label style={[[ui.textSm, ui.fontSemibold], { color: missingCover ? palette.error : palette.success }]}>{missingCover ? "Kapak fotoğrafı zorunlu" : "Kapak fotoğrafı eklendi"}</Label>
+                  <Label style={[[ui.textXs, ui.textWhite60]]}>Bu yeni ilgi alanı için hazır görselimiz yok. Devam etmek için bir fotoğraf yüklemelisin.</Label>
+                </Box> : <Box style={[[ui.rounded2xl, ui.p4], { borderWidth: 1, borderColor: "rgba(105,120,255,.3)", backgroundColor: "rgba(105,120,255,.08)", gap: 4 }]}>
+                  <Label style={[[ui.textSm, ui.fontSemibold], { color: "#c7ceff" }]}>İsteğe bağlı</Label>
+                  <Label style={[[ui.textXs, ui.textWhite60]]}>Fotoğraf yüklemezsen senin yerine biz etkinliğine uygun bir kapak görseli seçeriz.</Label>
+                </Box>}
 
               <Touch style={[[ui.h52, ui.rounded2xl, ui.flex, ui.flexCol, ui.itemsCenter, ui.justifyCenter, ui.gap3], {
             borderWidth: 1,

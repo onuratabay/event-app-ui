@@ -395,10 +395,25 @@ const KEYBOARD_GAP = 24
  * keyboard or under what floats over the bottom of the scroll area (a sticky "Devam Et" bar rises with
  * the keyboard); `insetBottom` is that floating part, read from the Scroll's bottom padding.
  */
+// Android has no automatic keyboard inset for scroll views (iOS: automaticallyAdjustKeyboardInsets) and the app
+// draws edge to edge, so a page that fits the screen had nothing to scroll and its field stayed under the
+// keyboard. While the keyboard is open, the content gets that much extra room at the bottom.
+function useAndroidKeyboardSpace(enabled: boolean) {
+  const [space, setSpace] = useState(0)
+  useEffect(() => {
+    if (!enabled || Platform.OS !== "android") return
+    const shown = Keyboard.addListener("keyboardDidShow", event => setSpace(event.endCoordinates.height))
+    const hidden = Keyboard.addListener("keyboardDidHide", () => setSpace(0))
+    return () => { shown.remove(); hidden.remove() }
+  }, [enabled])
+  return space
+}
 function useKeyboardReveal(enabled: boolean, scrollRef: React.RefObject<ScrollView | null>, insetBottom = 0) {
   const offset = useRef(0)
   const keyboardTop = useRef<number | null>(null)
   const pending = useRef<TextInput | null>(null)
+  // The last field focused inside this scroll area.
+  const last = useRef<TextInput | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const scrollAbove = (input: TextInput | null) => {
     const top = keyboardTop.current
@@ -417,7 +432,11 @@ function useKeyboardReveal(enabled: boolean, scrollRef: React.RefObject<ScrollVi
     // The layout settles (resize / keyboard-avoiding padding) right after the keyboard opens.
     const shown = Keyboard.addListener("keyboardDidShow", event => {
       keyboardTop.current = event.endCoordinates.screenY
-      const input = pending.current
+      // The field may still be focused from before (Android back closes the keyboard without blurring it):
+      // tapping it again opens the keyboard but sends no focus event, so this area's last field is used while
+      // it still has focus (other scroll areas, e.g. pages below, leave it alone).
+      const focused = TextInput.State?.currentlyFocusedInput?.() as unknown as TextInput | null
+      const input = pending.current ?? (last.current && focused === last.current ? last.current : null)
       pending.current = null
       clearTimeout(timer.current)
       timer.current = setTimeout(() => scrollAbove(input), 60)
@@ -426,6 +445,7 @@ function useKeyboardReveal(enabled: boolean, scrollRef: React.RefObject<ScrollVi
     return () => { shown.remove(); hidden.remove(); clearTimeout(timer.current) }
   }, [enabled])
   const reveal = (input: TextInput | null) => {
+    last.current = input
     // Keyboard already open (moving to the next field): scroll now; otherwise once it has opened.
     if (keyboardTop.current !== null) { clearTimeout(timer.current); timer.current = setTimeout(() => scrollAbove(input), 60) }
     else pending.current = input
@@ -475,7 +495,9 @@ export function Scroll({
   const insetBottom = Math.min(Number(paddingBottom ?? padding ?? 0) || 0, 120)
   const safeBottom = useSafeAreaInsets().bottom
   const clearsInset = useContext(BottomInsetContext) && !horizontal
-  const contentBottom = clearsInset ? (Number(paddingBottom ?? padding ?? 0) || 0) + safeBottom : paddingBottom
+  const keyboardSpace = useAndroidKeyboardSpace(keyboardReveal && !horizontal)
+  const baseBottom = clearsInset ? (Number(paddingBottom ?? padding ?? 0) || 0) + safeBottom : paddingBottom
+  const contentBottom = keyboardSpace ? (Number(baseBottom ?? 0) || 0) + keyboardSpace : baseBottom
   const anchor = (target: View | null, animated = true) => {
     const scroll = scrollRef.current as unknown as View | null
     if (!target || !scroll || horizontal) return

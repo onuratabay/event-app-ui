@@ -193,6 +193,11 @@ export function clearSessionCache(scope: "user" | "all" = "all") {
   for (const key of [...sessionCache.keys()]) if (scope === "all" || key.startsWith("user:")) sessionCache.delete(key)
 }
 
+/** Registration, before the account exists: a 6-digit code (2 minutes) to the address. */
+// Sent only when the email and phone are free and the password meets the rules (409 / 400 otherwise).
+export const sendRegisterEmailCode = (email: string, phoneNumber: string, password: string) => request<{ sent: boolean; expiresAt: string; resendAfter: number }>("/auth/register/email-code", { method: "POST", body: JSON.stringify({ email: email.trim(), phoneNumber, password, language: "tr" }) }, false)
+/** The right code returns the proof `register` needs (valid for 30 minutes). */
+export const verifyRegisterEmail = (email: string, code: string) => request<{ emailVerificationToken: string }>("/auth/register/verify-email", { method: "POST", body: JSON.stringify({ email: email.trim(), code, language: "tr" }) }, false)
 export async function register(input: {
   firstName: string
   lastName: string
@@ -203,6 +208,7 @@ export async function register(input: {
   city: string
   acceptedDocuments: LegalAcceptance[]
   marketingConsent: boolean
+  emailVerificationToken: string
 }) {
   const response = await request<AuthResponse>("/auth/register", {
     method: "POST",
@@ -337,15 +343,21 @@ export const getPendingInterests = () => request<PendingInterest[]>('/admin/inte
 export const decideInterest = (id: string, decision: 'approved' | 'rejected') => request<{ id: string; status: string }>(`/admin/interests/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ decision }) })
 // The catalog is the same for everyone and changes rarely: fetched once per 6 hours per app session.
 // The signal is accepted for compatibility but not passed on, so one screen leaving cannot cancel the shared request.
+/** Stock cover images of an interest (empty for a member-proposed one until an admin adds some). */
+export const getInterestImages = (interestId: string) => request<Array<{ id: string }>>(`/interests/${encodeURIComponent(interestId)}/images`, { background: true })
 export function getMapInterests(_signal?: AbortSignal) {
-  return cached("interests", 6 * HOURS, () => request<Array<{ id: string; name: string; slug: string; levels?: InterestLevel[] }>>("/interests", { headers: { "Accept-Language": "tr" } }))
+  return cached("interests", 6 * HOURS, () => request<Array<{ id: string; name: string; slug: string; levels?: InterestLevel[]; requiresCover?: boolean }>>("/interests", { headers: { "Accept-Language": "tr" } }))
 }
 
 export function forgotPassword(email: string) {
   return request<{ message: string }>("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email: email.trim(), language: "tr" }) }, false)
 }
-export function resetPassword(token: string, newPassword: string) {
-  return request<{ message: string }>("/auth/reset-password", { method: "POST", body: JSON.stringify({ token: token.trim(), newPassword, language: "tr" }) }, false)
+/** Checks the 6-digit emailed code (does not use it up); 5 wrong tries cancel the request. */
+export function verifyResetCode(email: string, code: string) {
+  return request<{ valid: true }>("/auth/verify-reset-code", { method: "POST", body: JSON.stringify({ email: email.trim(), code, language: "tr" }) }, false)
+}
+export function resetPassword(email: string, code: string, newPassword: string) {
+  return request<{ message: string }>("/auth/reset-password", { method: "POST", body: JSON.stringify({ email: email.trim(), code, newPassword, language: "tr" }) }, false)
 }
 
 // Admin only: membership applications. The server rejects these calls for non-admin accounts.

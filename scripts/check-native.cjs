@@ -302,9 +302,12 @@ async function tap(tree, label) {
   global.fetch = server.fetch;
   const originalFetch = global.fetch
   let registrationRequest
+  const emailCodeRequests = []
   global.fetch = async (url, options) => {
     if (url.endsWith("/events?page=1&limit=20")) return { ok: true, json: async () => ({ items: [] }) }
     if (url.endsWith("/legal/documents")) return { ok: true, json: async () => ({ items: [{ type: "terms", version: 2, title: "Kullanım Koşulları", required: true }, { type: "community", version: 1, title: "Topluluk Kuralları", required: true }, { type: "privacy", version: 1, title: "Gizlilik Politikası", required: true }, { type: "kvkk", version: 1, title: "KVKK", required: true }, { type: "marketing", version: 1, title: "Ticari İleti", required: false }] }) }
+    if (url.endsWith("/auth/register/email-code")) { emailCodeRequests.push(JSON.parse(options.body)); return { ok: true, json: async () => ({ sent: true, expiresAt: new Date(Date.now() + 120000).toISOString(), resendAfter: 60 }) } }
+    if (url.endsWith("/auth/register/verify-email")) return JSON.parse(options.body).code === "123456" ? { ok: true, json: async () => ({ emailVerificationToken: "email-proof" }) } : { ok: false, status: 400, text: async () => JSON.stringify({ errors: [{ message: "Kod hatalı. Tekrar dene." }] }) }
     registrationRequest = { url, body: JSON.parse(options.body) }
     return { ok: true, json: async () => ({ user: { id: "registered-user" }, tokens: { accessToken: "test-access", refreshToken: "test-refresh" } }) }
   }
@@ -378,6 +381,18 @@ async function tap(tree, label) {
   await tap(registration, "KVKK Aydınlatma Metni")
   assert(text(registration.toJSON()).includes("Onaylandı"), "The card header confirms the required consents")
   await tap(registration, "Devam Et")
+  // The email is confirmed with a 6-digit code first; the account is created only after the right code.
+  assert.equal(emailCodeRequests.length, 1, "Devam Et sends the email code")
+  assert.equal(registrationRequest, undefined, "No account before the email code")
+  const emailCodeField = () => registration.root.findAllByType("TextInput").find(n => n.props.accessibilityLabel === "E-posta doğrulama kodu")
+  assert(emailCodeField(), "The code field appears")
+  await act(async () => emailCodeField().props.onChangeText("111111"))
+  await tap(registration, "Doğrula ve devam et")
+  assert.equal(registrationRequest, undefined, "A wrong code is refused: no account")
+  assert(emailCodeField(), "The code step stays open after a wrong code")
+  await act(async () => emailCodeField().props.onChangeText("123456"))
+  await tap(registration, "Doğrula ve devam et")
+  assert.equal(registrationRequest.body.emailVerificationToken, "email-proof", "Registration carries the email proof")
   assert.equal(destination, "phone-verify", "A new account confirms its phone number first")
   assert.deepEqual(registrationRequest.body.acceptedDocuments, [{ type: "terms", version: 2 }, { type: "community", version: 1 }, { type: "privacy", version: 1 }, { type: "kvkk", version: 1 }], "The accepted server versions are sent; marketing stays opt-in")
   assert.equal(registrationRequest.body.marketingConsent, false)
@@ -665,21 +680,21 @@ async function tap(tree, label) {
   global.__testReverseGeocode = undefined
   await tap(createEvent,"Devam Et")
   const maxCard = () => createEvent.root.findAllByType("Pressable").some(n => n.props.accessibilityLabel === "Maksimum artır")
-  // The maximum appears only once the minimum is above 2, with "Sınır koy" chosen and starting at the minimum.
-  assert(!maxCard() && !text(createEvent.toJSON()).includes("Sınır koy"), "No maximum field while the minimum is 2")
+  // "Sınır yok / Sınır koy" is offered from a minimum of 2; no limit by default, and a limit starts at the minimum.
+  assert(!maxCard() && text(createEvent.toJSON()).includes("Sınır koy"), "Limit options show while the minimum is 2, no limit by default")
   const pressLabel = async label => { const node = createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === label); assert(node, `Missing button: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })) }
+  await tap(createEvent, "Sınır koy")
+  assert(maxCard() && text(createEvent.toJSON()).includes("Tam 2 kişilik"), "A limit starts at the minimum: exactly that many")
+  const maxDecrease = () => createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Maksimum azalt")
+  assert.equal(maxDecrease().props.disabled, true, "The maximum never goes below the minimum")
   await pressLabel("Minimum artır")
-  assert(maxCard(), "Above 2 the maximum field appears with a limit chosen")
   await pressLabel("Minimum artır")
-  await pressLabel("Minimum artır")
-  assert(text(createEvent.toJSON()).includes("Tam 5 kişilik"), "The limit follows the minimum: exactly that many")
-  const maxDecrease = createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Maksimum azalt")
-  assert.equal(maxDecrease.props.disabled, true, "The maximum never goes below the minimum")
+  assert(text(createEvent.toJSON()).includes("Tam 4 kişilik"), "Raising the minimum pushes the limit along")
   await tap(createEvent, "Sınır yok")
   assert(!maxCard(), "Choosing no limit hides the max card")
   assert(text(createEvent.toJSON()).includes("Sınır yok: minimum dolunca"), "No limit is explained")
-  for (let i = 0; i < 3; i++) await pressLabel("Minimum azalt")
-  assert(!maxCard() && !text(createEvent.toJSON()).includes("Sınır koy"), "Back at 2 the maximum field hides again")
+  for (let i = 0; i < 2; i++) await pressLabel("Minimum azalt")
+  assert(!maxCard() && text(createEvent.toJSON()).includes("Sınır koy"), "Back at 2 the options stay, still without a limit")
   assert(text(createEvent.toJSON()).includes("Hızlı ekle"), "Message to participants is on the participants step")
   {
     // Long quick-add chips stay inside the row: capped width, left-aligned text, × never shrinks away.

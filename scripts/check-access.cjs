@@ -23,6 +23,10 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     urls.push(url)
     if (options.body) bodies.push({ path, body: JSON.parse(options.body) })
     if (path === "/auth/register" && registerConflict) return { ok: false, status: 409, text: async () => JSON.stringify({ statusCode: 409, errors: [{ field: "phoneNumber", message: "Bu telefon numarası zaten kayıtlı" }] }) }
+    // A taken email/phone is caught before any code is sent.
+    if (path === "/auth/register/email-code" && registerConflict) return { ok: false, status: 409, text: async () => JSON.stringify({ statusCode: 409, errors: [{ field: "phoneNumber", message: "Bu telefon numarası zaten kayıtlı" }] }) }
+    if (path === "/auth/register/email-code") return { ok: true, status: 200, json: async () => ({ sent: true, expiresAt: new Date(Date.now() + 120000).toISOString(), resendAfter: 60 }) }
+    if (path === "/auth/register/verify-email") return { ok: true, status: 200, json: async () => ({ emailVerificationToken: "email-proof" }) }
     if (path === "/users/me/phone-verification/send") return { ok: true, status: 200, json: async () => ({ sent: true, expiresAt: new Date(Date.now() + 300000).toISOString(), resendAfter: 60 }) }
     if (path === "/users/me/phone-verification/verify") return JSON.parse(options.body).code === "1111" ? { ok: true, status: 200, json: async () => ({ verified: true }) }
       : { ok: false, status: 400, text: async () => JSON.stringify({ statusCode: 400, errors: [{ field: null, message: "Kod hatalı. Tekrar dene." }] }) }
@@ -167,6 +171,13 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     global.__testRootState = undefined
   }
 
+  // "Devam Et" first sends a 6-digit code to the email; the right code creates the account.
+  const confirmEmail = async (tree) => {
+    const field = tree.root.findAllByType("TextInput").find(n => n.props.accessibilityLabel === "E-posta doğrulama kodu")
+    assert(field, "The email code step appears before the account is created")
+    await act(async () => field.props.onChangeText("123456"))
+    await tap(tree, "Doğrula ve devam et")
+  }
   // Registration: a profile_incomplete account continues with the reference step, then the profile.
   storage.clear(); current = "profile_incomplete"
   let registered
@@ -181,6 +192,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await tap(registration, "KVKK Aydınlatma Metni")
   await tap(registration, "ticari elektronik ileti")
   await tap(registration, "Devam Et")
+  await confirmEmail(registration)
   assert.equal(registered, "phone-verify", "Registration continues with the phone check, then the reference step")
   const signUp = bodies.find(row => row.path === "/auth/register").body
   assert.deepEqual(signUp.acceptedDocuments, [{ type: "terms", version: 1 }, { type: "privacy", version: 1 }, { type: "marketing", version: 3 }], "Opting in records the marketing text version too")

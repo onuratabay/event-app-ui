@@ -15,6 +15,7 @@ import { BRAND_NAME, BRAND_URL } from "../components/Brand"
 import { palette } from "../theme/palette"
 import { ui } from "../theme/styles"
 import type { NavigateFn } from "../types"
+import { PASSWORD_ERROR, isStrongPassword } from "../content/password"
 
 const DEFAULT_NOTIFICATIONS: Required<NotificationPreferences> = { invites: true, messages: true, reminders: true }
 
@@ -99,6 +100,7 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
   const submitPassword = async () => {
     if (busy) return
     if (!oldPassword || !newPassword) { setError("Mevcut ve yeni şifreni gir."); return }
+    if (!isStrongPassword(newPassword)) { setError(PASSWORD_ERROR); return }
     if (newPassword !== repeatPassword) { setError("Yeni şifreler birbiriyle aynı değil."); return }
     setBusy(true); setError(null)
     try {
@@ -141,7 +143,7 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
         <Row title="Şifremi değiştir" detail="Mevcut şifreni doğrulayarak yeni bir şifre belirle" open={passwordOpen} onPress={() => { setPasswordOpen(!passwordOpen); setError(null) }} />
         {passwordOpen && <Reveal><Box style={s.form}>
           <Password label="Mevcut şifre" value={oldPassword} onChange={setOldPassword} />
-          <Password label="Yeni şifre (en az 8 karakter, 1 özel karakter)" value={newPassword} onChange={setNewPassword} />
+          <Password label="Yeni şifre" value={newPassword} onChange={setNewPassword} />
           <Password label="Yeni şifre tekrar" value={repeatPassword} onChange={setRepeatPassword} />
           <Touch disabled={busy} onPress={() => void submitPassword()} style={s.primary}><Label style={s.primaryLabel}>{busy ? "Kaydediliyor…" : "Şifreyi güncelle"}</Label></Touch>
         </Box></Reveal>}

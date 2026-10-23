@@ -14,7 +14,7 @@ import { ReferencePicker } from "../components/ReferencePicker";
 import { registerForPush, type PushState } from "../services/push";
 import { updateStoreUser, useStore } from "../native/Store";
 import { RefreshControl, StyleSheet, View } from "react-native";
-import { clearSessionCache, logout, getApiErrorMessage, getCurrentUser, getLegalDocuments, login, redeemAccessCode, register, type ApiUser, type LegalDocumentSummary } from "../api/client";
+import { clearSessionCache, logout, getApiErrorMessage, getCurrentUser, getLegalDocuments, login, redeemAccessCode, register, sendRegisterEmailCode, verifyRegisterEmail, type ApiUser, type LegalDocumentSummary } from "../api/client";
 import { useOpenLegal } from "../legal/links";
 import { gatedScreen } from "../native/access";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +25,8 @@ import { useKeyboardVisible } from "../components/BottomNav";
 import { Box, Label, Scroll, Touch, useScrollAnchor } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn, type Screen as AppScreen } from "../types";
+import { pastedCode } from "../native/pasteCode";
+import { PASSWORD_ERROR, PASSWORD_HINT, PASSWORD_RULES, isStrongPassword, passwordRules } from "../content/password";
 interface Props {
   step: 1 | 2 | 3;
   navigate: NavigateFn;
@@ -220,6 +222,13 @@ function SectionLabel({ children }: { children: ReactNode }) {
 }
 
 /* ---------- Sticky CTA bar ---------- */
+/**
+ * Names start with a capital letter in every word ("ayşe nur" → "Ayşe Nur", Turkish İ/I); the rest is left as typed.
+ * Applied when the field is left and on submit, never while typing: changing the text under an Android keyboard's
+ * ongoing composition made it re-insert the lowercase letter ("Aa").
+ */
+export const capitalizeWords = (value: string) => value.replace(/(^|[\s'-])(\p{L})/gu, (_match, before: string, letter: string) => before + letter.toLocaleUpperCase("tr-TR"));
+
 function StickyBar({
   children
 }: {
@@ -343,16 +352,67 @@ function Step1({
   const accepted = rulesAccepted && privacyAccepted && documents !== null;
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  // Email check before the account exists: "Devam Et" sends a 6-digit code (2 minutes); only the right code
+  // lets the account be created. The proof stays usable for 30 minutes (the server signs it) for this address.
+  const [emailCheck, setEmailCheck] = useState<{ email: string; expiresAt: number; resendAt: number } | null>(null);
+  const [emailCode, setEmailCode] = useState("");
+  const [emailProof, setEmailProof] = useState<{ email: string; token: string; at: number } | null>(null);
+  const [checkNow, setCheckNow] = useState(Date.now());
+  useEffect(() => {
+    if (!emailCheck) return;
+    const timer = setInterval(() => setCheckNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [emailCheck]);
+  const typedEmail = form.email.trim().toLowerCase();
+  const codeSecondsLeft = emailCheck ? Math.max(0, Math.ceil((emailCheck.expiresAt - checkNow) / 1000)) : 0;
+  const resendSecondsLeft = emailCheck ? Math.max(0, Math.ceil((emailCheck.resendAt - checkNow) / 1000)) : 0;
+  const sendEmailCode = async () => {
+    const result = await sendRegisterEmailCode(typedEmail, `+90${phoneDigits(form.telefon)}`, form.sifre);
+    const now = Date.now();
+    setEmailCode(""); setCheckNow(now);
+    setEmailCheck({ email: typedEmail, expiresAt: Date.parse(result.expiresAt) || now + 120_000, resendAt: now + result.resendAfter * 1000 });
+  };
   const continueRegistration = async () => {
     if (creating) return;
     setCreating(true); setCreateError(null);
     try {
-      // Application order: account → references (step 2) → profile and interests → waiting for approval.
+      // Application order: email code → account → references (step 2) → profile and interests → waiting for approval.
       if (store.onboarding.accountId || store.user.id) { navigate("onboarding-2"); return; }
+      if (!isStrongPassword(form.sifre)) { setCreateError(PASSWORD_ERROR); return; }
+      const proof = emailProof && emailProof.email === typedEmail && Date.now() - emailProof.at < 25 * 60_000 ? emailProof.token : null;
+      if (proof) { await createAccount(proof); return; }
+      try { await sendEmailCode(); }
+      catch (cause) {
+        // Email or phone already has an account: an application that stopped half way continues with the same
+        // phone and password; otherwise the server's message says which one is taken.
+        if (!(cause instanceof Error && /^API 409:/.test(cause.message))) throw cause;
+        const phoneNumber = `+90${phoneDigits(form.telefon)}`;
+        let response;
+        try { response = await login(phoneNumber, form.sifre); }
+        catch { throw new Error(`API 409: ${JSON.stringify({ message: `${getApiErrorMessage(cause, "Bu e-posta veya telefon zaten kayıtlı.")} Daha önce başvuru yaptıysan aynı telefon ve şifreyle kaldığın yerden devam edebilirsin; şifreni hatırlamıyorsan girişteki “Şifremi unuttum”u kullan.` })}`); }
+        enterAccount(response);
+      }
+    } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Doğrulama kodu gönderilemedi. Bağlantını ve e-posta adresini kontrol et.")); }
+    finally { if (mounted.current) setCreating(false); }
+  };
+  const confirmEmailCode = async () => {
+    if (creating || !emailCheck) return;
+    if (emailCode.length !== 6) { setCreateError("E-postana gelen 6 haneli kodu gir."); return; }
+    setCreating(true); setCreateError(null);
+    try {
+      const { emailVerificationToken } = await verifyRegisterEmail(emailCheck.email, emailCode);
+      setEmailProof({ email: emailCheck.email, token: emailVerificationToken, at: Date.now() });
+      setEmailCheck(null);
+      await createAccount(emailVerificationToken);
+    } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Kod doğrulanamadı. Tekrar dene.")); }
+    finally { if (mounted.current) setCreating(false); }
+  };
+  const createAccount = async (emailVerificationToken: string) => {
+    {
       const phoneNumber = `+90${phoneDigits(form.telefon)}`;
       let response;
       try {
-        response = await register({ firstName: form.ad, lastName: form.soyad, email: form.email.trim(), phoneNumber, password: form.sifre, birthDate: form.dogum, city: form.sehir, acceptedDocuments, marketingConsent: marketing && !!marketingDocument });
+        response = await register({ firstName: capitalizeWords(form.ad.trim()), lastName: capitalizeWords(form.soyad.trim()), email: form.email.trim(), phoneNumber, password: form.sifre, birthDate: form.dogum, city: form.sehir, acceptedDocuments, marketingConsent: marketing && !!marketingDocument, emailVerificationToken });
       } catch (cause) {
         // The account may already exist from an attempt that stopped half way (the server saved it, the
         // app never heard back). The same phone and password prove it is theirs: continue that application.
@@ -360,6 +420,11 @@ function Step1({
         try { response = await login(phoneNumber, form.sifre); }
         catch { throw new Error(`API 409: ${JSON.stringify({ message: "Bu e-posta veya telefonla başlamış bir başvuru var. Aynı şifreyi girersen kaldığın yerden devam edersin; şifreni hatırlamıyorsan girişteki “Şifremi unuttum” ile yenileyebilirsin." })}`); }
       }
+      enterAccount(response);
+    }
+  };
+  const enterAccount = (response: Awaited<ReturnType<typeof register>>) => {
+    {
       const id = String((response.user as { id: string }).id);
       const status = (response.user as { status?: { enum: string } }).status?.enum;
       setStore(current => ({ ...current, onboarding: { ...form, sifre: "", accountId: id }, user: { ...current.user, id, name: `${form.ad} ${form.soyad}`, status } }));
@@ -367,15 +432,15 @@ function Step1({
       // A new application confirms the phone number by SMS code before its next step.
       const next = status && status !== "profile_incomplete" ? gatedScreen(status, response.user as { instagramUsername?: string | null }) ?? "discover" : "phone-verify";
       if (mounted.current) navigate(next);
-    } catch (cause) { if (mounted.current) setCreateError(getApiErrorMessage(cause, "Hesabın oluşturulamadı. Bağlantını ve bilgilerini kontrol et.")); }
-    finally { if (mounted.current) setCreating(false); }
+    }
   };
-  const allFilled = Object.values(form).every(v => v.trim().length > 0) && phoneDigits(form.telefon).length === 10 && !isFutureDate(form.dogum) && !isUnderAge(form.dogum);
+  const passwordOk = isStrongPassword(form.sifre);
+  const allFilled = Object.values(form).every(v => v.trim().length > 0) && phoneDigits(form.telefon).length === 10 && !isFutureDate(form.dogum) && !isUnderAge(form.dogum) && passwordOk;
   const canContinue = Boolean(store.onboarding.accountId) || (allFilled && accepted);
   return <Box style={{
     flex: 1
   }}>
-      <TopNavBar navigate={navigate} fallback="welcome" onBack={() => { setStore(current => ({ ...current, onboarding: { ...current.onboarding, ...form, sifre: "" } })); navigate("welcome", { back: true }); }} title="Üyelik Başvurusu" right={<ExitAction navigate={navigate} />} floating />
+      <TopNavBar navigate={navigate} fallback="welcome" onBack={() => { setStore(current => ({ ...current, onboarding: { ...current.onboarding, ...form, sifre: "" } })); navigate("welcome", { back: true }); }} title="Üyelik Başvurusu" floating />
       {/* keyboardReveal: the field being typed in is scrolled above the keyboard. */}
       <Scroll keyboardReveal style={[[ui.flex, ui.flexCol, ui.flex1, ui.bg06060e, ui.pb40, ui.px5], { paddingTop: 84 }]}>
         <AtmoBackground />
@@ -398,15 +463,17 @@ function Step1({
           {/* Form */}
           <Box style={[[ui.spaceY3]]} enter>
             {waiting && !me && <Label style={[[ui.textXs, ui.textWhite40]]}>Başvuru bilgilerin yükleniyor…</Label>}
+            {/* Names: the keyboard starts each word with a capital. No autoCorrect={false} here: on Android it sends
+                "no suggestions", and some keyboards (e.g. Samsung) then also skip the automatic capital. */}
             <Box walkthroughId="application-fields" style={[[ui.grid, ui.gap3]]} columns={2}>
-              {locked("ad") ? <LockedField label="Ad" value={submitted.ad} /> : <GlassInput label="Ad" placeholder="Adın" autoCapitalize="words" autoCorrect={false} textContentType="givenName" autoComplete="given-name" value={form.ad} onChangeText={e => setForm(p => ({
+              {locked("ad") ? <LockedField label="Ad" value={submitted.ad} /> : <GlassInput label="Ad" placeholder="Adın" autoCapitalize="words" textContentType="givenName" autoComplete="given-name" value={form.ad} onChangeText={e => setForm(p => ({
               ...p,
               ad: e
-            }))} />}
-              {locked("soyad") ? <LockedField label="Soyad" value={submitted.soyad} /> : <GlassInput label="Soyad" placeholder="Soyadın" autoCapitalize="words" autoCorrect={false} textContentType="familyName" autoComplete="family-name" value={form.soyad} onChangeText={e => setForm(p => ({
+            }))} onEndEditing={() => setForm(p => ({ ...p, ad: capitalizeWords(p.ad) }))} />}
+              {locked("soyad") ? <LockedField label="Soyad" value={submitted.soyad} /> : <GlassInput label="Soyad" placeholder="Soyadın" autoCapitalize="words" textContentType="familyName" autoComplete="family-name" value={form.soyad} onChangeText={e => setForm(p => ({
               ...p,
               soyad: e
-            }))} />}
+            }))} onEndEditing={() => setForm(p => ({ ...p, soyad: capitalizeWords(p.soyad) }))} />}
             </Box>
             {locked("email") ? <LockedField label="E-posta" value={submitted.email} /> : <GlassInput label="E-posta" placeholder="ornek@email.com" value={form.email} onChangeText={e => setForm(p => ({
             ...p,
@@ -443,7 +510,7 @@ function Step1({
             {!waiting && <Box>
               <Label style={passwordStyles.label}>Şifre</Label>
               <Box style={passwordStyles.wrap}>
-                <GlassInput accessibilityLabel="Şifre" placeholder="En az 8 karakter ve özel karakter" value={form.sifre} onChangeText={e => setForm(p => ({
+                <GlassInput accessibilityLabel="Şifre" placeholder={PASSWORD_HINT} value={form.sifre} onChangeText={e => setForm(p => ({
                 ...p,
                 sifre: e
               }))} onEndEditing={event => openAgreementsAfterPassword(event.nativeEvent.text ?? form.sifre)} secureTextEntry={!showPassword} autoComplete="new-password" textContentType="newPassword" autoCapitalize="none" autoCorrect={false} style={passwordStyles.input} />
@@ -451,6 +518,13 @@ function Step1({
                   {showPassword ? <EyeOffIcon style={passwordStyles.icon} /> : <EyeIcon style={passwordStyles.icon} />}
                 </Touch>
               </Box>
+              {/* The rules, checked as the password is typed (the server checks the same before sending the code). */}
+              {!!form.sifre && <Box style={passwordRuleStyles.row} accessibilityLiveRegion="polite">
+                {PASSWORD_RULES.map(([key, text]) => {
+                  const ok = passwordRules(form.sifre)[key];
+                  return <Label key={key} style={[passwordRuleStyles.rule, { color: ok ? palette.success : palette.muted }]}>{`${ok ? "✓" : "○"} ${text}`}</Label>;
+                })}
+              </Box>}
             </Box>}
           </Box>
 
@@ -493,13 +567,58 @@ function Step1({
       <StickyBar>
         {waiting ? <WaitingActions label="Eklediklerimi gönder" canSend={Object.keys(additions).length > 0} sending={sending} notice={sendNotice} error={sendError} onSend={() => void sendAdditions()} onBack={() => navigate("onboarding-3", { reset: true })} /> : <>
         {createError && <ErrorNotice title="Kayıt tamamlanamadı" message={createError} onDismiss={() => setCreateError(null)} />}
-        <ContinueButton onPress={() => void continueRegistration()} disabled={!canContinue || creating}>
-          {creating ? "Hesap oluşturuluyor…" : "Devam Et"}
-        </ContinueButton>
+        {emailCheck ? <Box style={emailCodeStyles.panel}>
+            {/* Its own frosted card: the bar's fade alone let the form behind show through the taller panel. */}
+            <GlassFill kind="sheet" radius={24} />
+            <Label style={emailCodeStyles.title}>E-postanı doğrula</Label>
+            <Label style={emailCodeStyles.hint}>{`${emailCheck.email} adresine 6 haneli bir kod gönderdik. Gelen kutunu ve spam klasörünü kontrol et.`}</Label>
+            <GlassInput label="Doğrulama kodu" accessibilityLabel="E-posta doğrulama kodu" value={emailCode} onChangeText={value => { setEmailCode(value.replace(/\D/g, "").slice(0, 6)); setCreateError(null); }}
+              keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="one-time-code" maxLength={6} placeholder="••••••" returnKeyType="done" onSubmitEditing={() => void confirmEmailCode()} />
+            <Box style={emailCodeStyles.timerRow}>
+              <Label style={[emailCodeStyles.timer, !codeSecondsLeft && emailCodeStyles.expired, { flex: 1 }]} accessibilityLiveRegion="polite">
+                {codeSecondsLeft ? `Kod ${Math.floor(codeSecondsLeft / 60)}:${String(codeSecondsLeft % 60).padStart(2, "0")} içinde geçersiz olacak.` : "Kodun süresi doldu. Yeni kod iste."}
+              </Label>
+              {/* The code copied from the email goes into the field with one tap. */}
+              <Touch accessibilityLabel="Kodu yapıştır" onPress={() => void pastedCode().then(value => { if (value) { setEmailCode(value); setCreateError(null); } else setCreateError("Panoda 6 haneli bir kod yok. Koda e-postada dokunup kopyala."); })} style={emailCodeStyles.link}>
+                <Label style={emailCodeStyles.linkText}>Kodu yapıştır</Label>
+              </Touch>
+            </Box>
+            <ContinueButton onPress={() => void confirmEmailCode()} disabled={creating || !codeSecondsLeft || emailCode.length !== 6}>
+              {creating ? "Hesap oluşturuluyor…" : "Doğrula ve devam et"}
+            </ContinueButton>
+            <Box style={emailCodeStyles.links}>
+              <Touch accessibilityLabel="Kodu tekrar gönder" disabled={creating || resendSecondsLeft > 0} onPress={() => { setCreateError(null); void sendEmailCode().catch(cause => setCreateError(getApiErrorMessage(cause, "Kod gönderilemedi."))); }} style={emailCodeStyles.link}>
+                <Label style={[emailCodeStyles.linkText, resendSecondsLeft > 0 && emailCodeStyles.linkMuted]}>{resendSecondsLeft > 0 ? `Tekrar gönder (${resendSecondsLeft} sn)` : "Kodu tekrar gönder"}</Label>
+              </Touch>
+              <Touch accessibilityLabel="E-postayı değiştir" disabled={creating} onPress={() => { setEmailCheck(null); setEmailCode(""); setCreateError(null); }} style={emailCodeStyles.link}>
+                <Label style={emailCodeStyles.linkText}>E-postayı değiştir</Label>
+              </Touch>
+            </Box>
+          </Box>
+        : <ContinueButton onPress={() => void continueRegistration()} disabled={!canContinue || creating}>
+          {creating ? (store.onboarding.accountId ? "Hesap oluşturuluyor…" : "Kod gönderiliyor…") : "Devam Et"}
+        </ContinueButton>}
         </>}
       </StickyBar>
     </Box>;
 }
+
+const passwordRuleStyles = StyleSheet.create({
+  row: { flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 4, marginTop: 8 },
+  rule: { fontSize: 12, lineHeight: 17 },
+});
+const emailCodeStyles = StyleSheet.create({
+  panel: { gap: 10, padding: 16, borderRadius: 24, overflow: "hidden", backgroundColor: palette.glassSheet, borderWidth: 1, borderColor: palette.glassBorder },
+  title: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 16, lineHeight: 22 },
+  hint: { color: palette.muted, fontSize: 13, lineHeight: 18 },
+  timerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  timer: { color: palette.muted, fontSize: 12, lineHeight: 17 },
+  expired: { color: palette.error },
+  links: { flexDirection: "row", justifyContent: "space-between" },
+  link: { minHeight: 40, justifyContent: "center", paddingHorizontal: 4 },
+  linkText: { color: palette.accent, fontFamily: "Outfit-Medium", fontSize: 13 },
+  linkMuted: { color: palette.muted },
+});
 
 /* ========================================
    STEP 2

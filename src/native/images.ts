@@ -6,11 +6,16 @@ const covers = {
   music: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=900&h=600&fit=crop&auto=format",
   coffee: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=900&h=600&fit=crop&auto=format",
 } as const
-export function defaultEventCover(category: string): string {
+/** The stock cover that fits this activity, or null when none does (then only the generic fallback is left). */
+export function matchingCover(category: string): string | null {
   const name = category.toLocaleLowerCase("tr-TR")
   if (/kahve|coffee|gastronomi|yemek/.test(name)) return covers.coffee
   if (/müzik|konser|music|dans/.test(name)) return covers.music
   if (/sanat|foto|art|seramik/.test(name)) return covers.art
   if (/padel|tenis|tennis|spor|yoga|fitness/.test(name)) return covers.sport
-  return covers.outdoors
+  if (/koş|doğa|yürüy|hiking|trek|bisiklet|kamp|outdoor|seyahat|gezi/.test(name)) return covers.outdoors
+  return null
+}
+export function defaultEventCover(category: string): string {
+  return matchingCover(category) ?? covers.outdoors
 }
