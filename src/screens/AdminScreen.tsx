@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { showAlert } from "../components/AppDialog"
 import { RefreshControl, StyleSheet } from "react-native"
-import { getAdminStats, type AdminStats as AdminStatsData, decideApplication, decideInterest, decideReport, getAdminReports, getPendingInterests, type AdminReport, type PendingInterest, getApiErrorMessage, getApplicationDetail, getApplications, type ApplicationDecision, type ApplicationFilter, type ApplicationsPage, type MembershipApplication, type MembershipApplicationDetail } from "../api/client"
+import { getAdminStats, type AdminStats as AdminStatsData, deleteUserPermanently, lookupUserByEmail, type AdminUserLookup, decideApplication, decideInterest, decideReport, getAdminReports, getPendingInterests, type AdminReport, type PendingInterest, getApiErrorMessage, getApplicationDetail, getApplications, type ApplicationDecision, type ApplicationFilter, type ApplicationsPage, type MembershipApplication, type MembershipApplicationDetail } from "../api/client"
 import TopNavBar from "../components/TopNavBar"
 import AdminStats from "../components/AdminStats"
 import CountBadge from "../components/CountBadge"
@@ -198,6 +198,71 @@ function ReportsSection({ navigate, reload }: { navigate: NavigateFn; reload: nu
   </Box>
 }
 
+/**
+ * Admin only: find a member by email and delete them for good, with everything that belongs to them. The
+ * member's summary shows first so the admin sees who goes; the server refuses admins and the admin themself.
+ */
+function DeleteMemberSection() {
+  const [email, setEmail] = useState("")
+  const [found, setFound] = useState<AdminUserLookup | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const validEmail = /^\S+@\S+\.\S+$/.test(email.trim())
+  const find = async () => {
+    if (!validEmail || busy) return
+    setBusy(true); setError(null); setNotice(null); setFound(null)
+    try { setFound(await lookupUserByEmail(email)) }
+    catch (cause) { setError(getApiErrorMessage(cause, "Üye aranamadı.")) }
+    finally { setBusy(false) }
+  }
+  const remove = async (user: AdminUserLookup) => {
+    setBusy(true); setError(null)
+    try {
+      await deleteUserPermanently(user.id, user.email)
+      setFound(null); setEmail("")
+      setNotice(`${user.firstName} ${user.lastName} (${user.email}) ve tüm verileri kalıcı olarak silindi.`)
+    } catch (cause) { setError(getApiErrorMessage(cause, "Üye silinemedi.")) }
+    finally { setBusy(false) }
+  }
+  const confirm = (user: AdminUserLookup) => showAlert("Üye kalıcı olarak silinsin mi?",
+    `${user.firstName} ${user.lastName} (${user.email}) silinecek. Profili, mesajları, katılımları ve düzenlediği ${user.ownedEvents} etkinlik (diğer katılımcılar dahil) kaldırılır. Bu işlem geri alınamaz.`, [
+    { text: "Vazgeç", style: "cancel" },
+    { text: "Kalıcı olarak sil", style: "destructive", onPress: () => void remove(user) },
+  ])
+  return <Box style={{ gap: 10 }}>
+    <Label style={s.section}>Üyeyi kalıcı olarak sil</Label>
+    <Label style={s.muted}>Silmek istediğin üyenin e-posta adresini yaz. Önce kim olduğunu göreceksin; silme işlemi onaydan sonra yapılır ve geri alınamaz.</Label>
+    <Box style={s.search}>
+      <SearchIcon size={16} style={{ color: palette.muted }} />
+      <Field accessibilityLabel="Silinecek üyenin e-posta adresi" placeholder="uye@ornek.com" value={email} onChangeText={value => { setEmail(value); setFound(null); setError(null); setNotice(null) }} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" returnKeyType="search" onSubmitEditing={() => void find()} style={s.searchField} />
+    </Box>
+    <Touch accessibilityRole="button" disabled={!validEmail || busy} disabledOpacity={0.35} onPress={() => void find()} style={[s.action, s.neutral, { flex: 0 }]}>
+      <Label style={s.neutralText}>{busy && !found ? "Aranıyor…" : "Üyeyi bul"}</Label>
+    </Touch>
+    {error && <Box style={s.stateBox}><Label accessibilityRole="alert" style={s.error}>{error}</Label></Box>}
+    {notice && <Box style={s.notice} accessibilityLiveRegion="polite"><CheckIcon size={15} style={{ color: palette.success }} /><Label style={s.noticeText}>{notice}</Label></Box>}
+    {found && <Box style={s.card}>
+      <Box style={s.cardHead}>
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          <Label style={s.name} numberOfLines={1}>{`${found.firstName} ${found.lastName}`}</Label>
+          <Label style={s.muted} numberOfLines={1} selectable>{found.email}</Label>
+        </Box>
+        {found.status && <Label style={[s.badge, { color: (BADGE[found.status] ?? BADGE.security_review).color, backgroundColor: (BADGE[found.status] ?? BADGE.security_review).background }]}>{STATUS_TR[found.status] ?? found.status}</Label>}
+      </Box>
+      <DetailRow label="Telefon" value={found.phoneNumber || "—"} />
+      <DetailRow label="Şehir" value={found.city || "—"} />
+      <DetailRow label="Kayıt tarihi" value={appliedOn(found.createdAt)} />
+      <DetailRow label="Düzenlediği etkinlik" value={String(found.ownedEvents)} />
+      <DetailRow label="Katıldığı etkinlik" value={String(found.participations)} />
+      {found.role === "admin" ? <Label style={s.warning}>Bu bir yönetici hesabı; buradan silinemez.</Label>
+        : <Touch accessibilityLabel={`${found.firstName} ${found.lastName} kalıcı olarak sil`} disabled={busy} disabledOpacity={0.35} onPress={() => confirm(found)} style={[s.action, s.reject, { flex: 0 }]}>
+          <Label style={s.rejectText}>{busy ? "Siliniyor…" : "Kalıcı olarak sil"}</Label>
+        </Touch>}
+    </Box>}
+  </Box>
+}
+
 /** Admin only: search membership applications and approve, reject or review them in one tap. */
 export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
   const { data } = useStore()
@@ -213,7 +278,7 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   // Two tabs: the statistics overview (default) and the membership applications.
-  const [tab, setTab] = useState<"overview" | "applications">("overview")
+  const [tab, setTab] = useState<"overview" | "applications" | "delete">("overview")
   const [stats, setStats] = useState<AdminStatsData | null>(null)
   const [statsError, setStatsError] = useState<string | null>(null)
   const loadStats = async () => {
@@ -301,7 +366,7 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
     <TopNavBar navigate={navigate} fallback="settings" title="Yönetim" subtitle={page && !blocked ? `${page.counts.pending} onay bekliyor` : undefined} />
     {blocked ? <Box style={s.center}><Label style={s.title}>Bu sayfaya erişim yetkin yok</Label><Label style={s.muted}>Üyelik başvurularını yalnızca yöneticiler yönetebilir.</Label></Box> : <Scroll style={s.page} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={pulling} onRefresh={() => { void pullRefresh() }} tintColor={palette.accent} colors={[palette.accent]} progressBackgroundColor={palette.surface} progressViewOffset={84} />}>
       <Box style={s.tabs} accessibilityRole="tablist">
-        {([["overview", "Genel bakış"], ["applications", "Başvurular"]] as const).map(([id, label]) => <Touch walkthroughId={id === "overview" ? "admin-overview" : "admin-applications"} key={id} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === id }} onPress={() => setTab(id)} style={[s.tab, tab === id && s.tabOn]}>
+        {([["overview", "Genel bakış"], ["applications", "Başvurular"], ["delete", "Üye sil"]] as const).map(([id, label]) => <Touch walkthroughId={id === "overview" ? "admin-overview" : id === "applications" ? "admin-applications" : undefined} key={id} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: tab === id }} onPress={() => setTab(id)} style={[s.tab, tab === id && s.tabOn]}>
           <Box style={s.tabLabel}>
             <Label style={[s.chipText, tab === id && s.chipTextOn]}>{label}</Label>
             {id === "applications" && <CountBadge count={page?.counts.pending ?? 0} />}
@@ -312,7 +377,7 @@ export default function AdminScreen({ navigate }: { navigate: NavigateFn }) {
         {statsError && <Box style={s.stateBox}><Label style={s.error}>{statsError}</Label><Touch onPress={() => void loadStats()} style={s.retry}><Label style={s.retryText}>Tekrar dene</Label></Touch></Box>}
         {!stats && !statsError && <Box style={s.stateBox}><LoadingSpinner /></Box>}
         {stats && <AdminStats stats={stats} />}
-      </> : <>
+      </> : tab === "delete" ? <DeleteMemberSection /> : <>
       <ReportsSection navigate={navigate} reload={attempt + (pulling ? 1 : 0)} />
       <PendingInterests reload={attempt + (pulling ? 1 : 0)} />
       <Box style={s.search}>

@@ -341,6 +341,11 @@ export interface AdminReport { id: string; description: string; status: 'submitt
 export const getAdminReports = (status: 'open' | 'all') => request<{ items: AdminReport[]; counts: { open: number; all: number } }>(`/admin/reports?status=${status}`, { background: true })
 // One action closes the report and every other open report about the same member or event.
 export const decideReport = (id: string, action: 'dismiss' | 'deactivate') => request<{ closed: string[]; targetId: string; targetStatus?: string }>(`/admin/reports/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ action }) })
+/** Admin: a member found by email, before deleting them for good. */
+export interface AdminUserLookup { id: string; firstName: string; lastName: string; email: string; phoneNumber: string; city: string | null; status: string | null; role: 'member' | 'admin'; createdAt: string; ownedEvents: number; participations: number }
+export const lookupUserByEmail = (email: string) => request<AdminUserLookup>(`/admin/users/lookup?email=${encodeURIComponent(email.trim())}`, { background: true })
+// The email goes along again: the server deletes only when it still belongs to this id.
+export const deleteUserPermanently = (id: string, email: string) => request<{ deleted: true; id: string }>(`/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ email }) })
 export const getPendingInterests = () => request<PendingInterest[]>('/admin/interests/pending', { background: true })
 export const decideInterest = (id: string, decision: 'approved' | 'rejected') => request<{ id: string; status: string }>(`/admin/interests/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ decision }) })
 // The catalog is the same for everyone and changes rarely: fetched once per 6 hours per app session.
