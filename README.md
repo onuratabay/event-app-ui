@@ -8,9 +8,9 @@ Use Node.js 22. Run `npm install`, then `npx expo start`. Open the QR code with 
 
 The application uses Expo Go-compatible native modules for screen and API development. An installed native build is required to verify the custom `eventapp://` scheme and HTTPS Universal/App Links; Expo Go uses Expo development URLs. Personal event invitations open a restricted native guest screen. Store, domain and device requirements are described in [Guest event sharing](../vibe-us/docs/guest-sharing.md).
 
-## API connection during development
+## API connection
 
-Run the `vibe-us` backend on port 3000 with working MySQL credentials. In Expo Go on the same LAN, the app derives the backend host from Expo's development host, so changes to the computer's IP do not require code edits. Set `EXPO_PUBLIC_API_URL` to override this address for a remote API, a separate backend computer, or an Expo tunnel. Restart Expo after changing this environment variable. Published builds require an explicit API URL.
+The backend and its MySQL database run only on the ewent.app server (`93.89.238.230`). The app always connects to `https://ewent.app` (`src/api/config.ts`), in Expo Go and in published builds alike; there is no local backend, LAN fallback or environment override.
 
 ## Structure
 

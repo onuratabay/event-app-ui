@@ -1,11 +1,11 @@
 import { Platform } from "react-native"
 import Constants from "expo-constants"
-import { resolveApiUrl } from "./config"
+import { API_URL } from "./config"
 import { apiLoading } from "./loading"
 import { clearChatCache } from "../services/chat-cache"
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "./token-store"
 
-export const API_URL = resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, __DEV__ ? Constants.expoConfig?.hostUri : undefined, Platform.OS)
+export { API_URL }
 /** Photos come as signed server paths ("/photos/users/…?v=…&s=…"); images load them from the API host and cache them on disk. */
 export const photoUri = (uri: string) => uri.startsWith("/photos/") ? `${API_URL.replace(/\/+$/, "")}${uri}` : uri
 /** This build's version (app.json "version"); sent with every request so the server knows which app is calling. */
@@ -284,10 +284,6 @@ export async function getMapEvents(signal?: AbortSignal, filters: { dateFrom?: s
     if (page * 100 >= total || !result.items.length) break
   }
   return { items: [...events.values()], total, truncated: events.size < total }
-}
-
-export function hasRemoteApiConfigured() {
-  return Boolean(process.env.EXPO_PUBLIC_API_URL)
 }
 
 export interface ReferenceMember { id: string; name: string; phone: string }

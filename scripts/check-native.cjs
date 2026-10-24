@@ -233,11 +233,7 @@ async function tap(tree, label) {
   await act(async () => wheel.unmount())
   console.log(`PASS: ${process.env.TEST_PLATFORM || "ios"} common date/time panel, leap-day selection and cancellation.`)
 
-  const { resolveApiUrl } = require("../src/api/config.ts")
-  assert.equal(resolveApiUrl(undefined, "192.168.1.15:8081", "ios"), "http://192.168.1.15:3000")
-  assert.equal(resolveApiUrl(undefined, "192.168.1.25:8081", "android"), "http://192.168.1.25:3000")
-  assert.equal(resolveApiUrl("https://api.example.com/", "192.168.1.15:8081", "ios"), "https://api.example.com")
-  assert.equal(resolveApiUrl(undefined, undefined, "android"), "http://10.0.2.2:3000")
+  assert.equal(require("../src/api/config.ts").API_URL, "https://ewent.app", "The app talks only to the ewent.app server, never a local backend")
   const api = require("../src/api/client.ts")
   const server = require("./mock-server.cjs")();
   const { mapApiEvent, mapApiEventPreservingCover } = require("../src/native/Store.tsx")
@@ -406,7 +402,7 @@ async function tap(tree, label) {
   assert.equal(destination, "onboarding-2", "A new account continues with the next application step")
   assert.deepEqual(registrationRequest.body.acceptedDocuments, [{ type: "terms", version: 2 }, { type: "community", version: 1 }, { type: "privacy", version: 1 }, { type: "kvkk", version: 1 }], "The accepted server versions are sent; marketing stays opt-in")
   assert.equal(registrationRequest.body.marketingConsent, false)
-  assert.equal(registrationRequest.url, "http://192.168.1.15:3000/auth/register")
+  assert.equal(registrationRequest.url, "https://ewent.app/auth/register")
   assert.equal(registrationRequest.body.birthDate, "15/06/1995")
   assert.equal(registrationRequest.body.city, "İzmir", "The chosen city is sent with the registration")
   assert.equal(registrationRequest.body.phoneNumber, "+905321234567")
