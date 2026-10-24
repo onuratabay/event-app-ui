@@ -17,7 +17,7 @@ import React, {
   useState,
   type ReactNode,
 } from "react"
-import { Alert, Animated, Keyboard, Linking, Modal, Platform, Pressable, FlatList, ScrollView, StyleSheet, Text, TextInput, View, type GestureResponderEvent, type ImageStyle, type FlatListProps, type ScrollViewProps, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewProps, type ViewStyle } from "react-native"
+import { Alert, Animated, Keyboard, Linking, Modal, Platform, Pressable, FlatList, ScrollView, StyleSheet, Text, TextInput, View, type GestureResponderEvent, type ImageStyle, type FlatListProps, type ScrollViewProps, type StyleProp, type TextInputProps, type TextProps, type TextStyle, type ViewProps, type ViewStyle, type ScrollViewInstance, type TextInputInstance, type ViewInstance } from "react-native"
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import Svg, { type SvgProps } from "react-native-svg"
 
@@ -191,7 +191,7 @@ export function Box({
   enter,
   ...props
 }: LayoutProps) {
-  const targetRef = useRef<View | null>(null)
+  const targetRef = useRef<ViewInstance | null>(null)
   const inherited = useContext(Typography),
     { text, view } = split(style),
     a = useEntrance(enter)
@@ -270,7 +270,7 @@ export function Touch({
   disabledOpacity = 0.35,
   ...props
 }: TouchProps) {
-  const targetRef = useRef<View | null>(null)
+  const targetRef = useRef<ViewInstance | null>(null)
   const inherited = useContext(Typography),
     { text, view } = split(style)
   const { values: preferences } = usePreferences()
@@ -339,21 +339,21 @@ export function Touch({
   )
 }
 /** Inside a `Scroll` with `keyboardReveal`: called by a focused `Field` so it is scrolled above the keyboard. */
-const KeyboardRevealContext = createContext<((input: TextInput | null) => void) | null>(null)
+const KeyboardRevealContext = createContext<((input: TextInputInstance | null) => void) | null>(null)
 
 /**
  * Keyboard "next" between form fields, like Tab on a desktop: every editable field inside a Scroll
  * or Sheet registers here, and "next" moves to the field that follows it on screen (top to bottom,
  * then left to right); after the last one the keyboard closes.
  */
-interface FieldChain { register: (input: TextInput) => () => void; next: (from: TextInput | null) => void }
+interface FieldChain { register: (input: TextInputInstance) => () => void; next: (from: TextInputInstance | null) => void }
 const FieldChainContext = createContext<FieldChain | null>(null)
 function useFieldChain(): FieldChain {
-  const inputs = useRef(new Set<TextInput>())
+  const inputs = useRef(new Set<TextInputInstance>())
   return useMemo(() => ({
     register: input => { inputs.current.add(input); return () => { inputs.current.delete(input) } },
     next: from => {
-      const place = (input: TextInput) => new Promise<{ input: TextInput; x: number; y: number } | null>(resolve => {
+      const place = (input: TextInputInstance) => new Promise<{ input: TextInputInstance; x: number; y: number } | null>(resolve => {
         try { input.measureInWindow((x, y, width, height) => resolve(width || height ? { input, x, y } : null)) } catch { resolve(null) }
       })
       void Promise.all([...inputs.current].map(place)).then(rows => {
@@ -373,13 +373,13 @@ const ANCHOR_GAP = 16
  * bottom inset to the screens (so backgrounds reach the edge); sheets and nested scrolls already did.
  */
 const BottomInsetContext = createContext(true)
-const ScrollAnchorContext = createContext<((target: View | null) => void) | null>(null)
+const ScrollAnchorContext = createContext<((target: ViewInstance | null) => void) | null>(null)
 /** Scrolls the nearest Scroll so `target` is in view (used when a card or section opens). */
 export const useScrollAnchor = () => useContext(ScrollAnchorContext)
 /** Wraps content that appears on demand (an opened card, an extra field) and scrolls it into view. */
 export function Reveal({ children, style }: { children: ReactNode; style?: NativeStyleProp }) {
   const anchor = useScrollAnchor()
-  const ref = useRef<View | null>(null)
+  const ref = useRef<ViewInstance | null>(null)
   useEffect(() => { anchor?.(ref.current) }, [])
   return <View ref={ref} collapsable={false} style={split(style).view}>{children}</View>
 }
@@ -408,16 +408,16 @@ function useAndroidKeyboardSpace(enabled: boolean) {
   }, [enabled])
   return space
 }
-function useKeyboardReveal(enabled: boolean, scrollRef: React.RefObject<ScrollView | null>, insetBottom = 0) {
+function useKeyboardReveal(enabled: boolean, scrollRef: React.RefObject<ScrollViewInstance | null>, insetBottom = 0) {
   const offset = useRef(0)
   const keyboardTop = useRef<number | null>(null)
-  const pending = useRef<TextInput | null>(null)
+  const pending = useRef<TextInputInstance | null>(null)
   // The last field focused inside this scroll area.
-  const last = useRef<TextInput | null>(null)
+  const last = useRef<TextInputInstance | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const scrollAbove = (input: TextInput | null) => {
+  const scrollAbove = (input: TextInputInstance | null) => {
     const top = keyboardTop.current
-    const scroll = scrollRef.current as unknown as View | null
+    const scroll = scrollRef.current as unknown as ViewInstance | null
     if (!input || top === null) return
     const reveal = (visibleBottom: number) => input.measureInWindow((_x, y, _width, height) => {
       const overlap = y + height + KEYBOARD_GAP - visibleBottom
@@ -435,7 +435,7 @@ function useKeyboardReveal(enabled: boolean, scrollRef: React.RefObject<ScrollVi
       // The field may still be focused from before (Android back closes the keyboard without blurring it):
       // tapping it again opens the keyboard but sends no focus event, so this area's last field is used while
       // it still has focus (other scroll areas, e.g. pages below, leave it alone).
-      const focused = TextInput.State?.currentlyFocusedInput?.() as unknown as TextInput | null
+      const focused = TextInput.State?.currentlyFocusedInput?.() as unknown as TextInputInstance | null
       const input = pending.current ?? (last.current && focused === last.current ? last.current : null)
       pending.current = null
       clearTimeout(timer.current)
@@ -444,7 +444,7 @@ function useKeyboardReveal(enabled: boolean, scrollRef: React.RefObject<ScrollVi
     const hidden = Keyboard.addListener("keyboardDidHide", () => { keyboardTop.current = null })
     return () => { shown.remove(); hidden.remove(); clearTimeout(timer.current) }
   }, [enabled])
-  const reveal = (input: TextInput | null) => {
+  const reveal = (input: TextInputInstance | null) => {
     last.current = input
     // Keyboard already open (moving to the next field): scroll now; otherwise once it has opened.
     if (keyboardTop.current !== null) { clearTimeout(timer.current); timer.current = setTimeout(() => scrollAbove(input), 60) }
@@ -466,11 +466,11 @@ export function Scroll({
   style?: NativeStyleProp
   enter?: boolean
   glass?: boolean
-  ref?: React.Ref<ScrollView>
+  ref?: React.Ref<ScrollViewInstance>
   /** Keep the focused text field above the keyboard (on by default). */
   keyboardReveal?: boolean
 }) {
-  const scrollRef = useRef<ScrollView | null>(null)
+  const scrollRef = useRef<ScrollViewInstance | null>(null)
   const chain = useFieldChain()
   const inherited = useContext(Typography),
     { text, view } = split(style)
@@ -498,8 +498,8 @@ export function Scroll({
   const keyboardSpace = useAndroidKeyboardSpace(keyboardReveal && !horizontal)
   const baseBottom = clearsInset ? (Number(paddingBottom ?? padding ?? 0) || 0) + safeBottom : paddingBottom
   const contentBottom = keyboardSpace ? (Number(baseBottom ?? 0) || 0) + keyboardSpace : baseBottom
-  const anchor = (target: View | null, animated = true) => {
-    const scroll = scrollRef.current as unknown as View | null
+  const anchor = (target: ViewInstance | null, animated = true) => {
+    const scroll = scrollRef.current as unknown as ViewInstance | null
     if (!target || !scroll || horizontal) return
     // After the opened content has laid out: scroll the least needed to show it, top edge first.
     setTimeout(() => scroll.measureInWindow?.((_sx, sy, _sw, sh) => target.measureInWindow((_x, y, _w, h) => {
@@ -608,7 +608,7 @@ export function Picture({
 interface FieldProps extends Omit<TextInputProps, "style"> {
   style?: NativeStyleProp
   mode?: "email" | "tel" | "date" | "time" | string
-  ref?: React.Ref<TextInput>
+  ref?: React.Ref<TextInputInstance>
   glass?: boolean
 }
 export function Field({
@@ -623,7 +623,7 @@ export function Field({
   const inherited = useContext(Typography)
   const reveal = useContext(KeyboardRevealContext)
   const chain = useContext(FieldChainContext)
-  const inputRef = useRef<TextInput | null>(null)
+  const inputRef = useRef<TextInputInstance | null>(null)
   const [open, setOpen] = useState(false)
   const dateMode = mode === "date" || mode === "time"
   // Every editable field is a stop for "next". Single-line fields also move on with their return key,

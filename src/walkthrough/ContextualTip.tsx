@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react"
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native"
+import { Pressable, StyleSheet, Text, View, useWindowDimensions, type ViewInstance } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useScreenActive } from "../native/useScreenActive"
 import { palette } from "../theme/palette"
@@ -10,7 +10,7 @@ import { onWalkthroughScroll } from "./targets"
 /** Inline, dismissible help. Never intercepts the feature's action or opens another modal. */
 export default function ContextualTip({ id, when = true }: { id: TipId; when?: boolean }) {
   const guide = useWalkthrough()
-  const ref = useRef<View | null>(null), active = useScreenActive()
+  const ref = useRef<ViewInstance | null>(null), active = useScreenActive()
   const { height } = useWindowDimensions(), insets = useSafeAreaInsets()
   const seen = guide?.state.seenTips.includes(id)
   useEffect(() => {

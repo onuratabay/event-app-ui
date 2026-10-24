@@ -1,10 +1,10 @@
 import { useFocusEffect } from "expo-router"
 import { createContext, useCallback, useContext, useSyncExternalStore, type RefObject } from "react"
-import type { View } from "react-native"
+import type { ViewInstance } from "react-native"
 import type { Frame } from "./model"
 
-export const WalkthroughScrollContext = createContext<((target: View | null, animated?: boolean) => void) | null>(null)
-interface Target { node: RefObject<View | null>; reveal: ((node: View | null, animated?: boolean) => void) | null }
+export const WalkthroughScrollContext = createContext<((target: ViewInstance | null, animated?: boolean) => void) | null>(null)
+interface Target { node: RefObject<ViewInstance | null>; reveal: ((node: ViewInstance | null, animated?: boolean) => void) | null }
 const targets = new Map<string, Target>()
 const listeners = new Set<() => void>()
 const viewportListeners = new Set<() => void>()
@@ -13,7 +13,7 @@ export function onWalkthroughScroll(listener: () => void) { viewportListeners.ad
 let revision = 0
 const changed = () => { revision++; listeners.forEach(listener => listener()) }
 export const useTargetRevision = () => useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener) } }, () => revision, () => 0)
-export function TargetRegistration({ id, node }: { id: string; node: RefObject<View | null> }) {
+export function TargetRegistration({ id, node }: { id: string; node: RefObject<ViewInstance | null> }) {
   const reveal = useContext(WalkthroughScrollContext)
   // Only the focused screen registers: native-stack keeps previous screens mounted.
   useFocusEffect(useCallback(() => {

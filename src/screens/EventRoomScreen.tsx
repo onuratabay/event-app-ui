@@ -8,7 +8,7 @@ import { useScreenActive } from '../native/useScreenActive';
 import { onSocket, retainEvent, socketAction, socketConnected } from '../services/socket';
 import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions } from "react-native";
+import { ScrollView, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions, type ViewInstance } from "react-native";
 import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
@@ -60,8 +60,8 @@ export default function EventRoomScreen({
 }: Props) {
   const navInset = useBottomNavInset();
   // Keeps the composer above the keyboard even where the root does not shrink the screen for it.
-  const screenRef = useRef<View>(null);
-  const keyboardOverlap = useKeyboardOverlap(screenRef);
+  const screenRef = useRef<ViewInstance>(null);
+  const { overlap: keyboardOverlap, onLayout: onScreenLayout } = useKeyboardOverlap(screenRef);
   const {
     data: store,
     setData: setStore
@@ -340,7 +340,7 @@ export default function EventRoomScreen({
   const roster = [...people.values()].sort((a, b) => a.name.localeCompare(b.name, "tr"));
   const seenBy = lastMine ? Object.entries(reads).filter(([userId, at]) => userId !== ME.id && Date.parse(at) >= Date.parse(lastMine.createdAt || "")).map(([userId]) => firstName(userId)) : [];
   const subtitle = `${muted ? "🔕 " : ""}${event.location ? `${event.time} · ${event.location}` : event.time}`;
-  return <View ref={screenRef} style={StyleSheet.absoluteFill}><Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
+  return <View ref={screenRef} onLayout={onScreenLayout} style={StyleSheet.absoluteFill}><Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} walkthroughId="room-info" title={roomTitle(event)} subtitle={subtitle}
         onTitlePress={() => setInfoOpen(true)} titleHint="Oda bilgisini ve katılımcıları gösterir"
@@ -452,7 +452,7 @@ export default function EventRoomScreen({
             windowSize={11}
             onEndReached={() => { void loadOlder(); }}
             onEndReachedThreshold={0.3}
-            ListFooterComponent={cursor ? <Touch disabled={loading} onPress={() => void loadOlder()} style={s.older}><Label style={s.olderLabel}>{loading ? "Yükleniyor…" : "Önceki mesajları göster"}</Label></Touch> : null}
+            ListFooterComponent={cursor ? <Touch disabled={loading} onPress={() => void loadOlder()} style={s.older}><Label style={s.olderLabel}>{loading ? "Yükleniyor…" : "Önceki mesajları göster"}</Label></Touch> : undefined}
             renderItem={({ item: msg, index }) => {
               // In the flipped list the older neighbour is the next item and the newer one the previous.
               const previous = newestFirst[index + 1];

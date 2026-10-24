@@ -3,7 +3,7 @@ import { showAlert } from "../components/AppDialog"
 import { useWalkthroughAutostartBlocker, useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import ActivityIndicator from "../components/LoadingSpinner";
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Platform, StyleSheet, View } from "react-native"
+import { Platform, StyleSheet, View, type ViewInstance } from "react-native"
 import * as Location from "expo-location"
 import MapView, { Circle, Marker } from "react-native-maps"
 import { MAP_PROVIDER } from "../map/provider"
@@ -45,7 +45,7 @@ function Chip({ label, selected, onPress, disabled, accessibilityLabel }: { labe
 function Accordion({ title, summary, open, onToggle, invalid, children }: { title: string; summary: string; open: boolean; onToggle: () => void; invalid?: boolean; children: ReactNode }) {
   // An opened section scrolls into view, header included.
   const anchor = useScrollAnchor()
-  const ref = useRef<View | null>(null)
+  const ref = useRef<ViewInstance | null>(null)
   useEffect(() => { if (open) anchor?.(ref.current) }, [open])
   return <View ref={ref} collapsable={false}><GlassCard style={s.section}>
     <Touch walkthroughId={title === "Tarihler" ? "availability-dates" : undefined} accessibilityLabel={`${title}: ${summary}`} accessibilityState={{ expanded: open }} onPress={onToggle} style={s.sectionHeader} haptic={false}>

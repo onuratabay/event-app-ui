@@ -2,7 +2,7 @@ import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
 import { CloseIcon } from "../components/Icons";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, TextInput } from "react-native";
+import { ActivityIndicator, type TextInputInstance } from "react-native";
 import { AtmoBackground } from "../components/GlassUI";
 import { ClockIcon, SearchIcon } from "../components/Icons";
 import TopNavBar from "../components/TopNavBar";
@@ -105,7 +105,7 @@ export default function SearchScreen({
   const EVENTS = !filterActive ? store.events : loadingDates ? [] : results!.events;
   const searching = Boolean(query.trim()) || filterActive;
   // No autofocus: the keyboard opens only when the user taps the search box.
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const filtered = !searching ? [] : !query.trim() ? EVENTS : EVENTS.filter(e => e.title.toLowerCase().includes(query.toLowerCase()) || e.category.toLowerCase().includes(query.toLowerCase()) || e.location.toLowerCase().includes(query.toLowerCase()));
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />

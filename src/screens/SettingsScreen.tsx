@@ -13,7 +13,7 @@ import { changePassword, deleteAccount, getApiErrorMessage, getLegalConsents, ge
 import { LEGAL_TITLES, useOpenLegal } from "../legal/links"
 import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground } from "../components/GlassUI"
-import { BRAND_NAME, BRAND_URL } from "../components/Brand"
+import { BRAND_NAME, BRAND_SITE, BRAND_URL } from "../components/Brand"
 import { palette } from "../theme/palette"
 import { ui } from "../theme/styles"
 import type { NavigateFn } from "../types"
@@ -209,7 +209,7 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
       <Section title="Yardım ve hakkında">
         <Row title="Nasıl çalışır?" detail="Keşfet, katıl ve birlikte plan yap" onPress={() => showAlert("İlk buluşmana doğru", "Keşfet veya Harita’dan bir etkinlik seç. Ayrıntılardan katılım durumunu takip et. Katıldığın etkinliğin odası açıldığında katılımcılarla sohbet edebilirsin. Kendi planını paylaşmak için Oluştur’u kullan.")} />
         <Row title="Bir sorun yaşıyorum" detail="Bağlantı, izin ve hesap sorunları için yardım" onPress={() => showAlert("Yardım", "Bağlantı sorunu varsa internet erişimini kontrol edip yeniden dene. Konum veya fotoğraf erişimi için Gizlilik ve izinler bölümünü kullan. Şifreni unuttuysan giriş ekranındaki Şifremi unuttum seçeneğinden ilerle.")} />
-        <Row title="Web sitesi" detail={BRAND_NAME} onPress={() => void openExternal(BRAND_URL)} />
+        <Row title="Web sitesi" detail={BRAND_SITE} onPress={() => void openExternal(BRAND_URL)} />
         <Row title="Uygulama sürümü" detail={`${BRAND_NAME} · ${Constants.expoConfig?.version || "1.0.0"}`} />
       </Section>
 

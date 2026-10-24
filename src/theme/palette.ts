@@ -1,4 +1,4 @@
-/** ewent: midnight surfaces, restrained blue/violet accents, clear semantic states. */
+/** Ewent: midnight surfaces, restrained blue/violet accents, clear semantic states. */
 export const palette = {
   background: "#080b18",
   surface: "#11162a",

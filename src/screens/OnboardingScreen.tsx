@@ -13,7 +13,7 @@ import { CheckIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, InstagramIcon, ScrollI
 import { ReferencePicker } from "../components/ReferencePicker";
 import { registerForPush, type PushState } from "../services/push";
 import { updateStoreUser, useStore } from "../native/Store";
-import { RefreshControl, StyleSheet, View } from "react-native";
+import { RefreshControl, StyleSheet, View, type ViewInstance } from "react-native";
 import { clearSessionCache, logout, getApiErrorMessage, getCurrentUser, getLegalDocuments, login, redeemAccessCode, register, sendRegisterEmailCode, verifyRegisterEmail, type ApiUser, type LegalDocumentSummary } from "../api/client";
 import { useOpenLegal } from "../legal/links";
 import { gatedScreen } from "../native/access";
@@ -197,7 +197,7 @@ function ReferenceCodeField({ done, onResult }: { done: boolean; onResult: (resu
  */
 function AgreementsCard({ open, onToggle, status, done, children }: { open: boolean; onToggle: () => void; status: string; done: boolean; children: ReactNode }) {
   const anchor = useScrollAnchor();
-  const ref = useRef<View | null>(null);
+  const ref = useRef<ViewInstance | null>(null);
   useEffect(() => { if (open) anchor?.(ref.current); }, [open]);
   return <View ref={ref} collapsable={false}>
     <GlassCard style={[[ui.overflowHidden]]}>

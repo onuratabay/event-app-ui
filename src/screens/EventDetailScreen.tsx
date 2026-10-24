@@ -10,18 +10,20 @@ import { participate, getApiErrorMessage, getEvent, getEventCandidateCount, canc
 import { GeneratedCode } from "../components/GeneratedCode";
 import { formatScore } from "../events/score";
 import { eventPhase, isLivePhase, isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
-import { useEffect, useState, type ReactNode } from "react";
-import { StyleSheet } from "react-native";
+import { useEffect, useState, type ComponentType, type ReactElement, type ReactNode } from "react";
+import { StyleSheet, type ViewProps } from "react-native";
 import { AtmoBackground, Avatar, GlassCard } from "../components/GlassUI";
 import { CheckIcon, ClockIcon, LocationIcon, ShareIcon, StarIcon } from "../components/Icons";
 import { openDirections } from "../native/directions";
 import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useStore } from "../native/Store";
 import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
-import MaskedView from "@react-native-masked-view/masked-view";
+import MaskedViewBase from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
+// The package's types still extend NativeMethods, which React Native 0.87+ no longer exports.
+const MaskedView = MaskedViewBase as unknown as ComponentType<ViewProps & { maskElement: ReactElement }>;
 import InviteCandidatesSheet from "../availability/InviteCandidatesSheet";
 import { remainingLabel, useRemaining } from "../availability/countdown";
 interface Props {

@@ -1,7 +1,7 @@
 import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { showAlert } from "../components/AppDialog"
 import { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, type ViewInstance } from "react-native";
 import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { deleteDirectMessage, editDirectMessage, reportUser, getApiErrorMessage, getDirectMessages, markDirectRead, openDirectConversation, sendDirectMessage, type DirectConversation, type DirectMessage } from "../api/client";
 import { useBottomNavInset } from "../components/BottomNav";
@@ -38,8 +38,8 @@ function dayLabel(iso: string) {
 export default function DirectChatScreen({ navigate, userId }: { navigate: NavigateFn; userId: string }) {
   const navInset = useBottomNavInset();
   // Keeps the composer above the keyboard even where the root does not shrink the screen for it.
-  const screenRef = useRef<View>(null);
-  const keyboardOverlap = useKeyboardOverlap(screenRef);
+  const screenRef = useRef<ViewInstance>(null);
+  const { overlap: keyboardOverlap, onLayout: onScreenLayout } = useKeyboardOverlap(screenRef);
   const { data: store } = useStore();
   const meId = store.user.id;
   const screenActive = useScreenActive();
@@ -228,7 +228,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
   };
   const seen = !!lastMine && !!otherReadAt && instant(otherReadAt) >= instant(lastMine.createdAt);
 
-  return <View ref={screenRef} style={s.screen}>
+  return <View ref={screenRef} onLayout={onScreenLayout} style={s.screen}>
     <AtmoBackground />
     {/* The person's photo beside the name; the server sends it only to members with a photo of their own
         (otherwise the initial shows). */}
@@ -258,7 +258,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
           // Reaching the top (the end of a flipped list) loads earlier messages.
           onEndReached={() => { void loadOlder(); }}
           onEndReachedThreshold={0.3}
-          ListFooterComponent={cursor ? <Touch disabled={loadingOlder} onPress={() => void loadOlder()} style={s.older}><Label style={s.olderLabel}>{loadingOlder ? "Yükleniyor…" : "Önceki mesajları göster"}</Label></Touch> : null}
+          ListFooterComponent={cursor ? <Touch disabled={loadingOlder} onPress={() => void loadOlder()} style={s.older}><Label style={s.olderLabel}>{loadingOlder ? "Yükleniyor…" : "Önceki mesajları göster"}</Label></Touch> : undefined}
           renderItem={({ item: line, index }) => {
             // In the flipped list the older neighbour is the next item and the newer one the previous.
             const previous = newestFirst[index + 1];

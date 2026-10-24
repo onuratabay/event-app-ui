@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { AccessibilityInfo, Animated, BackHandler, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native"
+import { AccessibilityInfo, Animated, BackHandler, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions, type ViewInstance } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Svg, { Path, Rect } from "react-native-svg"
 import { SharedBlur } from "../native/SharedBlur"
@@ -29,7 +29,7 @@ function arrowPath(from: { x: number; y: number }, to: { x: number; y: number },
 export default function WalkthroughOverlay({ presentation, onDone, onClose }: { presentation: Presentation; onDone: () => void; onClose: () => void }) {
   // Drawn in the app's own window (not a Modal), so target positions and the sheet share one origin.
   const insets = useSafeAreaInsets()
-  const root = useRef<View | null>(null)
+  const root = useRef<ViewInstance | null>(null)
   const [box, setBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const measureRoot = () => root.current?.measureInWindow((x, y, width, height) => setBox({ x, y, width, height }))
   useEffect(() => { const sub = BackHandler.addEventListener("hardwareBackPress", () => { onClose(); return true }); return () => sub.remove() }, [onClose])

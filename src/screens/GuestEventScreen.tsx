@@ -8,6 +8,7 @@ import { parseGuestCode } from '../guest/links'
 import { Box, Field, Label, Picture, Scroll, Touch } from '../native/UI'
 import { palette } from '../theme/palette'
 import { AtmoBackground } from '../components/GlassUI'
+import { BRAND_NAME } from '../components/Brand'
 import { CategoryIcon, CheckIcon } from '../components/Icons'
 import LoadingSpinner from '../components/LoadingSpinner'
 
@@ -93,7 +94,7 @@ export default function GuestEventScreen() {
   const ended = !event || ['cancelled', 'closed'].includes(event.status)
   return <Box style={s.screen}>
     <AtmoBackground />
-    <Box style={s.header}><Label style={s.brand}>ewent.app</Label><Label style={s.badge}>Misafir</Label></Box>
+    <Box style={s.header}><Label style={s.brand}>{BRAND_NAME}</Label><Label style={s.badge}>Misafir</Label></Box>
     {loading ? <Box style={s.center}><LoadingSpinner size="large" /></Box> : <Scroll style={s.scroll}>
       {event && <>
         {image ? <Picture uri={image} accessibilityLabel={event.title} style={s.cover} /> : <Box style={s.cover}><CategoryIcon name={event.category} size={48} style={{ color: palette.accent }} /></Box>}

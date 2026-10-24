@@ -1,10 +1,10 @@
-# ewent.app
+# Ewent.app
 
-Expo SDK 57, React Native 0.86 and TypeScript application for iOS and Android.
+Expo SDK 58, React Native 0.88 and TypeScript application for iOS and Android.
 
 ## Run
 
-Use Node.js 22. Run `npm install`, then `npx expo start`. Open the QR code with Expo Go for SDK 57. The phone and computer should share a network. `npm run ios` and `npm run android` open an available simulator/emulator.
+Use Node.js 22. Run `npm install`, then `npx expo start`. Open the QR code with Expo Go for SDK 58. The phone and computer should share a network. `npm run ios` and `npm run android` open an available simulator/emulator.
 
 The application uses Expo Go-compatible native modules for screen and API development. An installed native build is required to verify the custom `eventapp://` scheme and HTTPS Universal/App Links; Expo Go uses Expo development URLs. Personal event invitations open a restricted native guest screen. Store, domain and device requirements are described in [Guest event sharing](../vibe-us/docs/guest-sharing.md).
 
@@ -21,6 +21,10 @@ The backend and its MySQL database run only on the ewent.app server (`93.89.238.
 - `assets/fonts/`: bundled Outfit and Fraunces fonts with OFL licenses.
 
 `npm install` uses the committed dependency versions. `.npmrc` disables automatic peer installation because optional desktop/browser peers pulled in by Router are unnecessary for the two mobile targets. Required mobile modules are declared explicitly and validated against Expo's bundled compatibility map.
+
+## Releases
+
+The app version (`app.json` → `expo.version`, shown in Settings and compared by the forced-update check) follows the backend's rules, from the Conventional Commits since the last `v*` tag: a feature (`feat`) bumps the middle number (1.0.4 → 1.1.0), anything else the last one (1.0.0 → 1.0.1). The first number moves only by hand: set `app.json`'s version to e.g. `2.0.0` for a big release. Before a store build run `npm run release` (writes the version, commits `chore(release): v<version>` and tags it), then `git push --follow-tags` and `eas build`. EAS still increments the build numbers itself.
 
 ## Validation
 
@@ -103,9 +107,9 @@ Ortam değişkenleri, API sınırları, migration'lar, `/.well-known` doğrulama
 
 ## Brand
 
-The display name is `ewent.app`; the website is https://ewent.app. Supplied original artwork is stored in `assets/brand/`. The transparent wordmark appears above the Welcome headline at 150 × 50 and centered in the Discover action row at 104 × 35. Discover actions run left to right: search, sorting/filters, wordmark, event calendar, notifications. Its blur fades below the action row without a divider. Splash retains its original orbit animation. The supplied square icon is used only as the installed app icon. Navigation and action buttons retain their functional icons. Existing application identifiers and `eventapp://` links remain compatible. HTTPS event invitation configuration and deployment requirements are documented in [Guest event sharing](../vibe-us/docs/guest-sharing.md). Native app icon changes require a new application build; Expo Go retains its own launcher icon.
+The display name is `Ewent.app` (always capitalised in the UI); the website is https://ewent.app. Supplied original artwork is stored in `assets/brand/`. The transparent wordmark appears above the Welcome headline at 150 × 50 and centered in the Discover action row at 104 × 35. Discover actions run left to right: search, sorting/filters, wordmark, event calendar, notifications. Its blur fades below the action row without a divider. Splash retains its original orbit animation. The supplied square icon is used only as the installed app icon. Navigation and action buttons retain their functional icons. Existing application identifiers and `eventapp://` links remain compatible. HTTPS event invitation configuration and deployment requirements are documented in [Guest event sharing](../vibe-us/docs/guest-sharing.md). Native app icon changes require a new application build; Expo Go retains its own launcher icon.
 
-### ewent görsel tema
+### Ewent görsel tema
 
 Tüm native ekranlar gece laciverti zemin ve logoya uyumlu mavi/mor vurgu paletini kullanır (`src/theme/palette.ts`). Ana butonlar beyaz yazılı koyu mavi/mor geçişlidir; seçili filtreler hafif renklendirilmiş yüzeylerdir. Kartlar sakin yüzeyler, ince kenarlar ve ortak çizgi ikonlarla düzenlenmiştir. Durum/hata renkleri anlamlarını korur. Splash düzeni ve akış üst çubuğunun ikon sırası korunmuştur. Özel topluluk hissi görseldir; yeni gizlilik veya üyelik kısıtlaması eklenmemiştir.
 

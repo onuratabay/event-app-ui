@@ -1,4 +1,4 @@
-# ewent.app brand assets
+# Ewent.app brand assets
 
 Original supplied wordmark and app icon are preserved. `ewent-wordmark-transparent.png` is the transparent cutout used in Welcome without clipping or a background rectangle. Generated with the built-in Imagegen tool.
 

@@ -1,6 +1,6 @@
 # Event App
 
-Expo SDK 57 + React Native + TypeScript application for iOS and Android.
+Expo SDK 58 + React Native + TypeScript application for iOS and Android.
 
 - `app/`: Expo Router routes, native stack and safe-area/keyboard setup.
 - `src/screens/`: Existing application screens. Preserve their Turkish copy and midnight navy visual design with restrained blue/violet accents from `src/theme/palette.ts`. Screens sit on the animated `AtmoBackground`; cards and sheets are frosted glass (`palette.glass*` background plus `GlassFill` or `GlassCard`), not opaque `palette.surface`.

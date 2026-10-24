@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { showAlert } from "./AppDialog"
-import { Image, Modal, Platform, Share, StatusBar, StyleSheet, View } from 'react-native'
+import { Image, Modal, Platform, Share, StatusBar, StyleSheet, View, type ViewInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { captureRef } from 'react-native-view-shot'
@@ -9,6 +9,7 @@ import { createEventShare, getApiErrorMessage, revokeEventShare, type EventShare
 import { copyEvent } from '../native/media'
 import { Box, Label, Picture, Scroll, Touch } from '../native/UI'
 import { CheckIcon, ClockIcon, CloseIcon, LocationIcon, ShareIcon } from './Icons'
+import { BRAND_SITE } from './Brand'
 import { inviteExpiry, shareMessage, shareTo, ShareTargetGrid, type ShareTargetId } from './ShareTargets'
 import { remainingLabel, useRemaining } from '../availability/countdown'
 import { participantCount } from '../native/Store'
@@ -32,7 +33,7 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const pending = useRef(false)
-  const card = useRef<View>(null)
+  const card = useRef<ViewInstance>(null)
   const remaining = useRemaining(link?.expiresAt)
   // The modal is its own window: SafeAreaView inside it got no insets on Android, so the header (and ✕)
   // slid under the status bar. The app's insets are applied directly, at least the status bar height.
@@ -105,7 +106,7 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
             {event.location ? <View style={s.metaRow}><LocationIcon size={14} style={{ color: palette.accent }} /><Label style={s.metaText} numberOfLines={1}>{event.location}</Label></View> : null}
             <View style={s.cardFooter}>
               <Label style={s.count}>{`${participantCount(event.currentParticipants, event.maxParticipants)} kişi`}</Label>
-              <Label style={s.brand}>ewent.app</Label>
+              <Label style={s.brand}>{BRAND_SITE}</Label>
             </View>
             <Label style={s.invite}>{link ? `Davetle katıl · ${inviteExpiry(link.expiresAt)} tarihine kadar geçerli` : 'Davetle katıl · 24 saat geçerli'}</Label>
           </View>

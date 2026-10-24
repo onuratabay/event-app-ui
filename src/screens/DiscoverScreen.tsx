@@ -360,7 +360,7 @@ export default function DiscoverScreen({
           })} onShare={() => setShareEvent(event)} /></Box>}
           ListEmptyComponent={!store.feedLoaded ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 48 }} /> : <DiscoverEmptyState interests={store.user.interests} filterLabel={sortBy === "mine" ? "Senin etkinliklerin" : activeFilter !== "Sana Özel" && EVENTS.some(isOpenForFeed) ? activeFilter : undefined}
             onClearFilter={() => { setActiveFilter("Sana Özel"); setSortBy("recommended"); }} onCreate={activity => navigate("create-event", activity ? { activity } : undefined)} />}
-          ListFooterComponent={loadingMore ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 20 }} /> : null}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={palette.accent} style={{ paddingVertical: 20 }} /> : undefined}
           // The app-wide event loader (ApiLoadingOverlay) covers the refresh, so the native spinner is hidden:
           // transparent on iOS, and on Android parked above the screen so its circle never slides in.
           refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={() => { void pullToRefresh(); }} tintColor="transparent" colors={["transparent"]} progressBackgroundColor="transparent" progressViewOffset={Platform.OS === "android" ? -200 : 112} />}

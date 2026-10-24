@@ -1,6 +1,6 @@
 import { useWalkthroughBlocker } from "../walkthrough/activity"
 import { useEffect, useRef, useState } from "react"
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { palette } from "../theme/palette"
 import { GlassFill } from "./GlassFill"
@@ -13,7 +13,7 @@ const months = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz"
 // so it never reaches an end.
 const COPIES = 5
 function Wheel({ values, labels, value, onChange, label, cyclic = false }: { values: number[]; labels?: string[]; value: number; onChange: (value: number) => void; label: string; cyclic?: boolean }) {
-  const ref = useRef<ScrollView>(null)
+  const ref = useRef<ScrollViewInstance>(null)
   const count = values.length
   const base = cyclic ? Math.floor(COPIES / 2) * count : 0
   const rows = cyclic ? Array.from({ length: COPIES * count }, (_, i) => values[i % count]) : values

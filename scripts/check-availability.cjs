@@ -324,7 +324,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   }
   global.__testWindowWidth = 360
   const narrow = await mount("Discover")
-  assert(narrow.root.findAll(node => node.props.accessibilityLabel === "ewent.app" && node.props.style?.width === 72).length, "The wordmark shrinks to keep three actions per side on narrow phones")
+  assert(narrow.root.findAll(node => node.props.accessibilityLabel === "Ewent.app" && node.props.style?.width === 72).length, "The wordmark shrinks to keep three actions per side on narrow phones")
   await act(async () => narrow.unmount())
   global.__testWindowWidth = undefined
 }

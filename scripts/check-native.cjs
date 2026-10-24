@@ -233,7 +233,38 @@ async function tap(tree, label) {
   await act(async () => wheel.unmount())
   console.log(`PASS: ${process.env.TEST_PLATFORM || "ios"} common date/time panel, leap-day selection and cancellation.`)
 
+  // Chat composer keyboard space. iOS's root makes room on keyboardWillShow, before keyboardDidShow; Android's
+  // root shrinks on keyboardDidShow itself, so measuring then counted the keyboard twice and lifted the composer
+  // to the top of the room until the next keyboard event (typing).
+  {
+    const { useKeyboardOverlap } = require("../src/native/useKeyboardOverlap.ts")
+    const android = (process.env.TEST_PLATFORM || "ios") === "android"
+    let frame = { y: 0, height: 800 }, overlap, probe
+    function Probe() {
+      const ref = React.useRef(null)
+      const keyboard = useKeyboardOverlap(ref)
+      overlap = keyboard.overlap
+      return React.createElement("View", { ref, onLayout: keyboard.onLayout })
+    }
+    await act(async () => { probe = create(React.createElement(Probe), { createNodeMock: () => ({ measureInWindow: done => done(0, frame.y, 390, frame.height) }) }) })
+    const layout = () => act(async () => probe.root.findByType("View").props.onLayout())
+    if (!android) frame = { y: 0, height: 500 }
+    await act(async () => global.__testKeyboardListeners.keyboardDidShow({ endCoordinates: { screenY: 500, height: 300 } }))
+    assert.equal(overlap, 0, "The keyboard is not counted before the root has made room for it")
+    frame = { y: 0, height: 500 }
+    await layout()
+    assert.equal(overlap, 0, "Once the root has shrunk the screen, the composer gets no extra space")
+    frame = { y: 0, height: 540 }
+    await layout()
+    assert.equal(overlap, 40, "Whatever the root leaves under the keyboard is added below the composer")
+    await act(async () => global.__testKeyboardListeners.keyboardDidHide())
+    assert.equal(overlap, 0)
+    await act(async () => probe.unmount())
+    console.log(`PASS: ${process.env.TEST_PLATFORM || "ios"} chat composer keyboard space is measured after the root makes room.`)
+  }
+
   assert.equal(require("../src/api/config.ts").API_URL, "https://ewent.app", "The app talks only to the ewent.app server, never a local backend")
+  require("./check-release-version.cjs")()
   const api = require("../src/api/client.ts")
   const server = require("./mock-server.cjs")();
   const { mapApiEvent, mapApiEventPreservingCover } = require("../src/native/Store.tsx")

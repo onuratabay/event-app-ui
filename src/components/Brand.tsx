@@ -1,6 +1,8 @@
 import { Image } from "expo-image";
 
-export const BRAND_NAME = "ewent.app";
+export const BRAND_NAME = "Ewent.app";
+/** The website as people read it (always capitalised); links use BRAND_URL. */
+export const BRAND_SITE = "Ewent.app";
 export const BRAND_URL = "https://ewent.app";
 
 export function BrandWordmark({ width = 150 }: { width?: number }) {
