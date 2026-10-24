@@ -74,12 +74,12 @@ export const GUIDES: Guide[] = [
   { id: "profile", screen: "profile", title: "Profilin ve güven", summary: "Kendini anlat, bağlantılarını gör", section: "Hesabın", steps: [
     step("profile-header", "Profilin seni anlatsın", "Fotoğrafına veya adına dokunarak güncelle. Şehir ve hakkında bilgilerini de profilinden düzenleyebilirsin."),
     step("profile-connections", "Birlikte birikenler", "Sayaçlara dokunarak bağlantılarını, katıldığın ve düzenlediğin etkinlikleri aç."),
-    step("profile-score", "Güven birlikte oluşur", "Event Skoru, birlikte etkinliğe katıldığın kişilerin değerlendirmelerinden oluşur."),
+    step("profile-score", "Güven birlikte oluşur", "Etkinlik puanı, düzenlediğin etkinliklerin değerlendirmesidir. Diğer puanlar, katılımcıların sana verdiği değerlendirmeleri gösterir."),
   ] },
   { id: "member-profile", screen: "profile", title: "Topluluk profilleri", summary: "Tanış, bağlantı kur ve güvenle paylaş", section: "Hesabın", context: "member", steps: [
     step("profile-header", "Biraz daha yakından tanı", "Üyenin paylaştığı bilgileri ve ilgi alanlarını profilinde keşfet."),
     step("profile-relation", "Bağlantı kur", "Birlikte bir etkinliğe katıldığın üyeye bağlantı isteği gönderebilirsin. Bağlantı olduğunuzda bire bir mesajlaşma da açılır."),
-    step("profile-score", "Birlikte yaşanan deneyimler", "Skor, diğer katılımcıların etkinlik sonrası değerlendirmelerini gösterir."),
+    step("profile-score", "Birlikte yaşanan deneyimler", "Etkinlik puanı düzenlediği buluşmalara verilen puanları, diğer değerlendirmeler ise katılımcıların bu üyeye verdiği puanları gösterir."),
   ] },
   { id: "settings", screen: "settings", title: "Ayarlar ve gizlilik", summary: "Bildirimler, izinler ve uygulama rehberi", section: "Hesabın", steps: [
     step("settings-notifications", "Hangi haberleri alacağını seç", "Davet, mesaj ve hatırlatma bildirimlerini ayrı ayrı yönetebilirsin."),
@@ -93,7 +93,7 @@ export const GUIDES: Guide[] = [
 ]
 export const TIPS = {
   participation: { title: "Katılımın kaydedildi", body: "Minimum katılımcıya ulaşıldığında etkinlik odası açılır. Buluşmada girişini organizatör onaylar; vardığında sohbete haber verebilirsin." },
-  references: { title: "Bir referans, bir tanışıklık", body: "Referans isteğin seçtiğin üyeye gider. Yanıtını burada takip edebilirsin; üyelik için yönetici incelemesi de gerekir." },
+  references: { title: "Bir referans, bir tanışıklık", body: "Referans isteğin seçtiğin üyeye gider. Yanıtını ve başvurunun güncel durumunu buradan takip edebilirsin." },
   invitations: { title: "Davet sana özel", body: "Katılmadan önce tarih ve konumu kontrol et. Süreli bir davetse son yanıt zamanı davetin yanında görünür." },
   privacy: { title: "Kimler görebilsin?", body: "Sadece davetliler seçeneği etkinliği davet ettiğin kişilerle sınırlar. Yayınlamadan önce davetli seçmen gerekir." },
   checkin: { title: "Buluşmada giriş onayı", body: "Etkinlik başladığında katılımcı girişlerini oda bilgisinden organizatör onaylar. Vardığında sohbete “Geldim” yazabilirsin." },

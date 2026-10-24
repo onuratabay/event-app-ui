@@ -109,7 +109,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   const pressText = async (label, index = 0) => { const node = pressables().filter(item => text(item).includes(label)).at(index); assert(node, `Missing button: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })) }
   let content = text(screen.toJSON())
   assert(content.includes("Etkinlik Takvimim") && !content.includes("Müsait olduğun zamanları kaydet"), "The page opens straight on the form, without the intro card")
-  assert(!content.includes("Kaydetme henüz açık değil") && !content.includes("İlan yayınla"))
+  assert(!content.includes("Müsaitlik kaydı şu an kullanılamıyor") && !content.includes("İlan yayınla"))
   // Two tabs: the form (with the calendar right at the top) and the saved records.
   assert(byLabel("Yeni müsaitlik").props.accessibilityState.selected, "The screen opens on the form")
   assert(byLabel("14 Eki 2026"), "The calendar is visible without scrolling past the records")
@@ -136,7 +136,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   assert(text(screen.toJSON()).includes("14 Eki – 17 Eki 2026 · 4 gün"), "The chosen range is summarized")
   assert(byLabel("15 Eki 2026").props.accessibilityState.selected, "Days inside the range are highlighted")
   await press("Günler ve saatler")
-  assert(text(screen.toJSON()).includes("gün boyu müsaitim olarak kaydedilir"), "Missing hours are explained as all day")
+  assert(text(screen.toJSON()).includes("gün boyu müsait olduğun kabul edilir"), "Missing hours are explained as all day")
   await press("Akşamları")
   assert(text(screen.toJSON()).includes("18:00–23:00"), "Applied preset hours are visible")
   assert(byLabel("1. aralık başlangıç saati"), "Preset hours stay editable")
@@ -153,7 +153,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   // Same flow as the event location step: a city field, then a district search with suggestions.
   assert(screen.root.findAll(node => node.props.testID === "availability-map").length, "The location section always shows the map")
   assert(text(screen.toJSON()).includes("haritada bir noktaya dokun"), "With no area yet, the section says how to choose one")
-  const regionSearch = () => screen.root.findAll(node => node.props.accessibilityLabel === "Adres veya mekan ara" && typeof node.props.onChangeText === "function")[0]
+  const regionSearch = () => screen.root.findAll(node => node.props.accessibilityLabel === "Adres veya mekân ara" && typeof node.props.onChangeText === "function")[0]
   const settle = (ms = 320) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)) })
   await act(async () => regionSearch().props.onChangeText("Kad"))
   await settle()
@@ -243,7 +243,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   await act(async () => detail.unmount())
   const afterInvite = await mount("EventDetail", { eventId: "own-event" })
   await wait(50)
-  assert(text(afterInvite.toJSON()).includes("takviminde bu tarih, saat ve yer için uygun kimse yok"), "The invite stays open and says nobody is waiting")
+  assert(text(afterInvite.toJSON()).includes("Bu tarih, saat ve konum için davet edebileceğin uygun bir üye bulunamadı"), "The invite stays open and says nobody is waiting")
   await act(async () => afterInvite.unmount())
   // The invitation stays open until the event is full: up to the max, or up to the minimum when no max was set.
   const ownEvent = server.events.find(event => event.id === "own-event")
@@ -324,7 +324,7 @@ module.exports = async function ({ mount, act, text, storage }) {
   }
   global.__testWindowWidth = 360
   const narrow = await mount("Discover")
-  assert(narrow.root.findAll(node => node.props.accessibilityLabel === "Ewent.app" && node.props.style?.width === 72).length, "The wordmark shrinks to keep three actions per side on narrow phones")
+  assert(narrow.root.findAll(node => node.props.accessibilityLabel === "Ewent.app" && node.props.style?.width === 44).length, "The square logo fits between the actions on narrow phones")
   await act(async () => narrow.unmount())
   global.__testWindowWidth = undefined
 }

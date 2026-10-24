@@ -1,3 +1,4 @@
+import { BrandLogo } from "../components/Brand";
 import { useOptionalGuest } from "../guest/GuestSession";
 import { palette } from "../theme/palette";
 import { gatedScreen } from "../native/access";
@@ -77,17 +78,13 @@ export default function SplashScreen({
           <Box style={[[ui.fixed, ui.roundedFull, ui.border, ui.borderWhite8], { width: 128, height: 128 }]} />
         </Animated.View>
         <Animated.View style={{ position: "absolute", top: 58, transform: [{ scale: coreScale }] }}>
-          <Box style={[[ui.w20, ui.h20, ui.rounded28px, ui.flex, ui.itemsCenter, ui.justifyCenter], {
-            backgroundColor: "rgba(105,120,255,.16)", borderWidth: 1, borderColor: "rgba(183,197,255,.42)",
-          }]} glass>
-            <Label style={[[ui.fontDisplay, ui.text2xl, ui.textWhite90]]}>✦</Label>
-          </Box>
+          <BrandLogo size={80} />
         </Animated.View>
         <Box style={[[ui.textCenter]]}>
           <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite90], { lineHeight: 34, paddingVertical: 2 }]}>
             Yeni anlar yaklaşıyor.
           </Label>
-          <Label style={[[ui.textSm, ui.textWhite45, ui.mt1]]}>Etkinlikler, insanlar ve iyi bir başlangıç.</Label>
+          <Label style={[[ui.textSm, ui.textWhite45, ui.mt1]]}>Ortak ilgi alanları, yeni buluşmalar.</Label>
           <Box style={[[ui.mt2, ui.hPx, ui.w24, ui.mxAuto], {}]} gradient={["transparent", "rgba(105,120,255,0.6)", "transparent"]} gradientDirection="right" />
         </Box>
       </Box>

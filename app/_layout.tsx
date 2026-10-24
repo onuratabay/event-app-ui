@@ -3,10 +3,11 @@ import GuestRouteBoundary from "../src/guest/GuestRouteBoundary";
 import { BlurSurface } from "../src/native/SharedBlur";
 import { palette } from "../src/theme/palette";
 import { useFonts } from "expo-font"
-import { Stack, usePathname } from "expo-router"
+import { DarkTheme, ThemeProvider, Stack, usePathname } from "expo-router"
 import * as SplashScreen from "expo-splash-screen"
 import { StatusBar } from "expo-status-bar"
-import { useEffect } from "react"
+import { NavigationBar } from "expo-navigation-bar"
+import { useCallback } from "react"
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -30,11 +31,19 @@ import HardwareBack from "../src/components/HardwareBack"
 import HistoryLimit from "../src/components/HistoryLimit"
 import UpdateRequired from "../src/components/UpdateRequired"
 import { WalkthroughProvider } from "../src/walkthrough/WalkthroughProvider"
-void SplashScreen.preventAutoHideAsync()
+void SplashScreen.preventAutoHideAsync().catch(() => {})
+const navigationTheme = {
+  ...DarkTheme,
+  colors: { ...DarkTheme.colors, background: palette.background, card: palette.background, text: palette.text, border: palette.border, primary: palette.blue },
+}
 // Full-screen forms whose own Scroll keeps the focused field above the keyboard. The keyboard slides over
 // their fixed background instead of the root shrinking the whole screen (which lifted the backdrop and
 // pushed the fields up twice).
 const SCREEN_OWNS_KEYBOARD = new Set(["/login"])
+// Route loading uses the same dark surface instead of a default placeholder.
+export function SuspenseFallback() {
+  return <View style={s.root} />
+}
 export default function RootLayout() {
   const pathname = usePathname()
   const [loaded, error] = useFonts({
@@ -45,24 +54,27 @@ export default function RootLayout() {
     // Handwritten notes on the walkthrough overlay (OFL).
     Caveat: require("../assets/fonts/Caveat.ttf"),
   })
-  useEffect(() => {
-    if (loaded || error) void SplashScreen.hideAsync()
+  // Keep the native launch surface until the first dark React frame has actually laid out.
+  const onReadyLayout = useCallback(() => {
+    if (loaded || error) void SplashScreen.hideAsync().catch(() => {})
   }, [loaded, error])
   if (!loaded && !error) return null
   if (error)
     return (
-      <View style={s.root}>
+      <View style={s.root} onLayout={onReadyLayout}>
         <Text style={{ color: "#fff", padding: 30 }}>
           Fontlar yüklenemedi. Uygulamayı yeniden başlat.
         </Text>
       </View>
     )
   return (
+    <ThemeProvider value={navigationTheme}>
     <SafeAreaProvider>
       <PreferencesProvider>
       {/* Only the top inset: screens draw their background down to the bottom edge and pad their own content. */}
-      <SafeAreaView style={s.root} edges={["top"]}>
+      <SafeAreaView style={s.root} edges={["top"]} onLayout={onReadyLayout}>
         <StatusBar style="light" />
+        {Platform.OS === "android" && <NavigationBar style="light" hidden={false} />}
         <ErrorNoticeProvider>
           <KeyboardAvoidingView
             style={s.root}
@@ -101,6 +113,7 @@ export default function RootLayout() {
       </SafeAreaView>
       </PreferencesProvider>
     </SafeAreaProvider>
+    </ThemeProvider>
   )
 }
 const s = StyleSheet.create({ root: { flex: 1, backgroundColor: palette.background } })

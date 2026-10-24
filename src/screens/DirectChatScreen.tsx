@@ -242,7 +242,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
       {!loaded && !sorted.length ? <Box style={{ flex: 1 }} />
         : conversation && loaded && !sorted.length ? <Box style={[s.empty, { flex: 1 }]}>
           <Label style={s.emptyTitle}>{canSend ? "Sohbeti başlat" : "Mesaj yok"}</Label>
-          <Label style={s.emptyText}>{canSend ? `${conversation.user.firstName} ile ilk mesajı sen yaz.` : "Bu kişiyle artık mesajlaşamazsın."}</Label>
+          <Label style={s.emptyText}>{canSend ? `${conversation.user.firstName} ile sohbeti ilk mesajınla başlat.` : "Bu kişiyle artık mesajlaşamazsın."}</Label>
         </Box>
         : <ChatList
           data={newestFirst}
@@ -291,7 +291,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
           <Touch accessibilityLabel="Düzenlemeyi iptal et" onPress={() => { setEditing(null); setInput(""); }} style={s.editCancel}><Label style={s.editCancelLabel}>Vazgeç</Label></Touch>
         </Box> : null}
         <Box walkthroughId="direct-composer" style={s.composer} glass>
-          <Field value={input} onChangeText={setInput} editable={!!conversation} placeholder={editing ? "Mesajı düzenle..." : "Bir mesaj yaz..."} placeholderTextColor="rgba(255,255,255,.35)" multiline maxLength={MAX_MESSAGE_LENGTH} style={s.input} />
+          <Field value={input} onChangeText={setInput} editable={!!conversation} placeholder={editing ? "Mesajı düzenle…" : "Bir mesaj yaz…"} placeholderTextColor="rgba(255,255,255,.35)" multiline maxLength={MAX_MESSAGE_LENGTH} style={s.input} />
           <Touch onPress={send} accessibilityLabel={editing ? "Düzenlemeyi kaydet" : "Mesaj gönder"} disabled={!input.trim() || !conversation || saving} style={s.send} gradient={["#4d5bcb", "#6651c9"]}>
             {editing ? <Label style={s.sendCheck}>✓</Label> : <SendIcon size={20} style={{ color: palette.text }} />}
           </Touch>

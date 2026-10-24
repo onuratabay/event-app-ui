@@ -396,14 +396,14 @@ export default function EventRoomScreen({
           </Box>
 
           <Box style={s.panelRow}>
-            <Box style={s.panelCopy}><Label style={s.panelTitle}>Odayı sessize al</Label><Label style={s.panelDetail}>Bu odanın okunmamış mesaj rozeti gösterilmez.</Label></Box>
+            <Box style={s.panelCopy}><Label style={s.panelTitle}>Odayı sessize al</Label><Label style={s.panelDetail}>Bu odanın okunmamış mesaj rozeti ve mesaj bildirimleri kapatılır.</Label></Box>
             <Switch accessibilityLabel="Odayı sessize al" value={muted} onValueChange={value => void toggleMute(value)}
               trackColor={{ false: palette.elevated, true: palette.violet }} thumbColor="#ffffff" ios_backgroundColor={palette.elevated} />
           </Box>
 
           <Label style={s.panelHeading}>Giriş onayı</Label>
           {!event.isActive ? <Label style={s.panelDetail}>Giriş onayı etkinlik başladığında açılır.</Label>
-            : !isOwner ? <Label style={s.panelDetail}>{checkins.includes(ME.id) ? "Girişin onaylandı ✓" : "Vardığında “Geldim” yaz; organizatör girişini onaylayacak."}</Label>
+            : !isOwner ? <Label style={s.panelDetail}>{checkins.includes(ME.id) ? "Girişin onaylandı ✓" : "Vardığında sohbete “Geldim” yazabilirsin. Girişini düzenleyen onaylar."}</Label>
             : null}
           {isOwner ? <>
             <Label style={s.panelHeading}>Duyuru gönder</Label>
@@ -436,7 +436,7 @@ export default function EventRoomScreen({
             <Label style={s.pinnedText} numberOfLines={pinnedOpen ? undefined : 2}>{pinned.text}</Label>
           </Touch> : null}
           {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
-          {!live && !error ? <Label accessibilityLiveRegion="polite" style={s.connection}>Bağlantı yeniden kuruluyor… Mesajların yine de gönderilir.</Label> : null}
+          {!live && !error ? <Label accessibilityLiveRegion="polite" style={s.connection}>Bağlantı yeniden kuruluyor… Gönderilemeyen mesajları tekrar deneyebilirsin.</Label> : null}
           {/* Empty state sits outside the flipped list (an inverted list would turn it upside down). */}
           {!sorted.length && !loading ? <Box style={[s.empty, { flex: 1 }]}><Label style={s.emptyTitle}>Sohbet başladı</Label><Label style={s.emptyText}>İlk mesajı sen yaz; buluşma detaylarını burada konuşabilirsiniz.</Label></Box>
           : <ChatList
@@ -508,7 +508,7 @@ export default function EventRoomScreen({
               <Field value={input} onChangeText={value => {
                 setInput(value);
                 if (eventId && !editing && Date.now() - lastTyping.current > 1000) { lastTyping.current = Date.now(); void socketAction('chat:typing', { eventId, typing: Boolean(value) }).catch(() => {}); }
-              }} placeholder={editing ? "Mesajı düzenle..." : "Bir mesaj yaz..."} placeholderTextColor="rgba(255,255,255,.35)" multiline maxLength={MAX_MESSAGE_LENGTH} style={s.input} />
+              }} placeholder={editing ? "Mesajı düzenle…" : "Bir mesaj yaz…"} placeholderTextColor="rgba(255,255,255,.35)" multiline maxLength={MAX_MESSAGE_LENGTH} style={s.input} />
               <Touch onPress={send} accessibilityLabel={editing ? "Düzenlemeyi kaydet" : "Mesaj gönder"} disabled={(editing && sending) || !input.trim()} style={s.send} gradient={["#4d5bcb", "#6651c9"]}>
                 {editing ? <Label style={s.sendCheck}>✓</Label> : <SendIcon size={20} style={{ color: palette.text }} />}
               </Touch>

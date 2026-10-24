@@ -25,7 +25,7 @@ module.exports = async ({ act, text, storage }) => {
   const render = () => React.createElement(LocationPicker, { value: picked, venue, defaultCity: 'Ankara', onChange: place => { picked = place }, onVenueChange: value => { venue = value } })
   let tree
   await act(async () => { tree = create(render()) })
-  const search = () => tree.root.findAll(node => node.props.accessibilityLabel === 'Adres veya mekan ara' && typeof node.props.onChangeText === 'function')[0]
+  const search = () => tree.root.findAll(node => node.props.accessibilityLabel === 'Adres veya mekân ara' && typeof node.props.onChangeText === 'function')[0]
   await act(async () => search().props.onChangeText('K'))
   await settle()
   let content = text(tree.toJSON())

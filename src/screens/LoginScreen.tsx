@@ -1,7 +1,7 @@
 import { palette } from "../theme/palette";
 import { gatedScreen } from "../native/access"
 import { useEffect, useRef, useState } from "react"
-import { AccessibilityInfo, Animated, Easing, StyleSheet } from "react-native"
+import { AccessibilityInfo, Platform, Animated, Easing, StyleSheet } from "react-native"
 import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground } from "../components/GlassUI"
 import { GlassFill, INPUT_FROST } from "../components/GlassFill"
@@ -44,7 +44,7 @@ function GuestInviteField() {
     <Box style={styles.phoneRow}>
       <Box style={[styles.inputFrame, { flex: 1 }]}>
         <GlassFill radius={16} {...INPUT_FROST} />
-        <Field value={input} onChangeText={text => { setInput(text); setError("") }} placeholder="EWT-… veya davet bağlantısı" accessibilityLabel="Ewent davet kodu"
+        <Field value={input} onChangeText={text => { setInput(text); setError("") }} placeholder="Etkinlik davet kodunu gir" accessibilityLabel="Ewent davet kodu"
           autoFocus autoCapitalize="none" autoCorrect={false} returnKeyType="go" onSubmitEditing={() => void open()} style={styles.input} />
       </Box>
       <Touch accessibilityLabel="Daveti aç" disabled={busy || !filled} disabledOpacity={0.7} onPress={() => void open()} glass
@@ -136,8 +136,10 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
               placeholder="5XX XXX XX XX"
               accessibilityLabel="Telefon numarası"
               keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              autoComplete="tel-national"
+              textContentType={Platform.OS === "ios" ? "username" : undefined}
+              autoComplete={Platform.OS === "android" ? "username" : undefined}
+              importantForAutofill="yes"
+              keyboardAppearance="dark"
               maxLength={13}
               style={styles.input}
             />
@@ -151,7 +153,10 @@ export default function LoginScreen({ navigate }: { navigate: NavigateFn }) {
             onChangeText={setPassword}
             placeholder="Şifreni gir"
             accessibilityLabel="Şifre"
-            autoComplete="current-password"
+            textContentType={Platform.OS === "ios" ? "password" : undefined}
+            autoComplete={Platform.OS === "android" ? "current-password" : undefined}
+            importantForAutofill="yes"
+            keyboardAppearance="dark"
             autoCapitalize="none"
             autoCorrect={false}
             onSubmitEditing={() => void submit()}

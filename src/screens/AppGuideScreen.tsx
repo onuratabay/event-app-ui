@@ -28,7 +28,7 @@ export default function AppGuideScreen({ navigate }: { navigate: NavigateFn }) {
     <Scroll style={s.page}>
       <Box style={s.intro}>
         <Label style={s.eyebrow}>KENDİ HIZINDA KEŞFET</Label>
-        <Label accessibilityRole="header" style={s.title}>{"Küçük ipuçları.\nYeni olasılıklar."}</Label>
+        <Label accessibilityRole="header" style={s.title}>{"Her adımda\nküçük bir ipucu."}</Label>
         <Label style={s.body}>Her ekranın rehberi yalnızca ilk ziyaretinde açılır. Geçtiğin rehberler de tekrar gösterilmez. Buradan istediğin bölüme her zaman dönebilirsin.</Label>
         <Label style={s.meta}>{`${completed} rehber tamamlandı · Her biri 2–3 kısa adım`}</Label>
       </Box>

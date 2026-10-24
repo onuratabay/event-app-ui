@@ -107,7 +107,7 @@ Ortam değişkenleri, API sınırları, migration'lar, `/.well-known` doğrulama
 
 ## Brand
 
-The display name is `Ewent.app` (always capitalised in the UI); the website is https://ewent.app. Supplied original artwork is stored in `assets/brand/`. The transparent wordmark appears above the Welcome headline at 150 × 50 and centered in the Discover action row at 104 × 35. Discover actions run left to right: search, sorting/filters, wordmark, event calendar, notifications. Its blur fades below the action row without a divider. Splash retains its original orbit animation. The supplied square icon is used only as the installed app icon. Navigation and action buttons retain their functional icons. Existing application identifiers and `eventapp://` links remain compatible. HTTPS event invitation configuration and deployment requirements are documented in [Guest event sharing](../vibe-us/docs/guest-sharing.md). Native app icon changes require a new application build; Expo Go retains its own launcher icon.
+The installed display name is `EwentApp`; the website is https://ewent.app. `assets/brand/ewentapp-logo.png` is the single source logo, used on Welcome, Splash, Discover, navigation and share cards. Its square aspect ratio is preserved. Native icons are generated from it into ignored `.cache/brand/`: opaque for iOS and mask-safe for Android. The independently deployed website keeps an identical copy with the same filename. Native launcher updates require a new build; Expo Go retains its own launcher icon. Existing application identifiers and `eventapp://` links remain compatible.
 
 ### Ewent görsel tema
 
@@ -122,3 +122,9 @@ Platform kontrolleri: `TEST_PLATFORM=ios npm test` ve `TEST_PLATFORM=android npm
 ### Eksik kapak görselleri
 
 Sunucuda kapak/kategori fotoğrafı bulunmayan etkinlikler, projede zaten bulunan kategoriye uygun stok görselleri gösterir; bunlar veritabanına kaydedilmez. Gerçek kapak önceliklidir. Harita/öneri sorgularının fotoğrafsız yanıtları önceden yüklenmiş gerçek kapağı silmez. Fotoğrafı olmayan kişiler için sahte yüz yerine baş harf gösterilir.
+
+Native launcher assets use a transparent embossed tile on Android and an opaque, tightly framed iOS derivative. The original icon is preserved. Native launch background is midnight navy; the native splash hides after the first React layout, with a matching dark navigation theme. Launcher name/icon and native splash changes require a fresh native build; Expo Go does not apply them.
+
+Android system navigation uses edge-to-edge content with `expo-navigation-bar` (`enforceContrast: false`, light buttons). The app draws behind the system bar; existing bottom safe-area insets keep controls clear of it. Apply this native setting with a new Android build. Three-button and gesture navigation should both be checked on a physical device.
+
+Android autofill uses a rounded translucent blue highlight (`plugins/withAutofillHighlight.cjs`), applied to the native app theme at build time. Login keeps password-manager support on both platforms with explicit username/current-password semantics, dark keyboard appearance and palette-aligned selection colors. iOS password-manager/system autofill overlays have no public color override in this implementation; verify their appearance on a physical iPhone.

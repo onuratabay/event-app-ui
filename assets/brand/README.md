@@ -1,9 +1,7 @@
-# Ewent.app brand assets
+# EwentApp logo
 
-Original supplied wordmark and app icon are preserved. `ewent-wordmark-transparent.png` is the transparent cutout used in Welcome without clipping or a background rectangle. Generated with the built-in Imagegen tool.
+`ewentapp-logo.png` is the only source logo: a transparent 1024 × 1024 embossed tile with about 1.2% minimum padding. Used by the installed app icon, welcome screen, discovery header, navigation and share cards. The website has an identical copy named `assets/ewentapp-logo.png` because it deploys independently.
 
-Final prompt:
+Created using the built-in imagegen tool with the prompt: "Remove the outer flat background; preserve the embossed rounded tile and W; clean the alpha edge; no redesign." Fitted to the canvas without changing its aspect ratio.
 
-> Precise cleanup of this transparent ewent wordmark. Preserve its exact letter shapes, glossy blue purple W and white letters. Remove all residual white speckles, fringe halos, rough matte remnants and stray pixels outside letters AND inside both e holes and n arch. Professional clean anti-aliased silhouette with smooth sharp edges. The background and letter holes must be fully transparent alpha. Retain all actual lettering and color, do not crop, do not redesign, do not add any background. Horizontal entire logo canvas with small padding.
-
-`ewent-w.png` is the W isolated from `ewent-wordmark-transparent.png` (flood-filled from inside the W so the neighbouring e letters are excluded, original pixels and alpha kept), used as the create button in the bottom bar.
+`app.config.js` runs `scripts/prepare-brand-icons.cjs` to derive an opaque iOS icon and mask-safe Android foreground into ignored `.cache/brand/`. These are generated build artifacts, not alternative source logos. Delete the cache to regenerate. Old logo files have been removed.

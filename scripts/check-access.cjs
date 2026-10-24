@@ -827,7 +827,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     const room = await mount("EventRoom", { eventId: "room-s" })
     await act(() => new Promise(resolve => setTimeout(resolve, 50)))
     busy = 0
-    const input = () => room.root.findAllByType("TextInput").find(n => n.props.placeholder === "Bir mesaj yaz...")
+    const input = () => room.root.findAllByType("TextInput").find(n => n.props.placeholder === "Bir mesaj yaz…")
     await act(async () => input().props.onChangeText("Merhaba oda"))
     await act(async () => room.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Mesaj gönder").props.onPress())
     assert(text(room.toJSON()).includes("Merhaba oda") && text(room.toJSON()).includes("Gönderiliyor"), "The message appears at once, marked as sending")
@@ -892,7 +892,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     }
     const room = await mount("EventRoom", { eventId: "room-o" })
     await act(() => new Promise(resolve => setTimeout(resolve, 50)))
-    await act(async () => room.root.findAllByType("TextInput").find(n => n.props.placeholder === "Bir mesaj yaz...").props.onChangeText("Yeni mesaj"))
+    await act(async () => room.root.findAllByType("TextInput").find(n => n.props.placeholder === "Bir mesaj yaz…").props.onChangeText("Yeni mesaj"))
     await act(async () => room.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Mesaj gönder").props.onPress())
     const order = () => { const all = text(room.toJSON()); return all.indexOf("Eski mesaj") < all.indexOf("Yeni mesaj") }
     assert(order(), "While sending, the new message sits below the older one")

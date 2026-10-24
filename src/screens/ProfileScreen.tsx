@@ -389,7 +389,7 @@ export default function ProfileScreen({
             <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb4]]}>
               <Box>
                 <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider]]}>
-                  Event Skoru
+                  Etkinlik puanı
                 </Label>
                 <Label style={[[ui.fontDisplay, ui.text4xl, ui.fontLight, ui.mt1], {
                 color: palette.accent
@@ -403,14 +403,13 @@ export default function ProfileScreen({
             </Box>
             {/* Per-question averages are shown on every profile (the server sends them for any member). */}
             <Box style={[[ui.spaceY0]]}>
-              <ScoreBadge score={user.scores.punctuality} label="Dakiklik & Güvenilirlik" />
-              <ScoreBadge score={user.scores.communication} label="İletişim & Nezaket" />
+              <ScoreBadge score={user.scores.punctuality} label="Dakiklik ve güvenilirlik" />
+              <ScoreBadge score={user.scores.communication} label="İletişim ve nezaket" />
               <ScoreBadge score={user.scores.community} label="Topluluk Uyumu" />
             </Box>
             {/* Addressed to "you": only on your own profile. */}
             {isOwn && <Label style={[[ui.textXs, ui.textWhite25, ui.mt3, ui.leadingRelaxed]]}>
-              Birlikte etkinliğe gittiğin kişilerin sana verdiği puanlardan
-              oluşur.
+              Etkinlik puanı, düzenlediğin etkinliklere verilen puanları gösterir. Altındaki değerlendirmeler ise birlikte katıldığın üyelerin sana verdiği puanlardır.
             </Label>}
           </GlassCard>
         </Box>

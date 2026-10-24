@@ -9,7 +9,7 @@ import { createEventShare, getApiErrorMessage, revokeEventShare, type EventShare
 import { copyEvent } from '../native/media'
 import { Box, Label, Picture, Scroll, Touch } from '../native/UI'
 import { CheckIcon, ClockIcon, CloseIcon, LocationIcon, ShareIcon } from './Icons'
-import { BRAND_SITE } from './Brand'
+import { BRAND_SITE, BRAND_LOGO } from './Brand'
 import { inviteExpiry, shareMessage, shareTo, ShareTargetGrid, type ShareTargetId } from './ShareTargets'
 import { remainingLabel, useRemaining } from '../availability/countdown'
 import { participantCount } from '../native/Store'
@@ -17,7 +17,6 @@ import { useWalkthroughBlocker } from '../walkthrough/activity'
 import { palette } from '../theme/palette'
 import type { AppEvent } from '../types'
 
-const WORDMARK = require('../../assets/brand/ewent-wordmark-transparent.png')
 
 /**
  * Full-screen event sharing: a card image of the event (cover, title, time, place, how full, invite
@@ -97,7 +96,7 @@ export default function EventShareSheet({ event, onClose }: { event: AppEvent; o
           <View style={s.cover}>
             <Picture uri={event.coverImage} accessibilityLabel={event.title} style={[StyleSheet.absoluteFill]} />
             <LinearGradient colors={['rgba(8,11,24,0)', 'rgba(8,11,24,.92)']} style={StyleSheet.absoluteFill} />
-            <Image source={WORDMARK} resizeMode="contain" style={s.wordmark} accessibilityIgnoresInvertColors />
+            <Image source={BRAND_LOGO} resizeMode="contain" style={s.logo} accessibilityIgnoresInvertColors />
             <View style={s.category}><Label style={s.categoryText}>{event.category}{event.level ? ` · ${event.level}` : ''}</Label></View>
           </View>
           <View style={s.cardBody}>
@@ -147,7 +146,7 @@ const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: 20, paddingBottom: 32, gap: 16 },
   card: { borderRadius: 24, overflow: 'hidden', backgroundColor: palette.surface, borderWidth: 1, borderColor: 'rgba(205,214,255,.18)' },
   cover: { height: 220, backgroundColor: palette.elevated },
-  wordmark: { position: 'absolute', top: 16, left: 16, width: 92, height: 30 },
+  logo: { position: 'absolute', top: 16, left: 16, width: 44, height: 44 },
   category: { position: 'absolute', left: 16, bottom: 14, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(8,11,24,.55)', borderWidth: 1, borderColor: 'rgba(255,255,255,.16)' },
   categoryText: { color: palette.text, fontSize: 12, fontFamily: 'Outfit-Medium' },
   cardBody: { padding: 18, gap: 8 },

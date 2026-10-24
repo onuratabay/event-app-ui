@@ -681,9 +681,9 @@ export function Field({
       }
       autoCapitalize={mode === "email" ? "none" : props.autoCapitalize}
       underlineColorAndroid="transparent"
-      cursorColor={palette.accent}
-      placeholderTextColor="rgba(226,232,240,.48)"
-      selectionColor="#c7ceff"
+      cursorColor={props.cursorColor ?? palette.accent}
+      placeholderTextColor={props.placeholderTextColor ?? "rgba(226,232,240,.48)"}
+      selectionColor={props.selectionColor ?? (Platform.OS === "ios" ? palette.accent : "rgba(105,120,255,.35)")}
     />
   )
 }

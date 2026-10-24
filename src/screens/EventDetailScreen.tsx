@@ -217,7 +217,7 @@ export default function EventDetailScreen({
             <Box walkthroughId="event-meta" style={[[ui.mt4, ui.grid, ui.gap3]]} columns={2}>
               {[{
               icon: <ClockIcon size={17} strokeWidth={1.75} />,
-              label: "Tarih & Saat",
+              label: "Tarih ve saat",
               value: `${event.date} · ${event.time}`
             }, {
               icon: <LocationIcon size={17} strokeWidth={1.75} />,
@@ -288,7 +288,7 @@ export default function EventDetailScreen({
                 <Box style={[[ui.flex1]]}>
                   <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>Davet açık</Label>
                   <Label style={[[ui.textXs, ui.textWhite55, ui.mt05]]}>
-                    {event.inviteOnly ? (waitingCount > 0 ? `Arkadaşlarını ya da takviminde uygun ${waitingCount} kişiyi davet edebilirsin` : "Arkadaşlarını davet edebilirsin; durumlarını da buradan görürsün") : waitingCount > 0 ? `Takviminde bu tarih, saat ve yer için uygun ${waitingCount} kişi var` : "Şu anda takviminde bu tarih, saat ve yer için uygun kimse yok"}
+                    {event.inviteOnly ? (waitingCount > 0 ? `Arkadaşlarını ya da takviminde uygun ${waitingCount} kişiyi davet edebilirsin` : "Arkadaşlarını davet edebilirsin; durumlarını da buradan görürsün") : waitingCount > 0 ? `Takviminde bu tarih, saat ve yer için uygun ${waitingCount} kişi var` : "Bu tarih, saat ve konum için davet edebileceğin uygun bir üye bulunamadı"}
                   </Label>
                 </Box>
                 {/* Opens the people whose calendar (Etkinlik Takvimim) is open for this date, time, place and activity. */}
@@ -304,7 +304,7 @@ export default function EventDetailScreen({
               }]} gradient={["#4d5bcb", "#6651c9"]} gradientDirection="right" />
                 </Box>
                 <Label style={[[ui.textXs, ui.textAmber30060, ui.mt15]]}>
-                  Etkinliğin aktif olması için{" "}
+                  Odanın açılması için{" "}
                   {Math.max(0, event.minParticipants - event.currentParticipants)} kişi daha
                   gerekiyor
                 </Label>

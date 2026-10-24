@@ -38,7 +38,7 @@ export default function ApprovalScreen({
               bekliyorduk.
             </Label>
           </Label>
-          <EditorialQuote>Seni aramıza aldık. Artık gerçek anlar yaşamanın, yeni insanlarla tanışmanın tam zamanı.</EditorialQuote>
+          <EditorialQuote>Hoş geldin. Profilini tamamla, ilgi alanlarını paylaş ve yeni buluşmaları keşfet.</EditorialQuote>
         </Box>
 
         {/* Stats */}

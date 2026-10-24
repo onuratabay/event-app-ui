@@ -4,8 +4,8 @@ import { useNavigate } from "../native/navigation"
 import type { Screen } from "../types"
 import BottomNav, { useKeyboardVisible } from "./BottomNav"
 
-// The bottom bar appears on every screen except these pre-app (sign-in and onboarding) routes.
-const HIDDEN_ROUTES = new Set(["/", "/welcome", "/login", "/forgot-password", "/onboarding-1", "/onboarding-2", "/onboarding-3", "/approval", "/interests", "/legal", "/admin", "/app-guide"])
+// Unknown routes (404) and pre-app screens have no bottom bar.
+const VISIBLE_ROUTES = new Set(["/availability", "/create-event", "/direct-chat", "/discover", "/event-detail", "/event-room", "/map", "/notifications", "/profile", "/rate-event", "/rooms", "/search", "/settings"])
 
 export default function AppBottomNav() {
   const pathname = usePathname()
@@ -13,7 +13,7 @@ export default function AppBottomNav() {
   const navigate = useNavigate()
   const keyboardVisible = useKeyboardVisible()
   const guest = useOptionalGuest()
-  if (HIDDEN_ROUTES.has(pathname) || pathname.startsWith("/guest-") || guest && (!guest.ready || guest.guest) || keyboardVisible) return null
+  if (!VISIBLE_ROUTES.has(pathname) || pathname.startsWith("/guest-") || guest && (!guest.ready || guest.guest) || keyboardVisible) return null
   const active = pathname.slice(1) as Screen
   return <BottomNav active={active} navigate={(screen, opts) => {
     // Re-opening create-event from its own tab would reset the unfinished draft.

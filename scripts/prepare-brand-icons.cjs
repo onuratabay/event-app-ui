@@ -1,0 +1,22 @@
+// Derived native assets live in ignored cache; the only editable source is ewentapp-logo.png.
+const fs = require('node:fs')
+const path = require('node:path')
+const { createHash } = require('node:crypto')
+const root = path.resolve(__dirname, '..')
+const source = path.join(root, 'assets/brand/ewentapp-logo.png')
+const target = path.join(root, '.cache/brand')
+const digest = createHash('sha256').update(fs.readFileSync(source)).update('native-icons-v1').digest('hex')
+const marker = path.join(target, 'source.sha256')
+if (fs.existsSync(marker) && fs.readFileSync(marker, 'utf8') === digest && ['ewentapp-logo-ios.png', 'ewentapp-logo-adaptive.png'].every(file => fs.existsSync(path.join(target, file)))) process.exit(0)
+;(async () => {
+  const { generateImageAsync, generateImageBackgroundAsync, compositeImagesAsync } = require('@expo/image-utils')
+  fs.mkdirSync(target, { recursive: true })
+  const image = async options => (await generateImageAsync({ projectRoot: root, cacheType: 'ewentapp-brand' }, { src: source, resizeMode: 'contain', ...options })).source
+  const ios = await image({ width: 1024, height: 1024, backgroundColor: '#080b18', removeTransparency: true })
+  const foreground = await image({ width: 660, height: 660, backgroundColor: 'transparent' })
+  const background = await generateImageBackgroundAsync({ width: 1024, height: 1024, resizeMode: 'contain', backgroundColor: 'transparent' })
+  const adaptive = await compositeImagesAsync({ foreground, background, x: 182, y: 182 })
+  fs.writeFileSync(path.join(target, 'ewentapp-logo-ios.png'), ios)
+  fs.writeFileSync(path.join(target, 'ewentapp-logo-adaptive.png'), adaptive)
+  fs.writeFileSync(marker, digest)
+})().catch(error => { console.error(error); process.exitCode = 1 })

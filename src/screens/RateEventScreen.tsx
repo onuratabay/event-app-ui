@@ -12,8 +12,8 @@ import type { NavigateFn } from "../types";
 
 /** The profile questions, in the order the profile shows them. */
 const QUESTIONS = [
-  { key: "punctuality", label: "Dakiklik & Güvenilirlik" },
-  { key: "communication", label: "İletişim & Nezaket" },
+  { key: "punctuality", label: "Dakiklik ve güvenilirlik" },
+  { key: "communication", label: "İletişim ve nezaket" },
   { key: "community", label: "Topluluk Uyumu" },
 ] as const;
 type QuestionKey = typeof QUESTIONS[number]["key"];

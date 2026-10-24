@@ -77,8 +77,8 @@ const displayDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.sp
 const INVITE_ONLY = "invite_only";
 // "Önerilenler" is not offered to users; the remaining options get their own icon and copy.
 const PRIVACY_OPTIONS: Record<string, { icon: typeof GlobeIcon; desc: string }> = {
-  public: { icon: GlobeIcon, desc: "Herkes görebilir ve katılabilir." },
-  [INVITE_ONLY]: { icon: UserPlusIcon, desc: "Keşfette yalnızca sen ve daveti kabul edenler görür." },
+  public: { icon: GlobeIcon, desc: "Topluluk üyeleri görebilir ve katılabilir." },
+  [INVITE_ONLY]: { icon: UserPlusIcon, desc: "Yalnızca sen ve davet ettiğin kişiler görebilir." },
 };
 const REQUIREMENTS_SUGGESTIONS: {
   [key: string]: string[];
@@ -86,8 +86,8 @@ const REQUIREMENTS_SUGGESTIONS: {
   Padel: ["Raketini yanında getir.", "Raket tesisten kiralanabilir.", "Sadece spor ayakkabını alıp gel."],
   Tenis: ["Raket gerekli.", "Tenis ayakkabısı zorunlu.", "Top temin edeceğim."],
   Koşu: ["Koşu ayakkabısı gerekli.", "Su şişesi getir."],
-  Kahve: ["Merak yeter!", "Ödeme kişiye ayrı."],
-  Hiking: ["Trek ayakkabısı gerekli.", "Minimum 1L su getir.", "Atıştırmalık al."],
+  Kahve: ["Merak yeter!", "Herkes kendi hesabını öder."],
+  Hiking: ["Yürüyüş ayakkabısı gerekli.", "En az 1 litre su getir.", "Atıştırmalık al."],
   default: ["Rahat kıyafet yeterli."]
 };
 export default function CreateEventScreen({
@@ -361,7 +361,7 @@ export default function CreateEventScreen({
               </Label>
               <Label style={[[ui.textXs, ui.textWhite40]]}>Seçtiğin arkadaşlarına etkinlik oluşturulunca davet gider; kabul ederlerse katılımcı olurlar.</Label>
               {friends === null ? <Label style={[[ui.textSm, ui.textWhite40]]}>Arkadaşların yükleniyor…</Label> : !friends.length ? <Label style={[[ui.textSm, ui.textWhite40]]}>Henüz aktif arkadaşın yok.</Label> : <>
-              <Field accessibilityLabel="Arkadaşlarında ara" placeholder="İsim veya soyisim ara" value={friendQuery} onChangeText={setFriendQuery} autoCapitalize="words" autoCorrect={false} returnKeyType="search" glass />
+              <Field accessibilityLabel="Arkadaşlarında ara" placeholder="Ad veya soyad ara" value={friendQuery} onChangeText={setFriendQuery} autoCapitalize="words" autoCorrect={false} returnKeyType="search" glass />
               {!shownFriends.length ? <Label style={[[ui.textSm, ui.textWhite40]]}>Bu isimde bir arkadaşın yok.</Label> : <Scroll style={{ maxHeight: 320 }} nestedScrollEnabled keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8 }}>
               {shownFriends.map(friend => {
             const name = `${friend.firstName} ${friend.lastName}`.trim();
@@ -414,7 +414,7 @@ export default function CreateEventScreen({
                 Ne yapmak{"\n"}istiyorsun?
               </Label>
               <Label style={[[ui.textSm, ui.textWhite40, ui.mb6]]}>
-                Seninle birlikte ne yapacağımızı anlat.
+                Birlikte yapmak istediğin aktiviteyi seç.
               </Label></Box>
               <Box style={[[ui.grid, ui.gap3]]} columns={2}>
                 {!activities.length && <Touch onPress={loadCatalog}>Seçenekleri yeniden yükle</Touch>}
@@ -447,7 +447,7 @@ export default function CreateEventScreen({
                 Hangi seviyede{"\n"}oynamak istersin?
               </Label>
               <Label style={[[ui.textSm, ui.textWhite40, ui.mb6]]}>
-                Sana uygun kişileri bulalım.
+                Etkinliğe uygun seviyeyi seç.
               </Label>
               <Box style={[[ui.spaceY3]]}>
                 {LEVELS.map(level => <Touch key={level} onPress={() => selectAndNext("level", level)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.textLeft, ui.flex, ui.itemsCenter, ui.justifyBetween, ui.border, data.level === level ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={data.level === level ? "rgba(105,120,255,.16)" : undefined} />
@@ -519,7 +519,7 @@ export default function CreateEventScreen({
                 Kaç kişilik{"\n"}bir buluşma?
               </Label>
               <Label style={[[ui.textSm, ui.textWhite40]]}>
-                Minimum dolunca etkinliğin hayata geçer.
+                Minimum katılımcı sayısına ulaşınca sohbet odası açılır.
               </Label>
 
               {[{
@@ -584,7 +584,7 @@ export default function CreateEventScreen({
                 </Box>
               </Box>}
               <Label style={[[ui.textXs, ui.textWhite40]]}>
-                {data.maxParticipants === null ? "Sınır yok: minimum dolunca etkinlik hayata geçer, isteyenler katılmaya devam edebilir." : data.maxParticipants === data.minParticipants ? `Tam ${data.minParticipants} kişilik: ${data.minParticipants} kişi dolunca katılım kapanır.` : `${data.minParticipants} kişi dolunca etkinlik hayata geçer; ${data.maxParticipants} kişide katılım kapanır.`}
+                {data.maxParticipants === null ? "Sınır yok: minimum katılımcı sayısına ulaşınca oda açılır. Etkinlik başlayana kadar yeni katılımcılar katılabilir." : data.maxParticipants === data.minParticipants ? `Tam ${data.minParticipants} kişilik: ${data.minParticipants} kişi dolunca katılım kapanır.` : `${data.minParticipants} kişi dolunca etkinlik hayata geçer; ${data.maxParticipants} kişide katılım kapanır.`}
               </Label>
 
               {/* Participants and the message to them share one step. */}
@@ -675,7 +675,7 @@ export default function CreateEventScreen({
                 Bu etkinlik{"\n"}kime açık?
               </Label>
               <Label style={[[ui.textSm, ui.textWhite40, ui.mb6]]}>
-                Kapıyı ne kadar aralık bırakmak istersin?
+                Etkinliği kimlerin görebileceğini ve katılabileceğini seç.
               </Label>
               <Box style={[[ui.spaceY3]]}>
                 {PRIVACIES.map(p => {

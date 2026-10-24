@@ -31,7 +31,7 @@ export default function GuestEntry() {
   }
   return <Box style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 18, backgroundColor: palette.background }}>
     <Label style={{ color: palette.text, fontSize: 28, fontFamily: 'Fraunces' }}>Misafir davetini aç</Label>
-    <Label style={{ color: palette.muted, fontSize: 14, lineHeight: 22 }}>WhatsApp’taki davet bağlantısını veya indirme ekranındaki davet kodunu buraya yapıştır.</Label>
+    <Label style={{ color: palette.muted, fontSize: 14, lineHeight: 22 }}>Sana gönderilen etkinlik davetinin bağlantısını veya davet kodunu buraya yapıştır.</Label>
     <Field accessibilityLabel="Davet bağlantısı veya kodu" value={input} onChangeText={setInput} autoCapitalize="none" autoCorrect={false} placeholder="EWT-…" style={{ minHeight: 52, padding: 14, borderRadius: 14, backgroundColor: palette.surface, color: palette.text, fontSize: 15 }} />
     {error ? <Label accessibilityRole="alert" style={{ color: palette.error }}>{error}</Label> : null}
     {canReturn && <Touch disabled={busy} onPress={() => void memberReturn()} style={{ color: palette.muted, minHeight: 44 }}>Üyeliğime dön</Touch>}

@@ -311,6 +311,29 @@ async function tap(tree, label) {
   }
   // expo-router loads every route at startup; Expo Go on Android throws as soon as expo-notifications loads.
   global.__expoNotificationsLoaded = false
+  // Broken links offer a session-aware home and never return into sign-in history.
+  {
+    const NotFound = require("../app/+not-found.tsx").default
+    const beforeState = global.__testRootState
+    global.__testNavigations = []
+    global.__testRootState = { index: 1, routes: [{ name: "discover" }, { name: "+not-found" }] }
+    let missing
+    await act(async () => { missing = create(React.createElement(NotFound)) })
+    assert(text(missing.toJSON()).includes("Bu sayfayı bulamadık."))
+    await tap(missing, "Önceki sayfaya dön")
+    assert.deepEqual(global.__testNavigations, ["back"])
+    global.__testNavigations = []
+    await tap(missing, "Ana ekrana dön")
+    assert.deepEqual(global.__testNavigations, ["dismissAll", "/welcome"])
+    await act(async () => missing.unmount())
+    global.__testRootState = { index: 1, routes: [{ name: "login" }, { name: "+not-found" }] }
+    await act(async () => { missing = create(React.createElement(NotFound)) })
+    assert(!text(missing.toJSON()).includes("Önceki sayfaya dön"))
+    await act(async () => missing.unmount())
+    global.__testRootState = beforeState
+    global.__testNavigations = undefined
+    console.log("PASS: 404 recovery returns safely without re-entering sign-in history.")
+  }
   require("../app/settings.tsx")
   assert.equal(global.__expoNotificationsLoaded, false, "Loading the settings route must not load expo-notifications")
   const { sortFeed, isOpenForFeed } = require("../src/discover/sort.ts")
@@ -586,7 +609,7 @@ async function tap(tree, label) {
     // All meta boxes share one height, and the participant list has no "+" placeholder seats.
     const flat = node => Object.assign({}, ...[].concat(node.props.style).flat(Infinity).filter(Boolean))
     const boxHeight = label => { let node = detail.root.findAll(n => n.type === "Text" && text(n) === label)[0]; while (node && !flat(node).height) node = node.parent; return node && flat(node).height }
-    const metaHeights = ["Tarih & Saat", "Konum", "Süre"].map(boxHeight)
+    const metaHeights = ["Tarih ve saat", "Konum", "Süre"].map(boxHeight)
     assert(metaHeights.every(Number.isFinite) && new Set(metaHeights).size === 1, "Meta boxes have equal heights")
     assert(!detail.root.findAll(node => node.type === "Text" && node.children.join("") === "+").length, "No + placeholder seats")
   }
@@ -704,7 +727,7 @@ async function tap(tree, label) {
   assert(locationMap(), "Location step shows a map")
   assert.equal(continueButton().props.disabled, true, "A meeting point is required before continuing")
   assert(createEvent.root.findAllByType("Pressable").some(n => String(n.props.accessibilityLabel).startsWith("Şehir:")), "City is chosen on the location step")
-  const addressSearch = createEvent.root.findAll(n => n.props.accessibilityLabel === "Adres veya mekan ara" && typeof n.props.onChangeText === "function")[0]
+  const addressSearch = createEvent.root.findAll(n => n.props.accessibilityLabel === "Adres veya mekân ara" && typeof n.props.onChangeText === "function")[0]
   await act(async () => addressSearch.props.onChangeText("Kuğulu Park"))
   await tap(createEvent, "Ara")
   await act(async () => { await new Promise(r => setTimeout(r, 20)) })
@@ -730,7 +753,7 @@ async function tap(tree, label) {
   assert(text(createEvent.toJSON()).includes("Tam 4 kişilik"), "Raising the minimum pushes the limit along")
   await tap(createEvent, "Sınır yok")
   assert(!maxCard(), "Choosing no limit hides the max card")
-  assert(text(createEvent.toJSON()).includes("Sınır yok: minimum dolunca"), "No limit is explained")
+  assert(text(createEvent.toJSON()).includes("Sınır yok: minimum katılımcı sayısına ulaşınca oda açılır"), "No limit is explained")
   for (let i = 0; i < 2; i++) await pressLabel("Minimum azalt")
   assert(!maxCard() && text(createEvent.toJSON()).includes("Sınır koy"), "Back at 2 the options stay, still without a limit")
   assert(text(createEvent.toJSON()).includes("Hızlı ekle"), "Message to participants is on the participants step")

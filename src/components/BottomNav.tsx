@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { Animated, Easing, Keyboard, Platform, StyleSheet } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { LinearGradient } from "expo-linear-gradient"
-import { BrandMark } from "./Brand"
+import { BrandLogo } from "./Brand"
 import { useReduceMotion } from "./GlassUI"
 import { useStore } from "../native/Store"
 import { Box, Label, Picture, Touch } from "../native/UI"
@@ -105,7 +105,7 @@ export default function BottomNav({
                 { perspective: 600 },
                 { rotateY: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) },
                 { scale: spin.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.18, 1] }) },
-              ] }}><BrandMark size={34} /></Animated.View> : <CompassIcon size={22} strokeWidth={1.75} style={{ color: active === screen ? "#c7ceff" : palette.muted }} />
+              ] }}><BrandLogo size={34} /></Animated.View> : <CompassIcon size={22} strokeWidth={1.75} style={{ color: active === screen ? "#c7ceff" : palette.muted }} />
             )}
             {screen !== "create-event" && (
               <Label

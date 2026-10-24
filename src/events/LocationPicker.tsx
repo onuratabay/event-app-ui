@@ -157,7 +157,7 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
     <CityPicker clearable value={city} onChange={next => void chooseCity(next)} />
     <Box style={s.search}>
       <SearchIcon size={15} style={{ color: palette.muted }} />
-      <Field accessibilityLabel="Adres veya mekan ara" placeholder={city ? `${city} içinde adres veya mekan ara…` : "Adres veya mekan ara…"} value={query}
+      <Field accessibilityLabel="Adres veya mekân ara" placeholder={city ? `${city} içinde adres veya mekan ara…` : "Adres veya mekân ara…"} value={query}
         onChangeText={text => { setQuery(text); setResults([]) }} onSubmitEditing={() => void search()} returnKeyType="search" style={s.searchField} />
       <Touch accessibilityLabel="Ara" disabled={!query.trim() || !!busy} onPress={() => void search()} style={s.searchButton}><Label style={s.link}>{busy === "search" ? "…" : "Ara"}</Label></Touch>
     </Box>

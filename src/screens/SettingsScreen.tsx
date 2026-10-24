@@ -148,7 +148,7 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
 
       {/* Only admins see this; the server also checks the role on every admin request. */}
       {data.user.role === "admin" && <Section title="Yönetim">
-        <Row title="Üyelik başvuruları" detail="Başvuruları ara, onayla, reddet veya incelemeye al" onPress={() => navigate("admin")} />
+        <Row title="Üyelik başvuruları" detail="Başvuruları ara, incele ve üyelik durumlarını yönet" onPress={() => navigate("admin")} />
       </Section>}
 
       <Section title="Hesap">
@@ -170,7 +170,7 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
 
       <Box walkthroughId="settings-notifications"><Section title="Bildirimler">
         <Toggle title="Etkinlik davetleri" detail="Biri seni bir etkinliğe davet ettiğinde" value={notifications.invites} disabled={!notificationsReady} onChange={v => void saveNotification("invites", v)} />
-        <Toggle title="Yeni mesajlar" detail="Katıldığın etkinlik odalarındaki mesajlar" value={notifications.messages} disabled={!notificationsReady} onChange={v => void saveNotification("messages", v)} />
+        <Toggle title="Yeni mesajlar" detail="Etkinlik odalarındaki ve bire bir sohbetlerdeki mesajlar" value={notifications.messages} disabled={!notificationsReady} onChange={v => void saveNotification("messages", v)} />
         <Toggle title="Etkinlik hatırlatmaları" detail="Katılacağın etkinlik yaklaştığında" value={notifications.reminders} disabled={!notificationsReady} onChange={v => void saveNotification("reminders", v)} />
         <Row title="Uygulama içi bildirimler" detail="Davetlerini ve topluluktan gelen haberleri görüntüle" onPress={() => navigate("notifications")} />
         <Row title="Telefon bildirim izinleri" detail="Sistem bildirim iznini telefon ayarlarından yönet" onPress={openSystemSettings} />
@@ -182,7 +182,7 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
         <Toggle title="Saydamlığı azalt" detail="Cam ve bulanıklık efektleri yerine düz zeminler kullan" value={values.reduceTransparency} disabled={!ready} onChange={v => void savePreference({ reduceTransparency: v })} />
         <Row title="Tema" detail="Gece mavisi · Bu sürümde koyu tema kullanılıyor" />
         <Row title="Dil" detail="Türkçe · Diğer diller henüz desteklenmiyor" />
-        <Row title="Metin boyutu" detail="Uygulama her cihazda aynı görünmesi için sabit yazı boyutu kullanır." />
+        <Row title="Metin boyutu" detail="Bu sürümde yazı boyutu sabittir." />
       </Section>
 
       <Box walkthroughId="settings-privacy"><Section title="Gizlilik ve izinler">

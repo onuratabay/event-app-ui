@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Ewent.app",
+    "name": "EwentApp",
     "slug": "event-app",
     "version": "1.0.0",
     "scheme": "eventapp",
@@ -12,14 +12,20 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.eventapp.community"
+      "bundleIdentifier": "com.eventapp.community",
+      "icon": "./assets/brand/ewentapp-logo.png"
     },
     "android": {
       "package": "com.eventapp.community",
       "permissions": [],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "icon": "./assets/brand/ewentapp-logo.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/brand/ewentapp-logo.png",
+        "backgroundColor": "#00000000"
+      }
     },
     "plugins": [
       "expo-router",
@@ -54,17 +60,36 @@
         {
           "color": "#6978ff"
         }
-      ]
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#080b18",
+          "dark": {
+            "backgroundColor": "#080b18"
+          }
+        }
+      ],
+      [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": false,
+          "style": "light",
+          "hidden": false
+        }
+      ],
+      "./plugins/withAutofillHighlight.cjs"
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "icon": "./assets/brand/ewent-icon.png",
+    "icon": "./assets/brand/ewentapp-logo.png",
     "extra": {
       "eas": {
         "projectId": "afed72bb-4bc3-48d3-b104-2159faa4313b"
       }
     },
-    "owner": "onuratabay"
+    "owner": "onuratabay",
+    "backgroundColor": "#080b18"
   }
 }

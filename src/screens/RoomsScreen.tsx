@@ -34,10 +34,10 @@ function MoreToggle({ total, open, onPress }: { total: number; open: boolean; on
 }
 /** Playful nudges for an empty "Katılımcı Bekleyenler"; one is picked each time the screen opens. */
 const CREATE_NUDGES = [
-  { emoji: "🦗", title: "Burada cırcır böcekleri öttü…", text: "Katılımcı bekleyen bir etkinliğin yok. Bir tane kur, sessizliği sen boz!" },
-  { emoji: "🎈", title: "Balon şişirildi, parti eksik", text: "Aklındaki buluşmayı etkinliğe çevir; ilk katılımcılar seni bekliyor." },
-  { emoji: "🧭", title: "Pusula seni gösteriyor", text: "Yürüyüş, kahve, oyun gecesi… Ne olursa. Rotayı sen çiz, ekip arkandan gelsin." },
-  { emoji: "🎲", title: "Zar sende!", text: "Bir etkinlik at ortaya, kimlerin geleceğini birlikte görelim." },
+  { emoji: "🦗", title: "Yeni bir plan yap.", text: "Katılımcı bekleyen bir etkinliğin yok. Bir buluşma planlayıp toplulukla paylaşabilirsin." },
+  { emoji: "🎈", title: "Buluşma fikrin var mı?", text: "Aklındaki buluşmayı etkinliğe çevir, birlikte katılmak isteyenlerle tanış." },
+  { emoji: "🧭", title: "Pusula seni gösteriyor", text: "Yürüyüş, kahve, oyun gecesi… Yapmak istediğin aktiviteyi seç ve bir buluşma planla." },
+  { emoji: "🎲", title: "Zar sende!", text: "Bir etkinlik oluştur, katılmak isteyenlerle birlikte plan yap." },
 ];
 /** Shown when no event of the member is waiting for participants: invites them to create one. */
 function CreateEventNudge({ navigate }: { navigate: NavigateFn }) {
@@ -109,7 +109,7 @@ export default function RoomsScreen({
     if (cacheKey) rememberChatList(cacheKey, next);
     return next;
   });
-  const removeChat = (chat: DirectConversation, name: string) => showAlert("Sohbet silinsin mi?", `${name} ile tüm mesajlar senin için silinir; ${chat.user.firstName} kendi mesajlarını görmeye devam eder. Yeni bir mesaj gelirse sohbet yalnızca yeni mesajlarla yeniden görünür.`, [
+  const removeChat = (chat: DirectConversation, name: string) => showAlert("Sohbet silinsin mi?", `${name} ile tüm mesajlar senin için silinir; ${chat.user.firstName} sohbet geçmişini görmeye devam eder. Yeni bir mesaj gelirse sohbet yalnızca yeni mesajlarla yeniden görünür.`, [
     { text: "Vazgeç", style: "cancel" },
     { text: "Sohbeti sil", style: "destructive", onPress: () => deleteChat(chat) },
   ]);

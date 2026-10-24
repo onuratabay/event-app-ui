@@ -273,7 +273,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
 
   return <Box style={s.screen}>
     <AtmoBackground />
-    <TopNavBar navigate={navigate} fallback="discover" title="Etkinlik Takvimim" subtitle="Özel eşleşme havuzu" />
+    <TopNavBar navigate={navigate} fallback="discover" title="Etkinlik Takvimim" subtitle="Müsaitlik ve davetler" />
     <Scroll style={[s.scroll, { paddingBottom: (tab === "new" ? 148 : 40) + inset }]} enter>
       <Box walkthroughId="availability-tabs" style={s.segment} accessibilityRole="tablist">
         {([["new", editingId ? "Kaydı düzenle" : "Yeni müsaitlik"], ["records", "Kayıtlarım"]] as const).map(([id, label]) => {
@@ -290,8 +290,8 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
       <ContextualTip id="availability" when={!!notice} />
       {notice && <Box style={s.success} accessibilityLiveRegion="polite"><CheckIcon size={16} style={{ color: palette.success }} /><Label style={s.successText}>{notice}</Label></Box>}
       {!AVAILABILITY_SERVER_READY && <Box style={s.pending} accessibilityRole="alert">
-        <Label style={s.pendingTitle}>Kaydetme henüz açık değil</Label>
-        <Label style={s.pendingText}>Müsaitlik kaydı ve eşleşme için sunucu desteği hazırlanıyor. Seçimlerini burada planlayabilirsin ama şu an kaydedilmez ve davet alınmaz.</Label>
+        <Label style={s.pendingTitle}>Müsaitlik kaydı şu an kullanılamıyor</Label>
+        <Label style={s.pendingText}>Bu sunucuda müsaitlik kayıtları kullanılamıyor. Seçimlerin kaydedilmez ve bu seçimlere göre davet alamazsın.</Label>
       </Box>}
 
       {tab === "records" && AVAILABILITY_SERVER_READY && <Box style={{ gap: 10 }}>
@@ -321,7 +321,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
         <Box style={s.wrap}>{WEEKDAYS.map(day => <Chip key={day} label={WEEKDAY_SHORT[day]} accessibilityLabel={WEEKDAY_LONG[day]} disabled={!daysInRange.includes(day)} selected={draft.weekdays.includes(day)} onPress={() => update(current => ({ ...current, weekdays: current.weekdays.includes(day) ? current.weekdays.filter(item => item !== day) : [...current.weekdays, day] }))} />)}</Box>
         {draft.startDate && daysInRange.length < 7 && <Label style={s.muted}>Seçtiğin aralıkta olmayan günler kapalı.</Label>}
         <Label style={s.fieldLabel}>Saat aralıkları</Label>
-        {!draft.timeWindows.length && <Box style={s.allDay}><Label style={s.allDayText}>Saat seçmedin: gün boyu müsaitim olarak kaydedilir.</Label></Box>}
+        {!draft.timeWindows.length && <Box style={s.allDay}><Label style={s.allDayText}>Saat seçmezsen bu günlerde gün boyu müsait olduğun kabul edilir.</Label></Box>}
         {draft.timeWindows.map((window, index) => <Box key={index} style={s.windowRow}>
           <Field mode="time" accessibilityLabel={`${index + 1}. aralık başlangıç saati`} value={window.from} onChangeText={value => update(current => ({ ...current, timeWindows: current.timeWindows.map((item, i) => i === index ? { ...item, from: value } : item) }))} style={s.timeField} glass />
           <Label style={s.muted}>–</Label>
@@ -342,7 +342,7 @@ export default function AvailabilityScreen({ navigate, now }: { navigate: Naviga
         {locatingCity && <Label style={s.muted}>Şehir bulunuyor…</Label>}
         <Box style={s.search}>
           <SearchIcon size={15} style={{ color: palette.muted }} />
-          <Field accessibilityLabel="Adres veya mekan ara" placeholder={cityPlace ? `${cityPlace.name} içinde adres veya mekan ara…` : "Adres veya mekan ara…"} value={searchShown}
+          <Field accessibilityLabel="Adres veya mekân ara" placeholder={cityPlace ? `${cityPlace.name} içinde adres veya mekân ara…` : "Adres veya mekân ara…"} value={searchShown}
             onChangeText={text => { setCityQuery(text); setTyping(true) }} onSubmitEditing={() => void searchCity()} returnKeyType="search" style={s.searchField} />
           {/* While typing: "Ara" (device geocoder), as on the event location step; once picked: clear. */}
           {typing ? <Touch accessibilityLabel="Ara" disabled={!cityQuery.trim() || searching} onPress={() => void searchCity()} style={s.searchButton}><Label style={s.link}>{searching ? "…" : "Ara"}</Label></Touch>

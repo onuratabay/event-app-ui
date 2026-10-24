@@ -36,7 +36,7 @@ const PRINCIPLES = [{
   desc: "Bu topluluk gerçek hayatta bağlantılar kurar. Diğer üyelerle iletişiminde saygılı, kapsayıcı ve nazik ol. Farklı görüşlere, yaşam tarzlarına ve kişisel sınırlara saygı göster."
 }, {
   title: "Katıldığın etkinliklere git",
-  desc: "Bir etkinliğe katılacağını söylediğinde diğer üyeler sana güvenerek plan yapar. Gelemeyeceksen mümkün olduğunca erken haber ver. Tekrarlanan habersiz katılmama davranışları güven skorunu etkileyebilir."
+  desc: "Bir etkinliğe katılacağını söylediğinde diğer üyeler sana güvenerek plan yapar. Gelemeyeceksen katılımını iptal et ve düzenleyene mümkün olduğunca erken haber ver."
 }, {
   title: "Diğer üyelerin gizliliğine saygı göster",
   desc: "Etkinliklerde öğrendiğin kişisel bilgileri, fotoğrafları veya konuşmaları izinsiz paylaşma. Topluluk içinde oluşan güveni koru."
@@ -147,7 +147,7 @@ function ExitAction({ navigate }: { navigate: NavigateFn }) {
     setBusy(false);
     navigate("welcome", { reset: true });
   };
-  return <NavAction label="Başvurudan çık" disabled={busy} onPress={() => showAlert("Çıkış yap", "Başvurundan çıkıp ilk ekrana döneceksin. Aynı e-posta ve şifreyle kaldığın yerden devam edebilirsin.", [{ text: "Vazgeç", style: "cancel" }, { text: "Çıkış yap", style: "destructive", onPress: () => void exit() }])}>Çıkış</NavAction>;
+  return <NavAction label="Başvurudan çık" disabled={busy} onPress={() => showAlert("Çıkış yap", "Başvurundan çıkıp ilk ekrana döneceksin. Telefon numaran ve şifrenle giriş yaparak kaldığın yerden devam edebilirsin.", [{ text: "Vazgeç", style: "cancel" }, { text: "Çıkış yap", style: "destructive", onPress: () => void exit() }])}>Çıkış</NavAction>;
 }
 
 const INSTAGRAM_REQUIRED = "Devam etmek için Instagram kullanıcı adını yaz.";
@@ -692,7 +692,7 @@ function Step2({
               Seni biraz daha{"\n"}tanıyalım.
             </Label>
             <Label style={[[ui.textSm, ui.textWhite45]]}>
-              Bize nasıl ulaştığını merak ediyoruz.
+              Instagram kullanıcı adını ekle, istersen tanıdığın bir üyeden referans iste.
             </Label>
           </Box>
 
@@ -709,7 +709,7 @@ function Step2({
                     Instagram
                   </Label>
                   <Label style={[[ui.textXs, ui.textWhite40]]}>
-                    Zorunlu · Profilini bağla
+                    Zorunlu · Kullanıcı adını ekle
                   </Label>
                 </Box>
               </Box>
@@ -718,7 +718,7 @@ function Step2({
                   {!!newInstagram && !instagramValid && <Label style={[[ui.textXs, ui.mt15], { color: palette.error }]}>Kullanıcı adı yalnızca harf, rakam, nokta ve alt çizgi içerebilir (en fazla 30 karakter).</Label>}
                   {!canContinue && !newInstagram && submitError === INSTAGRAM_REQUIRED && <Label accessibilityRole="alert" style={[[ui.textXs, ui.mt15], { color: palette.error }]}>{INSTAGRAM_REQUIRED}</Label>}
                 </Box>
-                <Label style={[[ui.textXs, ui.textWhite30, ui.mt3, { fontStyle: "italic" }]]}>* Merak etme, sadece biraz dedikodu yapacağız. Profilinden kim olduğunu anlarız, gerisi aramızda. 🕵️</Label>
+                <Label style={[[ui.textXs, ui.textWhite30, ui.mt3, { fontStyle: "italic" }]]}>Instagram kullanıcı adını başvurunu değerlendirirken kullanıyoruz. Hesabının şifresini istemiyoruz.</Label>
             </GlassCard>}
 
             {/* Reference */}
@@ -828,9 +828,9 @@ function Step3({
           <Label style={[[ui.fontDisplay, ui.text4xl, ui.textWhite], { fontStyle: "italic" }]}>
             {passive ? "Hesabın\nincelemede." : "Başvurunu\ninceliyoruz."}
           </Label>
-          <EditorialQuote>{passive ? "Topluluğun güvende kalması için hesapları zaman zaman yeniden değerlendiriyoruz." : "Topluluğun güvenli kalması bizim için çok önemli. Bu yüzden her başvuruyu dikkatle değerlendiriyoruz."}</EditorialQuote>
+          <EditorialQuote>{passive ? "Topluluğun güvende kalması için hesapları zaman zaman yeniden değerlendiriyoruz." : "Başvurunun durumunu buradan takip edebilirsin. Onaylı bir üyeden referansın varsa başvuruna ekleyebilirsin."}</EditorialQuote>
           <Label style={[[ui.textSm, ui.textWhite35]]}>
-            {passive ? (push === "granted" ? "İnceleme bitince sana bildirim göndereceğiz." : "İnceleme bitince sana haber vereceğiz.") : push === "granted" ? "Onaylandığında sana bildirim göndereceğiz." : "Yakında sana döneceğiz."}
+            {passive ? (push === "granted" ? "İnceleme bitince sana bildirim göndereceğiz." : "İncelemenin sonucunu bu ekrandan takip edebilirsin.") : push === "granted" ? "Onaylandığında sana bildirim göndereceğiz." : "Başvurunun güncel durumunu bu ekrandan takip edebilirsin."}
           </Label>
           {push === "denied" && <Label style={[[ui.textXs, ui.textWhite35]]}>
               Bildirimler kapalı. Onayı uygulamayı açtığında göreceksin; bildirimleri telefonunun ayarlarından açabilirsin.
@@ -841,7 +841,7 @@ function Step3({
         {passive ? <GlassCard walkthroughId="application-progress" style={[[ui.p5, ui.spaceY3]]} enter>
             <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite]]}>{takenPassive ? "Hesabın şu an pasif" : "Hesabını inceliyoruz"}</Label>
             <Label style={[[ui.textXs, ui.textWhite55, ui.leadingRelaxed]]}>İnceleme sürerken etkinliklere katılamaz, etkinlik oluşturamaz ve mesaj gönderemezsin.</Label>
-            <Label style={[[ui.textXs, ui.textWhite55, ui.leadingRelaxed]]}>Hesabın yeniden aktifleştirildiğinde uygulama kendiliğinden açılır; tekrar giriş yapman gerekmez.</Label>
+            <Label style={[[ui.textXs, ui.textWhite55, ui.leadingRelaxed]]}>Hesabın yeniden etkinleştirildiğinde uygulamayı kullanmaya devam edebilirsin.</Label>
           </GlassCard> : <GlassCard walkthroughId="application-progress" style={[[ui.p5]]} enter>
           <Box style={[[ui.spaceY0]]}>
             {stages.map((s, i) => <Box key={i} style={[[ui.flex, ui.itemsStart, ui.gap3]]}>
