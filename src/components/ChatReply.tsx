@@ -54,6 +54,9 @@ export function SwipeToReply({ enabled, onReply, children }: { enabled: boolean;
   </View>
 }
 
+/** One-tap messages above the composer of an event room (members' and guests'). */
+export const QUICK_REPLIES = ["Yoldayım 🚶", "5 dk gecikeceğim ⏱️", "Geldim 📍"]
+
 /** The answered message inside a reply's bubble: who wrote it and how it began. */
 export function ReplyQuote({ author, text, deleted, mine, onPress }: { author: string; text: string; deleted?: boolean; mine: boolean; onPress?: () => void }) {
   const body = <>

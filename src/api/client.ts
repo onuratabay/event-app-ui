@@ -672,7 +672,7 @@ export const leaveGuestEvent = (code: string, session: string) => request(`/gues
 export interface GuestRoomMessage { id: string; text: string; name: string; isGuest: boolean; mine?: boolean; createdAt: string; replyTo?: { id: string; name: string; isGuest: boolean; text: string; deleted: boolean } | null }
 // The room as a guest sees it: the latest 100 messages of members and guests (403 while the room is closed).
 export const getGuestMessages = (code: string, session: string) => request<{ items: GuestRoomMessage[] }>(`/guest/events/${encodeURIComponent(code)}/messages`, { guest: true, background: true, headers: { 'x-guest-session': session } })
-export const sendGuestMessage = (code: string, session: string, text: string, replyToId?: string) => request<{ id: string }>(`/guest/events/${encodeURIComponent(code)}/messages`, { guest: true, method: 'POST', headers: { 'x-guest-session': session }, body: JSON.stringify(replyToId ? { text, replyToId } : { text }) })
+export const sendGuestMessage = (code: string, session: string, text: string, replyToId?: string) => request<{ id: string }>(`/guest/events/${encodeURIComponent(code)}/messages`, { guest: true, method: 'POST', headers: { 'x-guest-session': session }, body: JSON.stringify(replyToId ? { text, replyToId } : { text }), background: true })
 
 export const getGuestParticipation = (code: string, session: string) => request<{ joined: boolean; name: string; expiresAt: string }>(`/guest/events/${encodeURIComponent(code)}/participation`, { guest: true, headers: { 'x-guest-session': session } })
 

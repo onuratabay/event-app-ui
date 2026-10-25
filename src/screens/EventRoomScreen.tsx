@@ -18,7 +18,7 @@ import ActionSheet, { REPORT_REASONS, type SheetOption } from "../components/Act
 import { deleteMessage, editMessage, getApiErrorMessage, getEvent, getEventActivity, getMessageReads, getMessages, markRoomRead, putPreference, renameRoom, reportUser, sendMessage, type ApiMessage } from "../api/client";
 import { EMPTY_USER, defaultRoomTitle, mapApiEventPreservingCover, participantCount, roomTitle, setOpenRoom } from "../native/Store";
 import { cachedRoom, hydrateChatCache, markRoomListRead, markRoomSynced, rememberRoom, type CachedRoomMessage, type RoomQuote } from "../services/chat-cache";
-import { ReplyBar, ReplyQuote, SwipeToReply } from "../components/ChatReply";
+import { QUICK_REPLIES, ReplyBar, ReplyQuote, SwipeToReply } from "../components/ChatReply";
 import { useStore } from "../native/Store";
 import { Box, ChatList, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -29,7 +29,6 @@ interface Props {
 }
 // Same limit the backend enforces for chat messages and edits.
 const MAX_MESSAGE_LENGTH = 2000;
-const QUICK_REPLIES = ["Yoldayım 🚶", "5 dk gecikeceğim ⏱️", "Geldim 📍"];
 // system: a WhatsApp-style info line (e.g. the organizer renamed the room), not a chat bubble.
 type RoomMessage = ChatMessage & { system?: boolean; announcement?: boolean; deleted?: boolean; edited?: boolean; pending?: boolean; failed?: boolean; replyTo?: RoomQuote };
 /** Saved room messages keep only the author's id and name; the rest of the user comes back empty. */

@@ -9,10 +9,10 @@ import { useGuest } from '../guest/GuestSession'
 import { AtmoBackground } from '../components/GlassUI'
 import { SendIcon } from '../components/Icons'
 import { useKeyboardVisible } from '../components/BottomNav'
-import { ReplyBar, ReplyQuote, SwipeToReply } from '../components/ChatReply'
+import { QUICK_REPLIES, ReplyBar, ReplyQuote, SwipeToReply } from '../components/ChatReply'
 import TopNavBar from '../components/TopNavBar'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { Box, ChatList, Field, Label, Touch } from '../native/UI'
+import { Box, ChatList, Field, Label, Scroll, Touch } from '../native/UI'
 import { useKeyboardOverlap } from '../native/useKeyboardOverlap'
 import { useScreenActive } from '../native/useScreenActive'
 import { palette } from '../theme/palette'
@@ -102,12 +102,13 @@ export default function GuestRoomScreen() {
     const timer = setInterval(() => void load(), POLL_MS)
     return () => clearInterval(timer)
   }, [code, session, active])
-  const send = async () => {
-    const text = input.trim()
+  // The composer's text, or a quick message (which leaves what is being typed in place).
+  const send = async (raw = input) => {
+    const text = raw.trim()
     if (!code || !session || !text || sending) return
     setSending(true); setError('')
     const quote = replyTo ? { id: replyTo.id, name: replyTo.name, isGuest: replyTo.isGuest, text: replyTo.text.slice(0, 300), deleted: false } : null
-    try { const result = await sendGuestMessage(code, session, text, replyTo?.id); remember(result.id, quote); setInput(''); setReplyTo(null); await load() }
+    try { const result = await sendGuestMessage(code, session, text, replyTo?.id); remember(result.id, quote); if (raw === input) setInput(''); setReplyTo(null); await load() }
     catch (cause) { setError(getApiErrorMessage(cause, 'Mesaj gönderilemedi. Tekrar dene.')) }
     finally { setSending(false) }
   }
@@ -161,7 +162,9 @@ export default function GuestRoomScreen() {
           }}
         />}
         <Box style={[s.composerWrap, { paddingBottom: 12 + safeBottom + keyboardOverlap }]}>
-          {replyTo ? <ReplyBar author={replyTo.mine ? 'Sen' : replyTo.isGuest ? `${replyTo.name} · Misafir` : replyTo.name.split(' ')[0]} text={replyTo.text} onCancel={() => setReplyTo(null)} /> : null}
+          {replyTo ? <ReplyBar author={replyTo.mine ? 'Sen' : replyTo.isGuest ? `${replyTo.name} · Misafir` : replyTo.name.split(' ')[0]} text={replyTo.text} onCancel={() => setReplyTo(null)} /> : <Scroll horizontal style={s.quickRow}>
+            {QUICK_REPLIES.map(reply => <Touch key={reply} accessibilityLabel={`Hızlı mesaj: ${reply}`} disabled={sending} onPress={() => void send(reply)} style={s.quick}><Label style={s.quickLabel}>{reply}</Label></Touch>)}
+          </Scroll>}
           <Box style={s.composer} glass>
             <Field value={input} onChangeText={setInput} placeholder="Bir mesaj yaz…" placeholderTextColor="rgba(255,255,255,.35)" multiline maxLength={MAX_MESSAGE_LENGTH} style={s.input} />
             <Touch onPress={() => void send()} accessibilityLabel="Mesaj gönder" disabled={sending || !input.trim()} style={s.send} gradient={['#4d5bcb', '#6651c9']}>
@@ -192,6 +195,9 @@ const s = StyleSheet.create({
   textMine: { color: '#ffffff', fontSize: 15, lineHeight: 21 },
   textOther: { color: 'rgba(255,255,255,.85)', fontSize: 15, lineHeight: 21 },
   time: { color: 'rgba(255,255,255,.3)', fontSize: 10, lineHeight: 13, marginHorizontal: 4 },
+  quickRow: { flexGrow: 0, gap: 8 },
+  quick: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: 'rgba(255,255,255,.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,.1)' },
+  quickLabel: { color: 'rgba(255,255,255,.8)', fontSize: 13, lineHeight: 17 },
   composerWrap: { paddingHorizontal: 16, paddingTop: 6, gap: 8 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingLeft: 14, paddingRight: 6, paddingVertical: 6, borderRadius: 22, backgroundColor: 'rgba(255,255,255,.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,.1)' },
   input: { flex: 1, minHeight: 40, maxHeight: 120, paddingVertical: 9, color: palette.text, fontSize: 15, backgroundColor: 'transparent' },
