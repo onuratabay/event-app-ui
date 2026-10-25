@@ -12,7 +12,9 @@ const MAX_MESSAGES = 100
 const MAX_THREADS = 40
 
 /** Room messages are stored with only what the chat needs of the author. */
-export type CachedRoomMessage = { id: string; createdAt?: string; text: string; time: string; user: { id: string; name: string }; system?: boolean; announcement?: boolean; deleted?: boolean; edited?: boolean }
+export type CachedRoomMessage = { id: string; createdAt?: string; text: string; time: string; user: { id: string; name: string }; system?: boolean; announcement?: boolean; deleted?: boolean; edited?: boolean; replyTo?: RoomQuote }
+/** "Cevapla": the answered room message as its reply shows it. */
+export type RoomQuote = { id: string; text: string; deleted?: boolean; userId: string; name: string }
 /**
  * `syncedAt`: the newest message up to which the saved copy is known to be complete. Opening a chat asks the
  * server only for what came after it. Messages that arrive live while the app is connected move it forward;

@@ -88,6 +88,8 @@ Module._load = function (id, parent, isMain) {
       Keyboard: { addListener: (name, handler) => { (global.__testKeyboardListeners ||= {})[name] = handler; return { remove() { if (global.__testKeyboardListeners?.[name] === handler) delete global.__testKeyboardListeners[name] } } }, dismiss: () => { global.__testKeyboardDismissed = true } },
       BackHandler: { addEventListener: (_name, handler) => { global.__testBackHandler = handler; return { remove() { global.__testBackHandler = undefined } } } },
       AccessibilityInfo: { isReduceMotionEnabled: async () => false, announceForAccessibility() {}, getRecommendedTimeoutMillis: async value => value },
+      // Swipe-to-reply: the drag gesture itself only works on a device.
+      PanResponder: { create: () => ({ panHandlers: {} }) },
       Easing: { linear: value => value, quad: value => value ** 2, cubic: value => value ** 3, out: easing => easing, inOut: easing => easing },
       Linking: { openURL: async url => { global.__openedUrl = url }, canOpenURL: async () => true },
       Share: { share: async value => { global.__lastShare = value; return {} } },

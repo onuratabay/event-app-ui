@@ -1,7 +1,7 @@
 import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { showAlert } from "../components/AppDialog"
 import { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, View, type ViewInstance } from "react-native";
+import { FlatList, StyleSheet, View, type ViewInstance } from "react-native";
 import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { deleteDirectMessage, editDirectMessage, reportUser, getApiErrorMessage, getDirectMessages, markDirectRead, openDirectConversation, sendDirectMessage, type DirectConversation, type DirectMessage } from "../api/client";
 import { useBottomNavInset } from "../components/BottomNav";
@@ -9,6 +9,7 @@ import { AtmoBackground, Avatar } from "../components/GlassUI";
 import ActionSheet, { REPORT_REASONS, type SheetOption } from "../components/ActionSheet";
 import * as Clipboard from "expo-clipboard";
 import { SendIcon } from "../components/Icons";
+import { ReplyBar, ReplyQuote, SwipeToReply } from "../components/ChatReply";
 import TopNavBar from "../components/TopNavBar";
 import { useStore } from "../native/Store";
 import { useScreenActive } from "../native/useScreenActive";
@@ -60,7 +61,12 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
   const conversationId = conversation?.id;
   const messagesRef = useRef<ChatLine[]>(messages);
   messagesRef.current = messages;
-  const upsert = (incoming: ChatLine[]) => setMessages(prev => [...new Map([...prev, ...incoming].map(row => [row.id, row])).values()]);
+  // Replies quoting an incoming (e.g. edited or deleted) message show its new text too.
+  const upsert = (incoming: ChatLine[]) => setMessages(prev => {
+    const byId = new Map(incoming.map(row => [row.id, row]));
+    const quoted = (row: ChatLine) => { const source = row.replyTo ? byId.get(row.replyTo.id) : undefined; return source && row.replyTo ? { ...row, replyTo: { ...row.replyTo, text: source.deleted ? "" : source.text.slice(0, 300), deleted: !!source.deleted } } : row; };
+    return [...new Map([...prev, ...incoming].map(row => [row.id, quoted(row)])).values()];
+  });
 
   useEffect(() => {
     if (!userId || !screenActive || !meId) return;
@@ -160,7 +166,8 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
       try {
         // Over the open connection when there is one (no new HTTP request per message); HTTP while it reconnects.
         // A timed-out socket send is not retried over HTTP, so a message is never sent twice.
-        const saved = socketConnected() ? await socketAction<DirectMessage>("dm:message", { conversationId, text: line.text }) : await sendDirectMessage(conversationId, line.text);
+        const replyToId = line.replyTo?.id;
+        const saved = socketConnected() ? await socketAction<DirectMessage>("dm:message", { conversationId, text: line.text, ...(replyToId ? { replyToId } : {}) }) : await sendDirectMessage(conversationId, line.text, replyToId);
         setMessages(prev => [...prev.filter(row => row.id !== line.id && row.id !== saved.id), saved]);
         setError(null);
       } catch (cause) {
@@ -178,8 +185,23 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
     const text = input.trim();
     if (!text || !conversationId || !canSend) return;
     const now = new Date().toISOString();
-    const line: ChatLine = { id: `local-${now}-${Math.random().toString(36).slice(2, 8)}`, conversationId, senderId: meId, text, createdAt: now, pending: true };
-    upsert([line]); setInput(""); deliver(line);
+    const line: ChatLine = { id: `local-${now}-${Math.random().toString(36).slice(2, 8)}`, conversationId, senderId: meId, text, createdAt: now, pending: true,
+      ...(replyTo ? { replyTo: { id: replyTo.id, senderId: replyTo.senderId, text: replyTo.text.slice(0, 300) } } : {}) };
+    upsert([line]); setInput(""); setReplyTo(null); deliver(line);
+  };
+  // "Cevapla": pulling a message right (or the option under a long press) quotes it in the next message.
+  const [replyTo, setReplyTo] = useState<ChatLine | null>(null);
+  const canReply = (line: ChatLine) => canSend && !line.deleted && !line.pending && !line.failed && !line.id.startsWith("local-");
+  const startReply = (line: ChatLine) => { if (!canReply(line)) return; setEditing(null); setReplyTo(line); };
+  const authorOf = (senderId: string) => senderId === meId ? "Sen" : conversation?.user.firstName || "Mesaj";
+  // Tapping a quote scrolls to the answered message (when it is loaded) and marks it for a moment.
+  const listRef = useRef<FlatList<ChatLine>>(null);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const showQuoted = (id: string) => {
+    const index = newestFirst.findIndex(row => row.id === id);
+    if (index < 0) return;
+    listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    setHighlighted(id); setTimeout(() => setHighlighted(current => current === id ? null : current), 1400);
   };
   // Long press on a message opens the same options as in event rooms: copy; edit and delete your own;
   // report someone else's.
@@ -199,7 +221,8 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
     if (line.deleted || line.pending || line.failed) return;
     const mine = line.senderId === meId;
     const options: SheetOption[] = [{ label: "Kopyala", onPress: () => { void Clipboard.setStringAsync(line.text).catch(() => {}); } }];
-    if (mine && canSend) options.push({ label: "Düzenle", onPress: () => { setEditing(line); setInput(line.text); } });
+    if (canReply(line)) options.unshift({ label: "Cevapla", onPress: () => startReply(line) });
+    if (mine && canSend) options.push({ label: "Düzenle", onPress: () => { setReplyTo(null); setEditing(line); setInput(line.text); } });
     if (mine) options.push({ label: "Sil", danger: true, onPress: () => removeMessage(line) });
     else options.push({ label: "Şikayet et", danger: true, onPress: () => report(line) });
     setSheet({ title: line.text.slice(0, 80), options });
@@ -245,7 +268,10 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
           <Label style={s.emptyText}>{canSend ? `${conversation.user.firstName} ile sohbeti ilk mesajınla başlat.` : "Bu kişiyle artık mesajlaşamazsın."}</Label>
         </Box>
         : <ChatList
+          listRef={listRef}
           data={newestFirst}
+          // Scrolling to an answered message far up: jump near it first, then settle on it.
+          onScrollToIndexFailed={({ index, averageItemLength }) => { listRef.current?.scrollToOffset({ offset: index * averageItemLength, animated: true }); setTimeout(() => listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 }), 250); }}
           keyExtractor={line => line.id}
           style={{ flex: 1 }}
           contentContainerStyle={s.listContent}
@@ -270,15 +296,18 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
             const sharesTime = !!following && following.senderId === line.senderId && !following.pending && !following.failed && dayKey(following.createdAt) === dayKey(line.createdAt) && timeOf(following.createdAt) === timeOf(line.createdAt);
             return <View>
               {separator}
-              <Box style={[s.message, mine ? s.alignEnd : s.alignStart, grouped && s.grouped]}>
-                <Touch accessibilityLabel={!line.deleted ? "Mesaj seçenekleri" : undefined} accessibilityHint={!line.deleted ? "Basılı tut" : undefined} haptic={false} disabled={!!line.deleted} disabledOpacity={1}
+              <SwipeToReply enabled={canReply(line)} onReply={() => startReply(line)}>
+              <Box style={[s.message, mine ? s.alignEnd : s.alignStart, grouped && s.grouped, highlighted === line.id && s.highlighted]}>
+                <Touch accessibilityLabel={!line.deleted ? "Mesaj seçenekleri" : undefined} accessibilityHint={!line.deleted ? "Basılı tut; cevaplamak için sağa kaydır" : undefined} haptic={false} disabled={!!line.deleted} disabledOpacity={1}
                   onLongPress={() => openActions(line)} style={[s.bubble, line.deleted ? s.bubbleDeleted : mine ? s.bubbleMine : s.bubbleOther, (line.pending || line.failed) && { opacity: 0.65 }, { minHeight: 0 }]}>
+                  {line.replyTo && !line.deleted ? <ReplyQuote author={authorOf(line.replyTo.senderId)} text={line.replyTo.text} deleted={line.replyTo.deleted} mine={mine} onPress={() => showQuoted(line.replyTo!.id)} /> : null}
                   <Label style={line.deleted ? s.deletedText : mine ? s.textMine : s.textOther}>{line.deleted ? "Bu mesaj silindi" : line.text}</Label>
                 </Touch>
                 {line.failed ? <Touch accessibilityLabel="Mesajı tekrar gönder" onPress={() => retry(line)} style={{ minHeight: 0 }}><Label style={[s.time, { color: palette.error }]}>Gönderilemedi · Tekrar dene</Label></Touch>
                   : (line.pending || line.editedAt || !sharesTime) ? <Label style={s.time}>{timeOf(line.createdAt)}{line.pending ? " · Gönderiliyor…" : ""}{line.editedAt && !line.deleted ? " · düzenlendi" : ""}</Label> : null}
                 {lastMine && line.id === lastMine.id ? <Label style={s.seen}>{seen ? "Görüldü" : "Gönderildi"}</Label> : null}
               </Box>
+              </SwipeToReply>
             </View>;
           }}
         />}
@@ -289,7 +318,7 @@ export default function DirectChatScreen({ navigate, userId }: { navigate: Navig
         {editing ? <Box style={s.editBar}>
           <Label style={s.editLabel} numberOfLines={1}>✎ Mesajı düzenliyorsun</Label>
           <Touch accessibilityLabel="Düzenlemeyi iptal et" onPress={() => { setEditing(null); setInput(""); }} style={s.editCancel}><Label style={s.editCancelLabel}>Vazgeç</Label></Touch>
-        </Box> : null}
+        </Box> : replyTo ? <ReplyBar author={authorOf(replyTo.senderId)} text={replyTo.text} onCancel={() => setReplyTo(null)} /> : null}
         <Box walkthroughId="direct-composer" style={s.composer} glass>
           <Field value={input} onChangeText={setInput} editable={!!conversation} placeholder={editing ? "Mesajı düzenle…" : "Bir mesaj yaz…"} placeholderTextColor="rgba(255,255,255,.35)" multiline maxLength={MAX_MESSAGE_LENGTH} style={s.input} />
           <Touch onPress={send} accessibilityLabel={editing ? "Düzenlemeyi kaydet" : "Mesaj gönder"} disabled={!input.trim() || !conversation || saving} style={s.send} gradient={["#4d5bcb", "#6651c9"]}>
@@ -315,6 +344,7 @@ const s = StyleSheet.create({
   day: { alignSelf: "center", color: "rgba(255,255,255,.45)", fontSize: 11, lineHeight: 14, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(255,255,255,.05)", marginVertical: 12 },
   message: { marginTop: 10, gap: 3, maxWidth: "80%" },
   grouped: { marginTop: 3 },
+  highlighted: { backgroundColor: "rgba(105,120,255,.16)", borderRadius: 20 },
   alignEnd: { alignSelf: "flex-end", alignItems: "flex-end" },
   alignStart: { alignSelf: "flex-start", alignItems: "flex-start" },
   bubble: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18 },

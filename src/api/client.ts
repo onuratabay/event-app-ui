@@ -481,7 +481,8 @@ export const getRatingForm = (eventId: string) => request<RatingForm>(`/events/$
 // The organizer sends no eventScore; everyone else must. Ratings are final once sent.
 export const submitRatings = (eventId: string, body: { eventScore?: number; participants: ParticipantRatingInput[] }) => request<{ submitted: true }>(`/events/${encodeURIComponent(eventId)}/ratings`, { method: 'POST', body: JSON.stringify(body) })
 /** One-to-one chats with connections (no event room needed). canSend is false once you are no longer connected. */
-export interface DirectMessage { id: string; conversationId: string; senderId: string; text: string; createdAt: string; /** Deleted by its sender: shown as "Bu mesaj silindi". */ deleted?: boolean; /** Edited by its sender: shown as "düzenlendi". */ editedAt?: string | null }
+export interface DirectMessage { id: string; conversationId: string; senderId: string; text: string; createdAt: string; /** Deleted by its sender: shown as "Bu mesaj silindi". */ deleted?: boolean; /** Edited by its sender: shown as "düzenlendi". */ editedAt?: string | null; /** "Cevapla": the earlier message of this chat it answers. */ replyTo?: DirectReply | null }
+export interface DirectReply { id: string; senderId: string; text: string; deleted?: boolean }
 export interface DirectConversation { id: string; user: { id: string; firstName: string; lastName: string; profilePhoto: string | null }; canSend: boolean; lastMessage: DirectMessage | null; unreadCount: number; /** Has the app open right now; live updates arrive as "presence:changed". */ online?: boolean }
 export const getDirectConversations = () => request<{ items: DirectConversation[] }>('/direct', { background: true })
 // Opens the chat with a connection (created on first use); an existing chat opens even after unfriending, read-only.
@@ -489,7 +490,7 @@ export const getDirectConversations = () => request<{ items: DirectConversation[
 export const openDirectConversation = (userId: string) => request<DirectConversation>(`/direct/with/${encodeURIComponent(userId)}`, { method: 'POST', background: true })
 // `after`: only messages newer than the device's newest (a small catch-up for a cached chat).
 export const getDirectMessages = (conversationId: string, cursor?: string, after?: string) => request<{ items: DirectMessage[]; nextCursor: string | null; otherReadAt: string | null }>(`/direct/${encodeURIComponent(conversationId)}/messages${after ? `?after=${encodeURIComponent(after)}` : cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, { background: true })
-export const sendDirectMessage = (conversationId: string, text: string) => request<DirectMessage>(`/direct/${encodeURIComponent(conversationId)}/messages`, { method: 'POST', body: JSON.stringify({ text }), background: true })
+export const sendDirectMessage = (conversationId: string, text: string, replyToId?: string) => request<DirectMessage>(`/direct/${encodeURIComponent(conversationId)}/messages`, { method: 'POST', body: JSON.stringify({ text, ...(replyToId ? { replyToId } : {}) }), background: true })
 // "Sohbeti sil": only for the caller; earlier messages stay hidden for them, the other side keeps everything.
 export const deleteDirectConversation = (conversationId: string) => request<{ cleared: true }>(`/direct/${encodeURIComponent(conversationId)}`, { method: 'DELETE' })
 // The sender edits their own message; both sides see it marked "düzenlendi".
@@ -537,7 +538,8 @@ export const getInvitations = () => request<EventListResponse>('/events/invitati
 export const getEnums = (group: string) => cached(`enums:${group}`, 6 * HOURS, () => request<Array<{ id: string; enum: string; name: string }>>(`/enum-values?group=${group}`))
 // Creating can take long (cover moderation); a retry with the same clientRequestId returns the same event instead of a duplicate.
 export const createEvent = (value: Record<string, unknown>) => request<ApiEvent>('/events', { method: 'POST', body: JSON.stringify(value), timeoutMs: 30000 })
-export interface ApiMessage { kind?: 'message' | 'announcement' | 'system'; id: string; text: string; createdAt: string; editedAt?: string | null; deleted?: boolean; user: { id: string; firstName: string; lastName: string } }
+export interface ApiMessage { kind?: 'message' | 'announcement' | 'system'; id: string; text: string; createdAt: string; editedAt?: string | null; deleted?: boolean; user: { id: string; firstName: string; lastName: string }; /** "Cevapla": the earlier message of this room it answers. */ replyTo?: RoomReply | null }
+export interface RoomReply { id: string; text: string; deleted?: boolean; user: { id: string; firstName: string; lastName: string } }
 // Room requests run in the background: the chat screen never shows the global loading overlay.
 export const editMessage = (eventId: string, messageId: string, text: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ text }), background: true })
 export const deleteMessage = (eventId: string, messageId: string) => request<ApiMessage>(`/events/${eventId}/messages/${messageId}`, { method: 'DELETE', background: true })
@@ -549,7 +551,7 @@ export const MESSAGE_PAGE_SIZE = 20
 // `after`: only messages newer than the device's newest (a small catch-up for a cached room).
 export const getMessages = (id: string, signal?: AbortSignal, cursor?: string, after?: string) => request<{ items: ApiMessage[]; nextCursor?: string | null }>(`/events/${id}/messages${after ? `?after=${encodeURIComponent(after)}` : cursor ? `?cursor=${encodeURIComponent(cursor)}&limit=${MESSAGE_PAGE_SIZE}` : `?limit=${MESSAGE_PAGE_SIZE}`}`, { signal, background: true })
 export const markRoomRead = (id: string) => request<{ eventId: string; unreadCount: number }>(`/events/${id}/messages/read`, { method: 'POST', background: true })
-export const sendMessage = (id: string, text: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text }), background: true })
+export const sendMessage = (id: string, text: string, replyToId?: string) => request<ApiMessage>(`/events/${id}/messages`, { method: 'POST', body: JSON.stringify({ text, ...(replyToId ? { replyToId } : {}) }), background: true })
 /** Profile "Katıldığı": ended events the user joined (not their own), newest first; `total` is the count. */
 /** Profile counters: organized = own events that started; attended = joined-and-ended + organized. */
 export const getProfileStats = () => request<{ attended: number; organized: number }>('/events/stats', { background: true })

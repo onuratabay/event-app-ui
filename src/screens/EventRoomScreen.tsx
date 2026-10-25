@@ -8,7 +8,7 @@ import { useScreenActive } from '../native/useScreenActive';
 import { onSocket, retainEvent, socketAction, socketConnected } from '../services/socket';
 import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions, type ViewInstance } from "react-native";
+import { FlatList, ScrollView, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions, type ViewInstance } from "react-native";
 import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
@@ -16,7 +16,8 @@ import { AtmoBackground, GlassFill } from "../components/GlassUI";
 import ActionSheet, { REPORT_REASONS, type SheetOption } from "../components/ActionSheet";
 import { deleteMessage, editMessage, getApiErrorMessage, getEvent, getEventActivity, getMessageReads, getMessages, markRoomRead, putPreference, renameRoom, reportUser, sendMessage, type ApiMessage } from "../api/client";
 import { EMPTY_USER, defaultRoomTitle, mapApiEventPreservingCover, participantCount, roomTitle, setOpenRoom } from "../native/Store";
-import { cachedRoom, hydrateChatCache, markRoomListRead, markRoomSynced, rememberRoom, type CachedRoomMessage } from "../services/chat-cache";
+import { cachedRoom, hydrateChatCache, markRoomListRead, markRoomSynced, rememberRoom, type CachedRoomMessage, type RoomQuote } from "../services/chat-cache";
+import { ReplyBar, ReplyQuote, SwipeToReply } from "../components/ChatReply";
 import { useStore } from "../native/Store";
 import { Box, ChatList, Field, Label, Picture, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
@@ -29,10 +30,10 @@ interface Props {
 const MAX_MESSAGE_LENGTH = 2000;
 const QUICK_REPLIES = ["Yoldayım 🚶", "5 dk gecikeceğim ⏱️", "Geldim 📍"];
 // system: a WhatsApp-style info line (e.g. the organizer renamed the room), not a chat bubble.
-type RoomMessage = ChatMessage & { system?: boolean; announcement?: boolean; deleted?: boolean; edited?: boolean; pending?: boolean; failed?: boolean };
+type RoomMessage = ChatMessage & { system?: boolean; announcement?: boolean; deleted?: boolean; edited?: boolean; pending?: boolean; failed?: boolean; replyTo?: RoomQuote };
 /** Saved room messages keep only the author's id and name; the rest of the user comes back empty. */
 const fromCache = (row: CachedRoomMessage): RoomMessage => ({ ...row, user: { ...EMPTY_USER, ...row.user } });
-const toCache = (row: RoomMessage): CachedRoomMessage => ({ id: row.id, createdAt: row.createdAt, text: row.text, time: row.time, user: { id: row.user.id, name: row.user.name }, system: row.system, announcement: row.announcement, deleted: row.deleted, edited: row.edited });
+const toCache = (row: RoomMessage): CachedRoomMessage => ({ id: row.id, createdAt: row.createdAt, text: row.text, time: row.time, user: { id: row.user.id, name: row.user.name }, system: row.system, announcement: row.announcement, deleted: row.deleted, edited: row.edited, ...(row.replyTo ? { replyTo: row.replyTo } : {}) });
 // Times arrive as "+03:00" from REST but "Z" from the device (pending sends), so compare instants,
 // never the strings: as text, "09:31Z" sorted before "12:30+03:00" and a new message jumped to the top.
 const instant = (iso?: string) => Date.parse(iso || "") || 0;
@@ -120,8 +121,14 @@ export default function EventRoomScreen({
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   useWalkthroughScreenBlocker(infoOpen || !!sheet || busy || renaming || sending || !!editing || !!input.trim());
-  const mapMessage = (message: ApiMessage): RoomMessage => ({ id: message.id, createdAt: message.createdAt, announcement: message.kind === 'announcement', system: message.kind === 'system', deleted: message.deleted === true, edited: Boolean(message.editedAt), text: message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}`.trim() } });
-  const upsert = (incoming: RoomMessage[]) => setMessages(prev => [...new Map([...prev, ...incoming].map(m => [m.id, m])).values()]);
+  const mapMessage = (message: ApiMessage): RoomMessage => ({ id: message.id, createdAt: message.createdAt, announcement: message.kind === 'announcement', system: message.kind === 'system', deleted: message.deleted === true, edited: Boolean(message.editedAt), text: message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}`.trim() },
+    ...(message.replyTo ? { replyTo: { id: message.replyTo.id, text: message.replyTo.text, deleted: message.replyTo.deleted === true, userId: message.replyTo.user.id, name: `${message.replyTo.user.firstName} ${message.replyTo.user.lastName}`.trim() } } : {}) });
+  // Replies quoting an incoming (e.g. edited or deleted) message show its new text too.
+  const upsert = (incoming: RoomMessage[]) => setMessages(prev => {
+    const byId = new Map(incoming.map(m => [m.id, m]));
+    const quoted = (m: RoomMessage) => { const source = m.replyTo ? byId.get(m.replyTo.id) : undefined; return source && m.replyTo ? { ...m, replyTo: { ...m.replyTo, text: source.deleted ? "" : source.text.slice(0, 300), deleted: !!source.deleted } } : m; };
+    return [...new Map([...prev, ...incoming].map(m => [m.id, quoted(m)])).values()];
+  });
   // Listeners read the signed-in id through a ref, so the room loads without waiting for the account.
   const meIdRef = useRef(ME.id);
   meIdRef.current = ME.id;
@@ -258,10 +265,11 @@ export default function EventRoomScreen({
   const deliver = (local: RoomMessage) => {
     if (!eventId) return;
     const text = local.text;
+    const replyToId = local.replyTo?.id;
     sendQueue.current = sendQueue.current.catch(() => {}).then(async () => {
       try {
         // Socket first; REST only when the realtime connection is down (never after a timeout, to avoid duplicates).
-        const saved = socketConnected() ? await socketAction<ApiMessage>('chat:message', { eventId, text }) : await sendMessage(eventId, text);
+        const saved = socketConnected() ? await socketAction<ApiMessage>('chat:message', { eventId, text, ...(replyToId ? { replyToId } : {}) }) : await sendMessage(eventId, text, replyToId);
         setMessages(prev => [...prev.filter(m => m.id !== local.id && m.id !== saved.id), mapMessage(saved)]);
         setError('');
       } catch {
@@ -284,8 +292,9 @@ export default function EventRoomScreen({
       return;
     }
     const now = new Date().toISOString();
-    const local: RoomMessage = { id: `local-${now}-${Math.random().toString(36).slice(2, 8)}`, createdAt: now, text, pending: true, time: new Date(now).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...ME } };
-    upsert([local]); setInput('');
+    const local: RoomMessage = { id: `local-${now}-${Math.random().toString(36).slice(2, 8)}`, createdAt: now, text, pending: true, time: new Date(now).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...ME },
+      ...(replyTo ? { replyTo: { id: replyTo.id, text: replyTo.text.slice(0, 300), userId: replyTo.user.id, name: replyTo.user.name } } : {}) };
+    upsert([local]); setInput(''); setReplyTo(null);
     void socketAction('chat:typing', { eventId, typing: false }).catch(() => {});
     deliver(local);
   };
@@ -294,6 +303,21 @@ export default function EventRoomScreen({
     deliver(msg);
   };
   const send = () => sendText(input);
+  // "Cevapla": pulling a message right (or the option under a long press) quotes it in the next message.
+  // Guests' messages and system lines cannot be answered (the server refuses them too).
+  const [replyTo, setReplyTo] = useState<RoomMessage | null>(null);
+  const canReply = (msg: RoomMessage) => !cancelled && !msg.system && !msg.deleted && !msg.pending && !msg.failed && !msg.id.startsWith("local-") && !msg.user.id.startsWith("guest:");
+  const startReply = (msg: RoomMessage) => { if (!canReply(msg)) return; setEditing(null); setReplyTo(msg); };
+  const quoteAuthor = (userId: string, name: string) => userId === ME.id ? "Sen" : name.split(" ")[0] || "Bir katılımcı";
+  // Tapping a quote scrolls to the answered message (when it is loaded) and marks it for a moment.
+  const listRef = useRef<FlatList<RoomMessage>>(null);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const showQuoted = (id: string) => {
+    const index = newestFirst.findIndex(m => m.id === id);
+    if (index < 0) return;
+    listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    setHighlighted(id); setTimeout(() => setHighlighted(current => current === id ? null : current), 1400);
+  };
   // "Sil" in the options deletes at once (no second confirmation); a failure brings the message back.
   const removeMessage = (msg: RoomMessage) => {
     if (!eventId) return;
@@ -314,7 +338,8 @@ export default function EventRoomScreen({
     const mine = msg.user.id === ME.id;
     const isOwner = event.host.id === ME.id;
     const options: SheetOption[] = [{ label: "Kopyala", onPress: () => { void Clipboard.setStringAsync(msg.text).catch(() => {}); } }];
-    if (mine && !msg.announcement) options.push({ label: "Düzenle", onPress: () => { setEditing(msg); setInput(msg.text); } });
+    if (canReply(msg)) options.unshift({ label: "Cevapla", onPress: () => startReply(msg) });
+    if (mine && !msg.announcement) options.push({ label: "Düzenle", onPress: () => { setReplyTo(null); setEditing(msg); setInput(msg.text); } });
     if (mine || isOwner) options.push({ label: "Sil", danger: true, onPress: () => removeMessage(msg) });
     if (!mine) options.push({ label: "Şikayet et", danger: true, onPress: () => report(msg) });
     setSheet({ title: msg.text.slice(0, 80), options });
@@ -440,7 +465,10 @@ export default function EventRoomScreen({
           {/* Empty state sits outside the flipped list (an inverted list would turn it upside down). */}
           {!sorted.length && !loading ? <Box style={[s.empty, { flex: 1 }]}><Label style={s.emptyTitle}>Sohbet başladı</Label><Label style={s.emptyText}>İlk mesajı sen yaz; buluşma detaylarını burada konuşabilirsiniz.</Label></Box>
           : <ChatList
+            listRef={listRef}
             data={newestFirst}
+            // Scrolling to an answered message far up: jump near it first, then settle on it.
+            onScrollToIndexFailed={({ index, averageItemLength }) => { listRef.current?.scrollToOffset({ offset: index * averageItemLength, animated: true }); setTimeout(() => listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 }), 250); }}
             keyExtractor={msg => msg.id}
             style={{ flex: 1 }}
             contentContainerStyle={s.listContent}
@@ -474,21 +502,22 @@ export default function EventRoomScreen({
               const grouped = !newDay && sameSender(previous, msg);
               const endsGroup = !sameMinute(msg, following);
               const person = people.get(msg.user.id);
-              return <View>{separator}<Box style={[s.message, isMe && s.messageMine, grouped && s.messageGrouped]}>
+              return <View>{separator}<SwipeToReply enabled={canReply(msg)} onReply={() => startReply(msg)}><Box style={[s.message, isMe && s.messageMine, grouped && s.messageGrouped, highlighted === msg.id && s.highlighted]}>
                 {!isMe && (grouped ? <Box style={s.avatarSpacer} /> : <Picture uri={person?.avatar || ""} accessibilityLabel={msg.user.name} style={s.avatar} />)}
                 <Box style={[s.bubbleColumn, isMe ? s.alignEnd : s.alignStart]}>
                   {!isMe && !grouped && <Box style={s.author}>
                     <Label style={s.authorName}>{msg.user.name.split(" ")[0]}</Label>
                     {isHost && <Label style={s.hostBadge}>Organizatör</Label>}
                   </Box>}
-                  <Touch accessibilityLabel="Mesaj seçenekleri" accessibilityHint="Basılı tut" haptic={false} onLongPress={() => { if (!msg.pending && !msg.failed) openActions(msg); }} style={[s.bubble, msg.deleted ? s.bubbleDeleted : isMe ? s.bubbleMine : s.bubbleOther, (msg.pending || msg.failed) && { opacity: 0.65 }]}>
+                  <Touch accessibilityLabel="Mesaj seçenekleri" accessibilityHint="Basılı tut; cevaplamak için sağa kaydır" haptic={false} onLongPress={() => { if (!msg.pending && !msg.failed) openActions(msg); }} style={[s.bubble, msg.deleted ? s.bubbleDeleted : isMe ? s.bubbleMine : s.bubbleOther, (msg.pending || msg.failed) && { opacity: 0.65 }]}>
+                    {msg.replyTo && !msg.deleted ? <ReplyQuote author={quoteAuthor(msg.replyTo.userId, msg.replyTo.name)} text={msg.replyTo.text} deleted={msg.replyTo.deleted} mine={isMe} onPress={() => showQuoted(msg.replyTo!.id)} /> : null}
                     <Label style={msg.deleted ? s.deletedText : isMe ? s.textMine : s.textOther}>{msg.deleted ? "Bu mesaj silindi" : msg.text}</Label>
                   </Touch>
                   {msg.failed ? <Touch accessibilityLabel="Mesajı tekrar gönder" onPress={() => retry(msg)} style={{ minHeight: 0, alignSelf: "flex-end" }}><Label style={[s.time, { color: palette.error }]}>Gönderilemedi · Tekrar dene</Label></Touch>
                     : (endsGroup || msg.pending || msg.edited) ? <Label style={s.time}>{msg.time}{msg.pending ? " · Gönderiliyor…" : ""}{msg.edited && !msg.deleted ? " · düzenlendi" : ""}</Label> : null}
                   {lastMine && msg.id === lastMine.id ? <Label style={s.seen}>{seenBy.length ? `Görüldü · ${seenBy.slice(0, 2).join(", ")}${seenBy.length > 2 ? ` +${seenBy.length - 2}` : ""}` : "Gönderildi"}</Label> : null}
                 </Box>
-              </Box></View>;
+              </Box></SwipeToReply></View>;
             }}
           />}
 
@@ -501,7 +530,7 @@ export default function EventRoomScreen({
             {editing ? <Box style={s.editBar}>
               <Label style={s.editLabel} numberOfLines={1}>✎ Mesajı düzenliyorsun</Label>
               <Touch accessibilityLabel="Düzenlemeyi iptal et" onPress={() => { setEditing(null); setInput(''); }} style={s.editCancel}><Label style={s.editCancelLabel}>Vazgeç</Label></Touch>
-            </Box> : <Scroll horizontal style={s.quickRow}>
+            </Box> : replyTo ? <ReplyBar author={quoteAuthor(replyTo.user.id, replyTo.user.name)} text={replyTo.text} onCancel={() => setReplyTo(null)} /> : <Scroll horizontal style={s.quickRow}>
               {QUICK_REPLIES.map(reply => <Touch key={reply} accessibilityLabel={`Hızlı mesaj: ${reply}`} onPress={() => void sendText(reply)} style={s.quick}><Label style={s.quickLabel}>{reply}</Label></Touch>)}
             </Scroll>}
             <Box walkthroughId="room-composer" style={s.composer} glass>
@@ -566,6 +595,7 @@ const s = StyleSheet.create({
   message: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 10 },
   messageMine: { flexDirection: "row-reverse" },
   messageGrouped: { marginTop: 3 },
+  highlighted: { backgroundColor: "rgba(105,120,255,.16)", borderRadius: 20 },
   avatar: { width: 28, height: 28, borderRadius: 14 },
   avatarSpacer: { width: 28 },
   bubbleColumn: { maxWidth: "78%", gap: 3 },

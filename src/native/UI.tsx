@@ -552,8 +552,9 @@ export function Scroll({
  * rows on screen. `data` is newest first. Where FlatList is unavailable (the host-mock test runner) the
  * same rows render oldest first in a plain Scroll.
  */
-export function ChatList<T>(props: FlatListProps<T>) {
-  if (FlatList) return <FlatList inverted {...props} />
+// `listRef` reaches the FlatList, e.g. to scroll to an answered message.
+export function ChatList<T>({ listRef, ...props }: FlatListProps<T> & { listRef?: React.Ref<FlatList<T>> }) {
+  if (FlatList) return <FlatList inverted ref={listRef} {...props} />
   const rows = [...(props.data as readonly T[] | null | undefined ?? [])]
   const footer = props.ListFooterComponent
   return <Scroll style={props.style as NativeStyleProp}>
