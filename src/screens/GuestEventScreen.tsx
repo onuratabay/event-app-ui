@@ -114,7 +114,8 @@ export default function GuestEventScreen() {
   const phase: EventPhase = !event ? 'forming' : event.status === 'cancelled' ? 'cancelled' : event.status === 'closed' ? 'closed'
     : event.status === 'started' ? 'started' : event.participantCount >= event.minParticipants ? 'active' : 'forming'
   const participationOpen = !!event && event.status === 'waiting_participants'
-  const roomOpen = phase === 'active' || phase === 'started'
+  // A guest can use the room only before the start (like joining); once it started the invite only shows the event.
+  const roomOpen = phase === 'active'
   const full = !!event && event.participantCount >= event.maxParticipants
   const frozenNote = event?.status === 'cancelled' ? 'Etkinlik iptal edildi; katılım durumu değiştirilemez.' : event?.status === 'closed' ? 'Etkinlik sona erdi; katılım durumu değiştirilemez.' : 'Bu etkinliğe katılım kapanmış.'
   return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>

@@ -27,6 +27,22 @@ type Quote = NonNullable<GuestRoomMessage['replyTo']>
 const sentKey = (code: string) => `event-app:guest-sent:${code}`
 
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+const dayKey = (iso: string) => { const date = new Date(Date.parse(iso) || 0); return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` }
+function dayLabel(iso: string) {
+  const date = new Date(iso)
+  if (isNaN(date.getTime())) return ''
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const day = new Date(date); day.setHours(0, 0, 0, 0)
+  const diff = Math.round((today.getTime() - day.getTime()) / 86400000)
+  if (diff === 0) return 'Bugün'
+  if (diff === 1) return 'Dün'
+  return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })
+}
+// As in the member room: consecutive messages from the same person (same day) are grouped, and messages of
+// the same minute share one time under the last of them.
+type Row = GuestRoomMessage & { mine: boolean }
+const sameSender = (a?: Row, b?: Row) => !!a && !!b && a.name === b.name && a.isGuest === b.isGuest && a.mine === b.mine && dayKey(a.createdAt) === dayKey(b.createdAt)
+const sameMinute = (a?: Row, b?: Row) => sameSender(a, b) && timeOf(a!.createdAt) === timeOf(b!.createdAt)
 
 /**
  * The event room for a guest who joined with an invite: the same conversation members see, with the guest's own
@@ -126,19 +142,22 @@ export default function GuestRoomScreen() {
           renderItem={({ item: msg, index }) => {
             // In the flipped list the older neighbour is the next item.
             const previous = newestFirst[index + 1]
-            const grouped = !!previous && previous.name === msg.name && previous.isGuest === msg.isGuest && previous.mine === msg.mine
+            const following = newestFirst[index - 1]
+            const newDay = !previous || dayKey(previous.createdAt) !== dayKey(msg.createdAt)
+            const grouped = !newDay && sameSender(previous, msg)
+            const endsGroup = !sameMinute(msg, following)
             const author = (name: string, isGuest: boolean, mine?: boolean) => mine ? 'Sen' : isGuest ? `${name} · Misafir` : name.split(' ')[0]
             const quotedMine = !!msg.replyTo && newestFirst.find(row => row.id === msg.replyTo!.id)?.mine
-            return <SwipeToReply enabled onReply={() => setReplyTo(msg)}><Box style={[s.message, msg.mine && s.messageMine, grouped && s.messageGrouped]}>
+            return <View>{newDay ? <Label style={s.day}>{dayLabel(msg.createdAt)}</Label> : null}<SwipeToReply enabled onReply={() => setReplyTo(msg)}><Box style={[s.message, msg.mine && s.messageMine, grouped && s.messageGrouped]}>
               <Box style={[s.bubbleColumn, msg.mine ? s.alignEnd : s.alignStart]}>
                 {!msg.mine && !grouped && <Label style={s.authorName}>{msg.isGuest ? `${msg.name} · Misafir` : msg.name.split(' ')[0]}</Label>}
                 <Box style={[s.bubble, msg.mine ? s.bubbleMine : s.bubbleOther]}>
                   {msg.replyTo ? <ReplyQuote author={author(msg.replyTo.name, msg.replyTo.isGuest, quotedMine)} text={msg.replyTo.text} deleted={msg.replyTo.deleted} mine={!!msg.mine} /> : null}
                   <Label style={msg.mine ? s.textMine : s.textOther}>{msg.text}</Label>
                 </Box>
-                <Label style={s.time}>{timeOf(msg.createdAt)}</Label>
+                {endsGroup ? <Label style={s.time}>{timeOf(msg.createdAt)}</Label> : null}
               </Box>
-            </Box></SwipeToReply>
+            </Box></SwipeToReply></View>
           }}
         />}
         <Box style={[s.composerWrap, { paddingBottom: 12 + safeBottom + keyboardOverlap }]}>
@@ -160,6 +179,7 @@ const s = StyleSheet.create({
   empty: { alignItems: 'center', gap: 6, paddingVertical: 48, paddingHorizontal: 24 },
   emptyTitle: { color: palette.text, fontFamily: 'Fraunces', fontSize: 20, lineHeight: 26 },
   emptyText: { color: palette.muted, fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  day: { alignSelf: 'center', color: 'rgba(255,255,255,.45)', fontSize: 11, lineHeight: 14, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,.05)', marginVertical: 12 },
   message: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 10 },
   messageMine: { flexDirection: 'row-reverse' },
   messageGrouped: { marginTop: 3 },

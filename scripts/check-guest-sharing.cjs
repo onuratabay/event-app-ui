@@ -127,6 +127,28 @@ module.exports = async ({ act, text, storage, tap, audit }) => {
   assert(text(tree.toJSON()).includes('Tenis buluşması'))
   await act(async () => tree.unmount())
 
+  // A joined invite is remembered by its code: opening another invite in between (without joining) forgets nothing,
+  // and the other invite remembers nothing (no name, no session).
+  const show = async params => { global.__testParams = params; await act(async () => { tree.update(React.createElement(GuestProvider, null, React.createElement(GuestScreen))); await new Promise(resolve => setTimeout(resolve, 20)) }) }
+  global.__testParams = { code }
+  await act(async () => { tree = create(React.createElement(GuestProvider, null, React.createElement(GuestScreen))) })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  await act(async () => tree.root.findByType('TextInput').props.onChangeText('Ayşe'))
+  await press(tree, 'Katıl')
+  assert(text(tree.toJSON()).includes('Katıldın · Misafir Ayşe'))
+  await show({ code: secondCode })
+  assert(!text(tree.toJSON()).includes('Katıldın'), 'An invite that was only opened is not joined')
+  assert.equal(tree.root.findByType('TextInput').props.value, '', 'An invite that was only opened does not get the other invite name')
+  await show({ code })
+  assert(text(tree.toJSON()).includes('Katıldın · Misafir Ayşe'), 'Coming back to a joined invite resumes it after another invite was opened')
+  assert.deepEqual(Object.keys(JSON.parse(storage.get('event-app:guest-participations'))), [code], 'Only joined invites are remembered')
+  await act(async () => tree.unmount())
+  await act(async () => { tree = create(React.createElement(GuestProvider, null, React.createElement(GuestScreen))) })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  assert(text(tree.toJSON()).includes('Katıldın · Misafir Ayşe'), 'A joined invite resumes after reopening the app')
+  await show({ code: secondCode })
+  await act(async () => tree.unmount())
+
   // A direct link to an unrelated route is hidden until the guard returns to the guest event.
   global.__testPathname = '/discover'; global.__testNavigations = []; global.__testRootState = { key: 'root', index: 0, routes: [{ name: 'discover' }] }
   await act(async () => { tree = create(React.createElement(GuestProvider, null, React.createElement(Boundary, null, React.createElement('Text', null, 'UNRELATED-CONTENT')))) })
