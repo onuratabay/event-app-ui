@@ -362,7 +362,7 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   await act(() => new Promise(resolve => setTimeout(resolve, 20)))
   assert(bodies.some(row => row.path === "/users/me/profile" && row.body.instagramUsername === "ada_yeni"), "Instagram handle is saved without the @")
   assert(text(ownProfile.toJSON()).includes("@ada_yeni"), "Saved handle is shown after the @")
-  const instagramLink = ownProfile.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Instagram profilini aç: @ada_yeni")
+  const instagramLink = ownProfile.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Instagram profilini aç: @ada_yeni, gizli")
   assert(instagramLink, "A saved handle becomes a link to Instagram")
   assert(!ownProfile.root.findAllByType("Pressable").some(n => /düzenle|ekle/i.test(String(n.props.accessibilityLabel)) && String(n.props.accessibilityLabel).includes("Instagram")), "A saved handle cannot be edited")
   global.__openedUrl = undefined
