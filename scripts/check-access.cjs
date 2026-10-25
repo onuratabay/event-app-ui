@@ -110,6 +110,10 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     const { previousRouteIn } = require("../src/native/navigation.ts")
     assert.equal(previousRouteIn({ index: 0, routes: [{ name: "__root", state: { index: 2, routes: [{ name: "rooms" }, { name: "event-room" }, { name: "profile" }] } }] }), "event-room", "The previous page is read from the stack nested under __root")
     assert.equal(previousRouteIn({ index: 0, routes: [{ name: "__root", state: { index: 0, routes: [{ name: "discover" }] } }] }), null, "A single page has no previous page")
+    // Tabs: the previous page is the tab visited before, else the page below the tabs.
+    const tabs = (history) => ({ type: "tab", index: 1, routes: [{ key: "d", name: "discover" }, { key: "m", name: "map" }, { key: "r", name: "rooms" }], history: history.map(key => ({ type: "route", key })) })
+    assert.equal(previousRouteIn({ index: 0, routes: [{ name: "__root", state: { index: 0, routes: [{ name: "(tabs)", state: tabs(["r", "m"]) }] } }] }), "rooms", "Back from a tab returns to the tab visited before")
+    assert.equal(previousRouteIn({ index: 0, routes: [{ name: "__root", state: { index: 1, routes: [{ name: "login" }, { name: "(tabs)", state: tabs(["m"]) }] } }] }), "login", "On the first tab, the page below the tabs is the previous one")
   }
   assert.deepEqual(await backFrom(["create-event", "profile"]), ["back"], "An unfinished creation flow is a normal previous page")
   assert.deepEqual(await backFrom(["login", "discover", "search"].slice(0, 2).concat("search")), ["back"])
@@ -121,14 +125,21 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
   go("event-detail", { eventId: "new", aboveHome: true })
   assert.deepEqual(global.__testNavigations, ["dismissAll", "/discover", "/event-detail"], "Created event detail sits directly above home")
   await act(async () => probe.unmount())
-  // Tabs go on top of history too, so back from any of them returns to the previous page.
-  for (const tab of ["rooms", "profile", "search", "map", "create-event", "discover"]) {
+  // Bottom-bar tabs are switched (each is built once); every other page goes on top of history.
+  for (const [screen, method] of [["rooms", "navigate"], ["profile", "navigate"], ["map", "navigate"], ["discover", "navigate"], ["search", "push"], ["create-event", "push"]]) {
     global.__testNavigations = []; global.__testMethods = []
     await act(async () => { probe = create(React.createElement(Probe)) })
-    go(tab)
-    assert.deepEqual(global.__testMethods, ["push"], `Opening ${tab} keeps the previous page in history`)
+    go(screen)
+    assert.deepEqual(global.__testMethods, [method], `Opening ${screen} uses ${method}`)
     await act(async () => probe.unmount())
   }
+  // Another member's profile is a page of its own, not the profile tab.
+  global.__testNavigations = []; global.__testMethods = []
+  await act(async () => { probe = create(React.createElement(Probe)) })
+  go("profile", { userId: "member-2" })
+  assert.deepEqual(global.__testMethods, ["push"], "Another member's profile is pushed")
+  assert.deepEqual(global.__testNavigations, ["/member"], "Another member's profile opens at /member")
+  await act(async () => probe.unmount())
   global.__testMethods = undefined
 
   // Android back follows the same rules and goes home instead of closing the app.
@@ -933,9 +944,13 @@ module.exports = async function ({ mount, tap, act, text, storage }) {
     assert.equal(status("Zeynep"), "Aktif", "Joining the room turns a member active live")
     await act(async () => rows().find(n => n.props.accessibilityLabel.startsWith("Ali")).props.onPress())
     assert.deepEqual(opened, { route: "profile", opts: { userId: "ali" } }, "Tapping a participant opens their profile")
-    await act(async () => room.root.findAll(n => n.props.accessibilityLabel === "Etkinlik detayına git" && typeof n.props.onPress === "function")[0].props.onPress())
-    assert.deepEqual(opened, { route: "event-detail", opts: { eventId: "room-u" } }, "The top-right icon opens the event detail")
     assert(!room.root.findAllByType("Modal").length, "The sheet closes when a profile opens")
+    // "Etkinliğe git" lives in the sheet (no icon in the header): it opens the event detail and closes the sheet.
+    assert(!room.root.findAll(n => n.props.accessibilityLabel === "Etkinlik detayına git").length, "No event icon in the header")
+    await act(async () => room.root.findAllByType("Pressable").find(n => String(n.props.accessibilityLabel).startsWith("Film · ")).props.onPress())
+    await act(async () => room.root.findAll(n => n.props.accessibilityLabel === "Etkinliğe git" && typeof n.props.onPress === "function")[0].props.onPress())
+    assert.deepEqual(opened, { route: "event-detail", opts: { eventId: "room-u" } }, "Etkinliğe git in the sheet opens the event detail")
+    assert(!room.root.findAllByType("Modal").length, "The sheet closes when the event opens")
     await act(async () => room.unmount())
     fakeSocket.setAction(async () => ({}))
     global.fetch = previousFetch

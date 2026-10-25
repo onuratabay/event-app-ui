@@ -15,7 +15,7 @@ import EventArchive from "../components/EventArchive";
 import { onSocket } from "../services/socket";
 import { useScreenActive } from "../native/useScreenActive";
 import { AtmoBackground, Avatar, GlassCard, InterestChip, ScoreBadge } from "../components/GlassUI";
-import { InstagramIcon } from "../components/Icons";
+import { InstagramIcon, LockIcon } from "../components/Icons";
 
 import { selectPhoto } from "../native/media";
 import { formatScore } from "../events/score";
@@ -82,10 +82,11 @@ function InstagramField({ handle, onSave }: { handle: string; onSave: (handle: s
       <Touch onPress={() => { setDraft(handle); setEditing(false); }} style={[[ui.textXs, ui.px3, ui.py1, ui.roundedLg, ui.textWhite40, ui.border, ui.borderWhite10]]}>İptal</Touch>
     </Box>;
   // A saved handle can no longer be edited here; tapping it opens Instagram.
-  if (handle) return <Touch accessibilityRole="link" accessibilityLabel={`Instagram profilini aç: @${handle}`} onPress={() => openExternal(`https://instagram.com/${handle}`)} style={profileInstagramStyles.link}>
+  if (handle) return <Touch accessibilityRole="link" accessibilityLabel={`Instagram profilini aç: @${handle}, gizli`} onPress={() => openExternal(`https://instagram.com/${handle}`)} style={profileInstagramStyles.link}>
       <InstagramIcon size={19} strokeWidth={1.8} style={profileInstagramStyles.icon} />
       <Label style={profileInstagramStyles.handle}>{`@${handle}`}</Label>
-      <Label style={profileInstagramStyles.private}>Özel</Label>
+      {/* Shown only on the member's own profile: a lock instead of the word "Özel". */}
+      <LockIcon size={13} strokeWidth={1.8} style={profileInstagramStyles.lock} />
     </Touch>;
   return <Touch accessibilityLabel="Instagram kullanıcı adı ekle" onPress={() => { setDraft(""); setEditing(true); }} style={profileInstagramStyles.link}>
       <InstagramIcon size={19} strokeWidth={1.8} style={profileInstagramStyles.icon} />
@@ -288,7 +289,7 @@ export default function ProfileScreen({
           {/* Only admins see the panel link; the server checks the role again on every admin request. */}
           {store.user.role === "admin" && <NavAction label="Admin panelini aç" tone="accent" onPress={() => navigate("admin")}>Admin</NavAction>}
           <NavAction label="Ayarları aç" onPress={() => navigate("settings")}>Ayarlar</NavAction>
-          <NavAction label="Çıkış yap" tone="accent" disabled={loggingOut} onPress={() => void signOut()}>{loggingOut ? "Bekle" : "Çıkış"}</NavAction>
+          <NavAction label="Çıkış yap" tone="accent" disabled={loggingOut} onPress={() => void signOut()}>{loggingOut ? "Bekle" : "Çıkış yap"}</NavAction>
         </> : undefined}
       />
 
@@ -310,7 +311,8 @@ export default function ProfileScreen({
               if (uri) void update("avatar", uri).catch(() => {});
             }
           }}>
-              <Picture uri={user.avatar} accessibilityLabel={user.name} style={[[ui.w20, ui.h20, ui.rounded2xl]]} />
+              {/* The whole photo, not a square crop of it: a portrait or landscape photo lost its top or sides. */}
+              <Picture uri={user.avatar} accessibilityLabel={user.name} fit="contain" style={[[ui.w20, ui.h20, ui.rounded2xl]]} />
             </Touch>
 
             <Box style={[[ui.flex1, ui.minW0]]}>
@@ -575,15 +577,7 @@ const profileInstagramStyles = StyleSheet.create({
   },
   external: { color: "rgba(183,197,255,.72)", fontSize: 14 },
   empty: { color: "rgba(226,232,240,.55)", fontFamily: "Outfit-Medium", fontSize: 14, lineHeight: 19 },
-  private: {
-    marginLeft: 2,
-    color: "rgba(226,232,240,.48)",
-    fontFamily: "Outfit-Medium",
-    fontSize: 10,
-    lineHeight: 14,
-    textTransform: "uppercase",
-    letterSpacing: .7,
-  },
+  lock: { marginLeft: 2, color: "rgba(226,232,240,.48)" },
 });
 const profileMessageStyles = StyleSheet.create({
   button: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, borderRadius: 14 },

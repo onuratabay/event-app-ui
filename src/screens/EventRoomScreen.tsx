@@ -3,12 +3,12 @@ import { showAlert } from "../components/AppDialog"
 import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
-import { ArrowLeftIcon, UsersIcon, LocationIcon, ClockIcon, StarIcon, SendIcon } from "../components/Icons";
+import { UsersIcon, LocationIcon, ClockIcon, StarIcon, SendIcon } from "../components/Icons";
 import { useScreenActive } from '../native/useScreenActive';
 import { onSocket, retainEvent, socketAction, socketConnected } from '../services/socket';
-import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
+import TopNavBar from "../components/TopNavBar";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, ScrollView, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions, type ViewInstance } from "react-native";
+import { FlatList, Keyboard, KeyboardAvoidingView, ScrollView, Modal, Pressable, StyleSheet, Switch, View, useWindowDimensions, type ScrollViewInstance, type ViewInstance } from "react-native";
 import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
@@ -95,6 +95,7 @@ export default function EventRoomScreen({
   }, [eventId, meId, messages, cursor]);
   const [loading, setLoading] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const infoScrollRef = useRef<ScrollViewInstance>(null);
   const { height: windowHeight } = useWindowDimensions();
   // Online (green dot) = has this room's chat open now. Snapshot from the server, then live join/leave events.
   const [present, setPresent] = useState<Set<string>>(new Set());
@@ -368,13 +369,13 @@ export default function EventRoomScreen({
   return <View ref={screenRef} onLayout={onScreenLayout} style={StyleSheet.absoluteFill}><Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.flex, ui.flexCol, ui.overflowHidden]]}>
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="rooms" onBack={() => navigate("event-detail", { eventId: event.id, back: true })} walkthroughId="room-info" title={roomTitle(event)} subtitle={subtitle}
-        onTitlePress={() => setInfoOpen(true)} titleHint="Oda bilgisini ve katılımcıları gösterir"
-        right={<NavAction label="Etkinlik detayına git" onPress={() => navigate("event-detail", { eventId: event.id })}>
-          <ArrowLeftIcon size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} style={{ color: palette.accent, transform: [{ rotate: "180deg" }] }} />
-        </NavAction>} />
+        onTitlePress={() => setInfoOpen(true)} titleHint="Oda bilgisini, katılımcıları ve etkinliğe gitmeyi gösterir" />
 
       {/* Tapping the room name opens one sheet: event info, participants and room settings. */}
       {infoOpen && <Modal transparent visible animationType="slide" statusBarTranslucent onRequestClose={() => setInfoOpen(false)}>
+          {/* The window does not resize for the keyboard inside a modal: the sheet rises by the keyboard's height
+              so the room name and announcement fields stay above it. */}
+          <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <Box style={s.sheetBackdrop}>
             <Pressable accessibilityLabel="Oda bilgisini kapat" onPress={() => setInfoOpen(false)} style={StyleSheet.absoluteFill} />
             {/* Safe area keeps the last rows above Android's system navigation bar. */}
@@ -383,7 +384,7 @@ export default function EventRoomScreen({
                 <Label style={s.peopleSheetTitle} numberOfLines={1}>{roomTitle(event)}</Label>
                 <Touch accessibilityLabel="Oda bilgisini kapat" onPress={() => setInfoOpen(false)} style={s.peopleSheetClose}><Label style={s.peopleSheetCloseLabel}>Kapat</Label></Touch>
               </Box>
-              <ScrollView style={{ maxHeight: Math.round(windowHeight * 0.7) }} contentContainerStyle={s.info} keyboardShouldPersistTaps="handled">
+              <ScrollView ref={infoScrollRef} style={{ maxHeight: Math.round(windowHeight * 0.7) }} contentContainerStyle={s.info} keyboardShouldPersistTaps="handled">
           {isOwner ? <>
             <Label style={s.panelHeading}>Oda adı</Label>
             <Field accessibilityLabel="Oda adı" value={roomNameDraft ?? event.roomName ?? ""} onChangeText={setRoomNameDraft} placeholder={defaultRoomTitle(event)} placeholderTextColor="rgba(255,255,255,.35)" maxLength={60} returnKeyType="done" onSubmitEditing={() => void saveRoomName()} style={s.panelInput} />
@@ -399,6 +400,10 @@ export default function EventRoomScreen({
                 <Label style={s.chipLabel}>{item.text}</Label>
               </Box>)}
           </ScrollView>
+          {/* The way to the event page, under its details (no icon in the header). */}
+          <Touch accessibilityLabel="Etkinliğe git" onPress={() => { setInfoOpen(false); navigate("event-detail", { eventId: event.id }); }} style={s.panelButton}>
+            <Label style={s.panelButtonLabel}>Etkinliğe git</Label>
+          </Touch>
 
           <Label style={s.panelHeading}>Katılımcılar · {roster.length}</Label>
           <Box style={s.people}>
@@ -432,8 +437,9 @@ export default function EventRoomScreen({
             : null}
           {isOwner ? <>
             <Label style={s.panelHeading}>Duyuru gönder</Label>
-            <Field value={announcement} onChangeText={setAnnouncement} placeholder="Tüm katılımcılara duyuru…" placeholderTextColor="rgba(255,255,255,.35)" maxLength={MAX_MESSAGE_LENGTH} style={s.panelInput} />
-            <Touch disabled={busy || !announcement.trim()} onPress={async () => { if (await runOwnerAction('event:announcement', { text: announcement.trim() })) setAnnouncement(''); }} style={s.panelButton}><Label style={s.panelButtonLabel}>📣 Duyuruyu sabitle ve gönder</Label></Touch>
+            {/* The announcement sits near the end of the sheet: focusing it scrolls it into view above the keyboard. */}
+            <Field value={announcement} onChangeText={setAnnouncement} onFocus={() => setTimeout(() => infoScrollRef.current?.scrollToEnd({ animated: true }), 250)} placeholder="Tüm katılımcılara duyuru…" placeholderTextColor="rgba(255,255,255,.35)" maxLength={MAX_MESSAGE_LENGTH} style={s.panelInput} />
+            <Touch disabled={busy || !announcement.trim()} onPress={async () => { Keyboard.dismiss(); if (await runOwnerAction('event:announcement', { text: announcement.trim() })) setAnnouncement(''); }} style={s.panelButton}><Label style={s.panelButtonLabel}>📣 Duyuruyu sabitle ve gönder</Label></Touch>
             {waitlist.length ? <>
               <Label style={s.panelHeading}>Yedek liste</Label>
               {waitlist.map((userId, index) => <Box key={userId} style={s.panelRow}>
@@ -445,6 +451,7 @@ export default function EventRoomScreen({
               </ScrollView>
             </SafeAreaView>
           </Box>
+          </KeyboardAvoidingView>
         </Modal>}
       <Box style={s.body}>
 

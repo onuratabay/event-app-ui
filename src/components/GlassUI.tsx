@@ -413,10 +413,12 @@ function DepthGlyph({ shape, index, moving, drift }: { shape: EventShape; index:
         { rotate: shape.angle },
         { rotateY: drift.interpolate({ inputRange: [0, 1], outputRange: [`${-turn}deg`, `${turn}deg`] }) },
       ] }}>
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: depth.interpolate({ inputRange: [0, 0.55, 1], outputRange: [1, 0.7, 0] }) }]}>
+        {/* The glyph artwork never changes, only its opacity: drawn once into a GPU texture (Android) instead of
+            re-rasterising the SVG, its blur filter included, on every animation frame. */}
+        <Animated.View renderToHardwareTextureAndroid shouldRasterizeIOS style={[StyleSheet.absoluteFill, { opacity: depth.interpolate({ inputRange: [0, 0.55, 1], outputRange: [1, 0.7, 0] }) }]}>
           <EventGlyph glyph={shape.glyph} color={shape.color} size={shape.size} id={`${index}b`} blur={2.4} />
         </Animated.View>
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: depth.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 0.3, 1] }) }]}>
+        <Animated.View renderToHardwareTextureAndroid shouldRasterizeIOS style={[StyleSheet.absoluteFill, { opacity: depth.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 0.3, 1] }) }]}>
           <EventGlyph glyph={shape.glyph} color={shape.color} size={shape.size} id={`${index}s`} />
         </Animated.View>
       </Animated.View>
@@ -461,7 +463,8 @@ export function AtmoBackground({
   const along = (from: number, to: number) => drift.interpolate({ inputRange: [0, 1], outputRange: [from, to] })
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}>
-      <Animated.View style={[s.bleed, { transform: [{ translateX: along(-26, 26) }, { translateY: along(-14, 22) }, { scale: along(1, 1.08) }] }]}>
+      {/* Static gradients that only move: cached as one GPU texture rather than redrawn every frame. */}
+      <Animated.View renderToHardwareTextureAndroid shouldRasterizeIOS style={[s.bleed, { transform: [{ translateX: along(-26, 26) }, { translateY: along(-14, 22) }, { scale: along(1, 1.08) }] }]}>
         <Svg width="100%" height="100%">
           <Defs>
             <RadialGradient id="atmo" cx="28%" cy="14%" rx="82%" ry="65%">

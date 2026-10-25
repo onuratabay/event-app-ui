@@ -37,10 +37,10 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   await press(tree, 'Admin panelini aç')
   assert.deepEqual(navigations.splice(0), ['admin'])
   await act(async () => tree.unmount())
+  // Settings has no admin entry, for admins either: the panel opens from the profile header.
   tree = await mount('Settings', { navigate: screen => navigations.push(screen) })
   await settle()
-  await tap(tree, 'Üyelik başvuruları')
-  assert.deepEqual(navigations, ['admin'])
+  assert(!text(tree.toJSON()).includes('Üyelik başvuruları'), 'Settings has no admin entry')
   await act(async () => tree.unmount())
   tree = await mount('Admin')
   await settle()

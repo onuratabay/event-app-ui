@@ -99,6 +99,7 @@ export default function BottomNav({
               // Without a photo: a line icon like the other tabs (the avatar's text fallback sat off-centre).
               ME.avatar ? <Picture
                 uri={ME.avatar}
+                fit="contain"
                 style={[s.avatar, active === screen && s.avatarActive]}
               /> : <PersonIcon
                 size={22}

@@ -458,6 +458,7 @@ export function Scroll({
   horizontal,
   ref,
   keyboardReveal = true,
+  floatingBottom,
   onScroll,
   enter: _,
   glass: __,
@@ -469,13 +470,18 @@ export function Scroll({
   ref?: React.Ref<ScrollViewInstance>
   /** Keep the focused text field above the keyboard (on by default). */
   keyboardReveal?: boolean
+  /**
+   * Height of what floats over the bottom of the area (e.g. a tall sticky "Devam Et" bar). Without it the bottom
+   * padding is used, capped at 120, which left content under taller bars when it was scrolled into view.
+   */
+  floatingBottom?: number
 }) {
   const scrollRef = useRef<ScrollViewInstance | null>(null)
   const chain = useFieldChain()
   const inherited = useContext(Typography),
     { text, view } = split(style)
   // Bottom padding marks what floats over the bottom of the scroll area (sticky bars), capped like insetBottom below.
-  const { reveal, offset } = useKeyboardReveal(keyboardReveal, scrollRef, Math.min(Number(view.paddingBottom ?? view.padding ?? 0) || 0, 120))
+  const { reveal, offset } = useKeyboardReveal(keyboardReveal, scrollRef, floatingBottom ?? Math.min(Number(view.paddingBottom ?? view.padding ?? 0) || 0, 120))
   const {
     padding,
     paddingTop,
@@ -492,7 +498,7 @@ export function Scroll({
   } = view
   // Floating top bars and the bottom bar sit over the scroll area; its paddings mark how much.
   const insetTop = Math.min(Number(paddingTop ?? padding ?? 0) || 0, 140)
-  const insetBottom = Math.min(Number(paddingBottom ?? padding ?? 0) || 0, 120)
+  const insetBottom = floatingBottom ?? Math.min(Number(paddingBottom ?? padding ?? 0) || 0, 120)
   const safeBottom = useSafeAreaInsets().bottom
   const clearsInset = useContext(BottomInsetContext) && !horizontal
   const keyboardSpace = useAndroidKeyboardSpace(keyboardReveal && !horizontal)
@@ -568,10 +574,13 @@ export function Picture({
   uri,
   style,
   accessibilityLabel,
+  fit = "cover",
 }: {
   uri: string
   style?: NativeStyleProp
   accessibilityLabel?: string
+  /** "cover" fills the box and crops what overflows; "contain" shows the whole photo inside it. */
+  fit?: "cover" | "contain"
 }) {
   const sourceUri = photoUri(uri?.trim() || "")
   const [failedUri, setFailedUri] = useState<string | null>(null)
@@ -597,8 +606,8 @@ export function Picture({
       source={{ uri: sourceUri }}
       recyclingKey={sourceUri}
       accessibilityLabel={accessibilityLabel}
-      style={split(style).view as ImageStyle}
-      contentFit="cover"
+      style={[split(style).view as ImageStyle, fit === "contain" && { backgroundColor: palette.elevated }]}
+      contentFit={fit}
       // Kept in memory too, so a page opened again (e.g. Discover from the bottom bar) shows covers at once.
       cachePolicy="memory-disk"
       transition={150}

@@ -6,7 +6,6 @@ import { Linking, StyleSheet, Switch } from "react-native"
 import Constants from "expo-constants"
 import { Box, Field, Label, Scroll, Touch, openExternal, Reveal } from "../native/UI"
 import { EyeIcon, EyeOffIcon } from "../components/Icons"
-import AccountProfileForm from "../components/AccountProfileForm"
 import { DEFAULT_PREFERENCES, usePreferences, type AppPreferences } from "../native/preferences"
 import { useStore } from "../native/Store"
 import { changePassword, deleteAccount, getApiErrorMessage, getLegalConsents, getPreferences, logout, putPreference, setMarketingConsent, type NotificationPreferences } from "../api/client"
@@ -56,7 +55,6 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS)
   const [notificationsReady, setNotificationsReady] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [oldPassword, setOldPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
@@ -101,14 +99,6 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
     resetSession()
     navigate(target, { reset: true })
   }
-  const signOut = () => showAlert("Çıkış yapılsın mı?", "Tekrar giriş yaparak hesabına dönebilirsin.", [
-    { text: "Vazgeç", style: "cancel" },
-    { text: "Çıkış yap", style: "destructive", onPress: () => {
-      if (busy) return
-      setBusy(true)
-      void endSession("welcome").catch(() => { setError("Çıkış yapılamadı. Lütfen tekrar dene."); setBusy(false) })
-    } },
-  ])
   // The update button stays off until every check the app can make itself has passed.
   const passwordReady = !!oldPassword && isStrongPassword(newPassword) && newPassword === repeatPassword
   const submitPassword = async () => {
@@ -146,14 +136,8 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
     <Scroll style={s.page}>
       {error && <Label accessibilityRole="alert" style={s.error}>{error}</Label>}
 
-      {/* Only admins see this; the server also checks the role on every admin request. */}
-      {data.user.role === "admin" && <Section title="Yönetim">
-        <Row title="Üyelik başvuruları" detail="Başvuruları ara, incele ve üyelik durumlarını yönet" onPress={() => navigate("admin")} />
-      </Section>}
 
       <Section title="Hesap">
-        <Row title={data.user.name || "Profil bilgilerim"} detail="Profil fotoğrafı, ad, soyad ve şehir" open={profileOpen} onPress={() => setProfileOpen(!profileOpen)} />
-        {profileOpen && <Reveal><AccountProfileForm /></Reveal>}
         <Row title="Şifremi değiştir" detail="Mevcut şifreni doğrulayarak yeni bir şifre belirle" open={passwordOpen} onPress={() => { setPasswordOpen(!passwordOpen); setPasswordError(null) }} />
         {passwordOpen && <Reveal><Box style={s.form}>
           <Password label="Mevcut şifre" value={oldPassword} onChange={value => { setOldPassword(value); setPasswordError(null) }} />
@@ -207,8 +191,6 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
       </Section></Box>}
 
       <Section title="Yardım ve hakkında">
-        <Row title="Nasıl çalışır?" detail="Keşfet, katıl ve birlikte plan yap" onPress={() => showAlert("İlk buluşmana doğru", "Keşfet veya Harita’dan bir etkinlik seç. Ayrıntılardan katılım durumunu takip et. Katıldığın etkinliğin odası açıldığında katılımcılarla sohbet edebilirsin. Kendi planını paylaşmak için Oluştur’u kullan.")} />
-        <Row title="Bir sorun yaşıyorum" detail="Bağlantı, izin ve hesap sorunları için yardım" onPress={() => showAlert("Yardım", "Bağlantı sorunu varsa internet erişimini kontrol edip yeniden dene. Konum veya fotoğraf erişimi için Gizlilik ve izinler bölümünü kullan. Şifreni unuttuysan giriş ekranındaki Şifremi unuttum seçeneğinden ilerle.")} />
         <Row title="Web sitesi" detail={BRAND_SITE} onPress={() => void openExternal(BRAND_URL)} />
         <Row title="Uygulama sürümü" detail={`${BRAND_NAME} · ${Constants.expoConfig?.version || "1.0.0"}`} />
       </Section>
@@ -218,7 +200,6 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
           if (!ready) return
           showAlert("Tercihler sıfırlansın mı?", "Hesabın, fotoğrafların ve etkinliklerin silinmez.", [{ text: "Vazgeç", style: "cancel" }, { text: "Sıfırla", onPress: () => void savePreference(DEFAULT_PREFERENCES) }])
         }} />
-        <Row title={busy ? "İşlem sürüyor…" : "Çıkış yap"} detail="Bu cihazdaki oturumu kapat" onPress={busy ? undefined : signOut} />
       </Section>
 
       <Section title="Hesabı sil">

@@ -1,8 +1,7 @@
-import { useNavigate } from "../src/native/navigation"
-import Screen from "../src/screens/ProfileScreen"
-import { useLocalSearchParams } from "expo-router"
+import { useNavigate } from "../../src/native/navigation"
+import Screen from "../../src/screens/ProfileScreen"
+// The member's own profile (bottom-bar tab). Another member's profile opens as its own page: app/member.tsx.
 export default function Route() {
   const navigate = useNavigate()
-  const { userId } = useLocalSearchParams<{ userId?: string }>()
-  return <Screen key={userId || "me"} navigate={navigate} userId={userId} />
+  return <Screen key="me" navigate={navigate} />
 }

@@ -7,12 +7,13 @@ import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../c
 ;
 import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions, getMyProposedInterests, proposeInterest, getInterestImages } from "../api/client";
 import { isUnlimitedCapacity, mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { View, type ViewInstance } from "react-native";
 import { Avatar, AtmoBackground, Checkbox, GlassCard, GlassFill, GlassInput, GlassTextarea } from "../components/GlassUI";
 import { CameraIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, PlusIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
-import { Box, Field, Label, Picture, Scroll, Touch, Reveal } from "../native/UI";
+import { Box, Field, Label, Picture, Scroll, Touch, Reveal, useScrollAnchor } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import TopNavBar from "../components/TopNavBar";
@@ -90,6 +91,13 @@ const REQUIREMENTS_SUGGESTIONS: {
   Hiking: ["Yürüyüş ayakkabısı gerekli.", "En az 1 litre su getir.", "Atıştırmalık al."],
   default: ["Rahat kıyafet yeterli."]
 };
+/** Scrolls its content into view each time `on` changes to a new non-zero value (a tap, not a revisit). */
+function ScrollIntoViewOn({ on, children }: { on: number; children: ReactNode }) {
+  const anchor = useScrollAnchor();
+  const ref = useRef<ViewInstance>(null);
+  useEffect(() => { if (on) anchor?.(ref.current); }, [on]);
+  return <View ref={ref} collapsable={false}>{children}</View>;
+}
 export default function CreateEventScreen({
   navigate,
   initialActivity,
@@ -140,6 +148,10 @@ export default function CreateEventScreen({
   const shownFriends = !friends ? [] : !friendNeedle ? friends : friends.filter(friend => `${friend.firstName} ${friend.lastName}`.toLocaleLowerCase("tr").includes(friendNeedle));
   const toggleInvite = (id: string) => setInvitedIds(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
   const [step, setStep] = useState(0);
+  // Counts level taps: each one scrolls the "how many people" section into view.
+  const [participantReveals, setParticipantReveals] = useState(0);
+  // Counts taps on "Sınır yok / Sınır koy": each one scrolls their explanation (under the buttons) into view.
+  const [limitReveals, setLimitReveals] = useState(0);
   useWalkthroughAutostartBlocker(step > 0);
   const [customDurationOpen, setCustomDurationOpen] = useState(false);
   const [customDuration, setCustomDuration] = useState({ hours: "", minutes: "" });
@@ -158,11 +170,10 @@ export default function CreateEventScreen({
   }));
   const levels = activities.find(a => a.name === data.activity)?.levels ?? [];
   const LEVELS = levels.map(l => l.name);
-  // Interests without levels skip the level step (step 1) entirely.
-  const chooseActivity = (activity: string, levelsKnown?: boolean) => {
-    const hasLevels = levelsKnown ?? !!activities.find(a => a.name === activity)?.levels?.length;
+  // Step 1 always follows: the level (only for interests with levels) and how many people.
+  const chooseActivity = (activity: string) => {
     setData(p => ({ ...p, activity, level: p.activity === activity ? p.level : "" }));
-    setTimeout(() => setStep(hasLevels ? 1 : 2), 180);
+    setTimeout(() => setStep(1), 180);
   };
   // "Yeni ilgi alanı": a member may propose one that is not in the list; they decide whether levels are asked.
   const [proposalOpen, setProposalOpen] = useState(false);
@@ -177,7 +188,7 @@ export default function CreateEventScreen({
       setActivities(list => list.some(row => row.id === interest.id) ? list : [...list, interest]);
       setProposalOpen(false); setProposalName(""); setProposalLevels(null);
       if (interest.existing) showAlert("Bu ilgi alanı zaten var", `“${interest.name}” seçildi.`);
-      chooseActivity(interest.name, interest.levels.length > 0);
+      chooseActivity(interest.name);
     } catch (error) { showAlert("İlgi alanı eklenemedi", getApiErrorMessage(error)); }
     finally { setProposing(false); }
   };
@@ -256,7 +267,7 @@ export default function CreateEventScreen({
   };
   const next = () => setStep(s => s + 1);
   const back = () => {
-    if (step === 2 && !levels.length) setStep(0);else if (step > 0) setStep(s => s - 1);else navigate("discover", { back: true });
+    if (step > 0) setStep(s => s - 1);else navigate("discover", { back: true });
   };
   const selectAndNext = (key: string, value: string) => {
     setData(prev => ({
@@ -290,9 +301,9 @@ export default function CreateEventScreen({
   const descriptionLength = data.description.trim().length;
   const descriptionValid = descriptionLength >= MIN_DESCRIPTION_LENGTH;
   // No step continues while one of its required fields is empty.
-  const stepIncomplete = step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !place || step === 4 && !descriptionValid || step === 5 && missingCover;
+  const stepIncomplete = step === 1 && levels.length > 0 && !data.level || step === 2 && (!data.date || !data.time || startsInPast || !durationChosen) || step === 3 && !place || step === 4 && !descriptionValid || step === 5 && missingCover;
   const missingInvitees = isInviteOnly && !invitedIds.length && !poolIds.length;
-  const hasStickyBar = step === 2 || step === 3 || step === 4 || step === 5;
+  const hasStickyBar = step === 1 || step === 2 || step === 3 || step === 4 || step === 5;
   const suggestions = personalSuggestions.length ? personalSuggestions : REQUIREMENTS_SUGGESTIONS[data.activity] || REQUIREMENTS_SUGGESTIONS.default;
   if (createBlocked) {
     return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e]]}>
@@ -402,7 +413,8 @@ export default function CreateEventScreen({
       }]} gradient={["#4d5bcb", "#6651c9"]} gradientDirection="right" />
       </Box>
 
-      <Scroll scrollEnabled={!mapTouched} style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull, ui.pb28], { paddingTop: 80 }, hasStickyBar && { paddingBottom: 176 }]}>
+      {/* The sticky "Devam Et" bar covers 176pt at the bottom: content scrolled into view stops above it. */}
+      <Scroll scrollEnabled={!mapTouched} floatingBottom={hasStickyBar ? 176 : undefined} style={[[ui.relative, ui.flex, ui.flexCol, ui.hFull, ui.pb28], { paddingTop: 80 }, hasStickyBar && { paddingBottom: 176 }]}>
         <Box style={[[ui.pt4, ui.px5]]}>
           {copiedFrom && <Box style={[[ui.mb4, ui.p3, ui.roundedXl, ui.border, ui.borderC8a44a30, ui.bgC8a44a10]]}>
               <Label style={[[ui.textXs, ui.textWhite80, ui.leadingRelaxed]]}>İptal ettiğin etkinliğin bilgileri dolduruldu. Tarihi ve dilediğin alanları güncelleyip yeni etkinlik olarak oluştur.</Label>
@@ -441,8 +453,9 @@ export default function CreateEventScreen({
                 </Box></Reveal>}
             </Box>}
 
-          {/* Step 1 - Level */}
-          {step === 1 && <Box style={[[]]} enter>
+          {/* Step 1 - Level (only for interests with levels) and how many people; "Devam Et" goes on. */}
+          {step === 1 && <Box style={[[ui.spaceY6]]} enter>
+              {LEVELS.length > 0 && <Box>
               <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
                 Hangi seviyede{"\n"}oynamak istersin?
               </Label>
@@ -450,78 +463,24 @@ export default function CreateEventScreen({
                 Etkinliğe uygun seviyeyi seç.
               </Label>
               <Box style={[[ui.spaceY3]]}>
-                {LEVELS.map(level => <Touch key={level} onPress={() => selectAndNext("level", level)} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.textLeft, ui.flex, ui.itemsCenter, ui.justifyBetween, ui.border, data.level === level ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={data.level === level ? "rgba(105,120,255,.16)" : undefined} />
+                {LEVELS.map(level => <Touch key={level} accessibilityState={{ selected: data.level === level }} onPress={() => { setData(prev => ({ ...prev, level })); setParticipantReveals(n => n + 1); }} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.textLeft, ui.flex, ui.itemsCenter, ui.justifyBetween, ui.border, data.level === level ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={data.level === level ? "rgba(105,120,255,.16)" : undefined} />
                     <Label style={[[ui.textBase, ui.textWhite80, ui.fontMedium]]}>
                       {level}
                     </Label>
                     {data.level === level && <Label style={[[ui.textC8a44a]]}>✓</Label>}
                   </Touch>)}
               </Box>
-            </Box>}
-
-          {/* Step 2 - Date, time & duration */}
-          {step === 2 && <Box style={[[ui.spaceY5]]} enter>
-              <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
-                Ne zaman{"\n"}buluşuyorsunuz?
-              </Label>
-              <GlassInput label="Tarih" value={data.date} onChangeText={e => setData(p => ({
-            ...p,
-            date: e
-          }))} mode="date" />
-              <GlassInput label="Başlangıç saati" value={data.time} onChangeText={e => setData(p => ({
-            ...p,
-            time: e
-          }))} mode="time" />
-              {startsInPast && <Label style={[[ui.textSm], { color: palette.error }]}>
-                Geçmiş bir tarih veya saat seçemezsin.
-              </Label>}
-
+              </Box>}
+              {/* Picking a level brings the "how many people" section into view. */}
+              <ScrollIntoViewOn on={participantReveals}><Box style={[[ui.spaceY6]]}>
               <Box>
-                <Label style={[[ui.textSm, ui.textWhite60, ui.fontMedium]]}>
-                  Ne kadar sürecek?
-                </Label>
-                <Label style={[[ui.textXs, ui.textWhite40, ui.mb3]]}>
-                  Tahminen ne kadar vaktiniz var?
-                </Label>
-                <Box style={[[ui.grid, ui.gap3]]} columns={3}>
-                  {DURATIONS.map(minutes => <Touch key={minutes} onPress={() => { setCustomDurationOpen(false); setData(p => ({ ...p, durationMinutes: minutes })); }} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, !customDurationOpen && data.durationMinutes === minutes ? [ui.borderC8a44a50, ui.textC8a44a] : [ui.borderWhite8, ui.textWhite70]]]}><GlassFill radius={16} tint={!customDurationOpen && data.durationMinutes === minutes ? "rgba(105,120,255,.16)" : undefined} />
-                      <Label style={[[ui.textSm, ui.fontMedium]]}>{formatDuration(minutes)}</Label>
-                    </Touch>)}
-                  <Touch onPress={() => setCustomDurationOpen(true)} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, customDurationOpen || data.durationMinutes && !DURATIONS.includes(data.durationMinutes) ? [ui.borderC8a44a50, ui.textC8a44a] : [ui.borderWhite8, ui.textWhite70]]]}><GlassFill radius={16} tint={customDurationOpen || data.durationMinutes && !DURATIONS.includes(data.durationMinutes) ? "rgba(105,120,255,.16)" : undefined} />
-                      <Label style={[[ui.textSm, ui.fontMedium]]}>Özel süre</Label>
-                    </Touch>
-                </Box>
-                {customDurationOpen && <Reveal><Box style={[[ui.spaceY3], { marginTop: 16 }]}>
-                    <Box style={[[ui.flex, ui.gap3]]}>
-                      <GlassInput label="Saat" accessibilityLabel="Süre saat" placeholder="0" keyboardType="number-pad" maxLength={2} value={customDuration.hours} onChangeText={hours => setCustomDuration(p => ({ ...p, hours: hours.replace(/\D/g, "") }))} />
-                      <GlassInput label="Dakika" placeholder="0" keyboardType="number-pad" maxLength={2} value={customDuration.minutes} onChangeText={minutes => setCustomDuration(p => ({ ...p, minutes: clampMinutes(minutes) }))} />
-                    </Box>
-                    <Label style={[[ui.textXs], { color: customMinutes > MAX_DURATION_MINUTES ? palette.error : palette.muted }]}>
-                      {customMinutes > MAX_DURATION_MINUTES ? "Süre en fazla 24 saat olabilir." : customDurationValid ? `Süre: ${formatDuration(customMinutes)}` : "Saat ve dakika gir."}
-                    </Label>
-                  </Box></Reveal>}
-              </Box>
-              <Box style={[[ui.h4]]} />
-            </Box>}
-
-          {/* Step 3 - Location */}
-          {step === 3 && <Box style={[[ui.spaceY5]]} enter>
-              <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
-                Nerede{"\n"}buluşacaksınız?
-              </Label>
-              <LocationPicker value={place} venue={data.location} defaultCity={store.user.city} onChange={setPlace}
-                onVenueChange={location => setData(p => ({ ...p, location }))} onMapTouch={setMapTouched} />
-            </Box>}
-
-          {/* Step 4 - Participants & message */}
-          {step === 4 && <Box style={[[ui.spaceY6]]} enter>
-              <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
-                Kaç kişilik{"\n"}bir buluşma?
+              <Label style={[[ui.fontDisplay, LEVELS.length > 0 ? ui.text2xl : ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
+                {LEVELS.length > 0 ? "Kaç kişilik bir buluşma?" : "Kaç kişilik\nbir buluşma?"}
               </Label>
               <Label style={[[ui.textSm, ui.textWhite40]]}>
                 Minimum katılımcı sayısına ulaşınca sohbet odası açılır.
               </Label>
-
+              </Box>
               {[{
             label: "Minimum",
             value: data.minParticipants,
@@ -579,18 +538,76 @@ export default function CreateEventScreen({
                 <Box style={[[ui.flex, ui.gap3]]}>
                   {([[false, "Sınır yok"], [true, "Sınır koy"]] as const).map(([limited, label]) => {
                     const selected = (data.maxParticipants !== null) === limited;
-                    return <Touch key={label} accessibilityState={{ selected }} onPress={() => setData(p => ({ ...p, maxParticipants: limited ? Math.max(p.minParticipants, p.maxParticipants ?? 0) : null }))} style={[[ui.flex1, ui.p3, ui.rounded2xl, ui.textCenter, ui.border, ui.textSm, selected ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>{label}</Touch>;
+                    return <Touch key={label} accessibilityState={{ selected }} onPress={() => { setData(p => ({ ...p, maxParticipants: limited ? Math.max(p.minParticipants, p.maxParticipants ?? 0) : null })); setLimitReveals(n => n + 1); }} style={[[ui.flex1, ui.p3, ui.rounded2xl, ui.textCenter, ui.border, ui.textSm, selected ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>{label}</Touch>;
                   })}
                 </Box>
               </Box>}
-              <Label style={[[ui.textXs, ui.textWhite40]]}>
+              <ScrollIntoViewOn on={limitReveals}><Label style={[[ui.textXs, ui.textWhite40]]}>
                 {data.maxParticipants === null ? "Sınır yok: minimum katılımcı sayısına ulaşınca oda açılır. Etkinlik başlayana kadar yeni katılımcılar katılabilir." : data.maxParticipants === data.minParticipants ? `Tam ${data.minParticipants} kişilik: ${data.minParticipants} kişi dolunca katılım kapanır.` : `${data.minParticipants} kişi dolunca etkinlik hayata geçer; ${data.maxParticipants} kişide katılım kapanır.`}
-              </Label>
+              </Label></ScrollIntoViewOn>
 
-              {/* Participants and the message to them share one step. */}
+              </Box></ScrollIntoViewOn>
+            </Box>}
+
+          {/* Step 2 - Date, time & duration */}
+          {step === 2 && <Box style={[[ui.spaceY5]]} enter>
+              <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
+                Ne zaman{"\n"}buluşuyorsunuz?
+              </Label>
+              <GlassInput label="Tarih" value={data.date} onChangeText={e => setData(p => ({
+            ...p,
+            date: e
+          }))} mode="date" />
+              <GlassInput label="Başlangıç saati" value={data.time} onChangeText={e => setData(p => ({
+            ...p,
+            time: e
+          }))} mode="time" />
+              {startsInPast && <Label style={[[ui.textSm], { color: palette.error }]}>
+                Geçmiş bir tarih veya saat seçemezsin.
+              </Label>}
+
               <Box>
                 <Label style={[[ui.textSm, ui.textWhite60, ui.fontMedium]]}>
-                  Katılımcılara ne söylemek istersin?
+                  Ne kadar sürecek?
+                </Label>
+                <Label style={[[ui.textXs, ui.textWhite40, ui.mb3]]}>
+                  Tahminen ne kadar vaktiniz var?
+                </Label>
+                <Box style={[[ui.grid, ui.gap3]]} columns={3}>
+                  {DURATIONS.map(minutes => <Touch key={minutes} onPress={() => { setCustomDurationOpen(false); setData(p => ({ ...p, durationMinutes: minutes })); }} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, !customDurationOpen && data.durationMinutes === minutes ? [ui.borderC8a44a50, ui.textC8a44a] : [ui.borderWhite8, ui.textWhite70]]]}><GlassFill radius={16} tint={!customDurationOpen && data.durationMinutes === minutes ? "rgba(105,120,255,.16)" : undefined} />
+                      <Label style={[[ui.textSm, ui.fontMedium]]}>{formatDuration(minutes)}</Label>
+                    </Touch>)}
+                  <Touch onPress={() => setCustomDurationOpen(true)} style={[[ui.p4, ui.rounded2xl, ui.textCenter, ui.border, customDurationOpen || data.durationMinutes && !DURATIONS.includes(data.durationMinutes) ? [ui.borderC8a44a50, ui.textC8a44a] : [ui.borderWhite8, ui.textWhite70]]]}><GlassFill radius={16} tint={customDurationOpen || data.durationMinutes && !DURATIONS.includes(data.durationMinutes) ? "rgba(105,120,255,.16)" : undefined} />
+                      <Label style={[[ui.textSm, ui.fontMedium]]}>Özel süre</Label>
+                    </Touch>
+                </Box>
+                {customDurationOpen && <Reveal><Box style={[[ui.spaceY3], { marginTop: 16 }]}>
+                    <Box style={[[ui.flex, ui.gap3]]}>
+                      <GlassInput label="Saat" accessibilityLabel="Süre saat" placeholder="0" keyboardType="number-pad" maxLength={2} value={customDuration.hours} onChangeText={hours => setCustomDuration(p => ({ ...p, hours: hours.replace(/\D/g, "") }))} />
+                      <GlassInput label="Dakika" placeholder="0" keyboardType="number-pad" maxLength={2} value={customDuration.minutes} onChangeText={minutes => setCustomDuration(p => ({ ...p, minutes: clampMinutes(minutes) }))} />
+                    </Box>
+                    <Label style={[[ui.textXs], { color: customMinutes > MAX_DURATION_MINUTES ? palette.error : palette.muted }]}>
+                      {customMinutes > MAX_DURATION_MINUTES ? "Süre en fazla 24 saat olabilir." : customDurationValid ? `Süre: ${formatDuration(customMinutes)}` : "Saat ve dakika gir."}
+                    </Label>
+                  </Box></Reveal>}
+              </Box>
+              <Box style={[[ui.h4]]} />
+            </Box>}
+
+          {/* Step 3 - Location */}
+          {step === 3 && <Box style={[[ui.spaceY5]]} enter>
+              <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
+                Nerede{"\n"}buluşacaksınız?
+              </Label>
+              <LocationPicker value={place} venue={data.location} defaultCity={store.user.city} onChange={setPlace}
+                onVenueChange={location => setData(p => ({ ...p, location }))} onMapTouch={setMapTouched} />
+            </Box>}
+
+          {/* Step 4 - Message to participants (how many people is asked with the level, step 1) */}
+          {step === 4 && <Box style={[[ui.spaceY6]]} enter>
+              <Box>
+                <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
+                  Katılımcılara ne{"\n"}söylemek istersin?
                 </Label>
                 <Label style={[[ui.textXs, ui.textWhite40]]}>
                   Zorunlu: etkinliği ve varsa gereksinimleri en az {MIN_DESCRIPTION_LENGTH} karakterle anlat.

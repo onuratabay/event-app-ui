@@ -7,13 +7,14 @@ import { useEffect } from "react"
 // then lands on home like any page with nothing below it.
 const MAX = 12
 const KEEP = 8
-type StackState = { key?: string; index?: number; routes?: Array<{ key: string; name: string; state?: StackState }>; [key: string]: unknown }
+type StackState = { key?: string; type?: string; index?: number; routes?: Array<{ key: string; name: string; state?: StackState }>; [key: string]: unknown }
 
 function pageStack(root: StackState | undefined): StackState | undefined {
   let state = root
   for (;;) {
     const focused = state?.routes?.[state.index ?? state.routes.length - 1]
-    if (!focused?.state?.routes?.length) return state
+    // The bottom-bar tabs are one page of the stack (each tab is built once), not pages to trim.
+    if (!focused?.state?.routes?.length || focused.state.type === "tab") return state
     state = focused.state
   }
 }
