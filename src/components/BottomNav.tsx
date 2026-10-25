@@ -8,7 +8,7 @@ import { useReduceMotion } from "./GlassUI"
 import { useStore } from "../native/Store"
 import { Box, Label, Picture, Touch } from "../native/UI"
 import type { NavigateFn, Screen } from "../types"
-import { MessageIcon, LocationIcon, CompassIcon } from "./Icons"
+import { MessageIcon, LocationIcon, CompassIcon, PersonIcon } from "./Icons"
 const nav: [Screen, string][] = [
   ["discover", "Keşfet"],
   ["map", "Harita"],
@@ -96,9 +96,14 @@ export default function BottomNav({
                 style={{ color: active === screen ? palette.accent : palette.muted }}
               />
             ) : screen === "profile" ? (
-              <Picture
+              // Without a photo: a line icon like the other tabs (the avatar's text fallback sat off-centre).
+              ME.avatar ? <Picture
                 uri={ME.avatar}
                 style={[s.avatar, active === screen && s.avatarActive]}
+              /> : <PersonIcon
+                size={22}
+                strokeWidth={1.75}
+                style={{ color: active === screen ? palette.accent : palette.muted }}
               />
             ) : (
               screen === "create-event" ? <Animated.View style={{ transform: [
@@ -164,6 +169,7 @@ const s = StyleSheet.create({
   create: { flex: 0, width: ITEM_HEIGHT, marginHorizontal: 4, backgroundColor: "#141a3c", borderColor: "rgba(122,140,255,.55)",
     boxShadow: "0px 0px 14px rgba(105,120,255,.45)" },
   label: { fontSize: 11, lineHeight: 14, letterSpacing: 0.2, fontFamily: "Outfit-Medium" },
-  avatar: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: "transparent" },
+  // Same 22pt box as the line icons, so "Profil" sits on the same line as the other labels.
+  avatar: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: "transparent" },
   avatarActive: { borderColor: palette.accent },
 })

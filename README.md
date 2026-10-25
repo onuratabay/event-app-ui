@@ -10,7 +10,11 @@ The application uses Expo Go-compatible native modules for screen and API develo
 
 ## API connection
 
-The backend and its MySQL database run only on the ewent.app server (`93.89.238.230`). The app always connects to `https://ewent.app` (`src/api/config.ts`), in Expo Go and in published builds alike; there is no local backend, LAN fallback or environment override.
+Published builds (release APKs, store builds) always connect to `https://ewent.app`, the production server (`93.89.238.230`).
+
+Development builds connect to `EXPO_PUBLIC_API_URL` when it is set (for example `https://ewent.app` to try against production). Without it they connect to the local `vibe-us` backend on port 3000 of the computer running Expo; the host follows Expo's development host, so a phone on the same LAN reaches it without edits. Restart Expo after changing the variable. See `src/api/config.ts`.
+
+The local backend's `.env` points at the old home-server database through a tunnel, not the production database on the VDS.
 
 ## Structure
 

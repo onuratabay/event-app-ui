@@ -1,5 +1,5 @@
 import Constants from "expo-constants"
-import { Platform } from "react-native"
+import { Platform, TurboModuleRegistry } from "react-native"
 
 type Ads = typeof import("react-native-google-mobile-ads")
 
@@ -35,11 +35,19 @@ export function nativeUnitId(): string | null {
   return realNative?.trim() || null
 }
 
+/** Native modules the ads package loads on import. */
+const NATIVE_MODULES = ["RNAppModule", "RNGoogleMobileAdsModule", "RNGoogleMobileAdsConsentModule", "RNGoogleMobileAdsNativeModule"]
 let sdk: Ads | null | undefined
-/** The ads SDK, or null where it cannot run: Expo Go has no native ads module, and tests mock nothing. */
+/**
+ * The ads SDK, or null where it cannot run: Expo Go and builds made without the ads module have no native side,
+ * and tests mock nothing. The native modules are looked up first without throwing: loading the package where
+ * they are missing raises a red error screen in development even inside try/catch.
+ */
 export function adsModule(): Ads | null {
   if (sdk !== undefined) return sdk
   if (Constants.executionEnvironment === "storeClient") return (sdk = null)
+  try { if (NATIVE_MODULES.some(name => !TurboModuleRegistry.get(name))) return (sdk = null) }
+  catch { return (sdk = null) }
   try { sdk = require("react-native-google-mobile-ads") as Ads }
   catch { sdk = null }
   return sdk

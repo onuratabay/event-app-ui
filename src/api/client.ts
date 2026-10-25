@@ -1,11 +1,28 @@
-import { Platform } from "react-native"
+import { NativeModules, Platform } from "react-native"
 import Constants from "expo-constants"
-import { API_URL } from "./config"
+import { resolveApiUrl } from "./config"
 import { apiLoading } from "./loading"
 import { clearChatCache } from "../services/chat-cache"
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "./token-store"
 
-export { API_URL }
+/**
+ * The development computer (Metro's host:port) in a development build. SDK 58 development builds no longer
+ * fill `expoConfig.hostUri`, so the address the JavaScript bundle was loaded from is used too; without it the
+ * app fell back to the emulator address 10.0.2.2 and a real phone could not sign in.
+ */
+function devServerHost(): string | undefined {
+  if (!__DEV__) return undefined
+  const expo = Constants.expoConfig?.hostUri ?? (Constants as { expoGoConfig?: { debuggerHost?: string } }).expoGoConfig?.debuggerHost
+  if (expo) return expo
+  try {
+    const sourceCode = NativeModules.SourceCode as { scriptURL?: string; getConstants?: () => { scriptURL?: string } } | undefined
+    const bundle = sourceCode?.getConstants?.().scriptURL ?? sourceCode?.scriptURL
+    return bundle && /^https?:/.test(bundle) ? new URL(bundle).host : undefined
+  } catch { return undefined }
+}
+// Development builds use the local backend unless EXPO_PUBLIC_API_URL says otherwise; published builds use ewent.app.
+export const API_URL = resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, devServerHost(), Platform.OS, __DEV__)
+if (__DEV__) console.debug("[API URL]", API_URL)
 /** Photos come as signed server paths ("/photos/users/…?v=…&s=…"); images load them from the API host and cache them on disk. */
 export const photoUri = (uri: string) => uri.startsWith("/photos/") ? `${API_URL.replace(/\/+$/, "")}${uri}` : uri
 /** This build's version (app.json "version"); sent with every request so the server knows which app is calling. */

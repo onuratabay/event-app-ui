@@ -478,6 +478,7 @@ function LineSymbol({ path, size = 20, style, strokeWidth = 1.75 }: IconProps & 
 export function CloseIcon(props: IconProps) { return <LineSymbol {...props} path="M6 6l12 12M18 6 6 18" /> }
 export function EditIcon(props: IconProps) { return <LineSymbol {...props} path="m15 5 4 4M4 20l5-1L20 8a2.8 2.8 0 0 0-4-4L5 15l-1 5Z" /> }
 export function SendIcon(props: IconProps) { return <LineSymbol {...props} path="M12 19V5m-6 6 6-6 6 6" /> }
+export function PersonIcon(props: IconProps) { return <LineSymbol {...props} path="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4.5 20a7.5 7.5 0 0 1 15 0" /> }
 export function ReplyIcon(props: IconProps) { return <LineSymbol {...props} path="M9 14 4 9l5-5M4 9h10.5A5.5 5.5 0 0 1 20 14.5V19" /> }
 export function FilterIcon(props: IconProps) { return <LineSymbol {...props} path="M4 7h10M18 7h2M4 17h4M12 17h8M14 4v6M8 14v6" /> }
 /** Map apps' "my location" arrow; filled once the map is following the user's position. */

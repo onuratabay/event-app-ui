@@ -6,6 +6,24 @@ export type PushState = "granted" | "denied" | "unavailable"
 let registered: string | null = null
 let handlerSet = false
 
+/** Native modules expo-notifications loads on import on Android (ExpoTopicSubscriptionModule is new in SDK 58). */
+const ANDROID_NATIVE_MODULES = ["ExpoPushTokenManager", "ExpoNotificationsEmitter", "ExpoNotificationsHandlerModule", "ExpoNotificationPermissionsModule", "ExpoNotificationChannelManager", "ExpoTopicSubscriptionModule"]
+let nativeReady: boolean | undefined
+/**
+ * expo-notifications, or null where its native side is missing: Expo Go on Android has no remote push, and an
+ * app built before an SDK upgrade lacks newer modules. Loading the package there raises a red error screen in
+ * development even inside try/catch (Metro reports a failing module before the catch), so the native modules
+ * are looked up first without throwing.
+ */
+function notificationsModule() {
+  try {
+    // The native side does not change while the app runs: looked up once.
+    nativeReady ??= Platform.OS !== "android" || (Constants.executionEnvironment !== "storeClient"
+      && ANDROID_NATIVE_MODULES.every(name => !!(require("expo") as typeof import("expo")).requireOptionalNativeModule(name)))
+    return nativeReady ? require("expo-notifications") as typeof import("expo-notifications") : null
+  } catch { return null }
+}
+
 /**
  * Registers this device for push (e.g. "Üyeliğin onaylandı") and sends its Expo token to the
  * server. `ask` shows the system permission prompt; without it only an existing permission is used.
@@ -13,9 +31,9 @@ let handlerSet = false
  * and the module is only required here, never at import time.
  */
 export async function registerForPush(ask: boolean): Promise<PushState> {
-  if (Constants.executionEnvironment === "storeClient" && Platform.OS === "android") return "unavailable"
+  const Notifications = notificationsModule()
+  if (!Notifications) return "unavailable"
   try {
-    const Notifications = require("expo-notifications") as typeof import("expo-notifications")
     const Device = require("expo-device") as typeof import("expo-device")
     if (!Device.isDevice) return "unavailable"
     if (!handlerSet) {
@@ -40,9 +58,9 @@ export async function registerForPush(ask: boolean): Promise<PushState> {
  * Returns an unsubscribe; does nothing where push is unavailable.
  */
 export function onPushOpened(handler: (data: Record<string, unknown>) => void): () => void {
-  if (Constants.executionEnvironment === "storeClient" && Platform.OS === "android") return () => {}
+  const Notifications = notificationsModule()
+  if (!Notifications) return () => {}
   try {
-    const Notifications = require("expo-notifications") as typeof import("expo-notifications")
     if (typeof Notifications.addNotificationResponseReceivedListener !== "function") return () => {}
     let active = true
     void Notifications.getLastNotificationResponseAsync?.().then(response => { if (active && response) handler(response.notification.request.content.data ?? {}) }).catch(() => {})

@@ -1,5 +1,5 @@
 import { useWalkthroughBlocker } from "../walkthrough/activity"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { palette } from "../theme/palette"
@@ -19,6 +19,10 @@ function Wheel({ values, labels, value, onChange, label, cyclic = false }: { val
   const rows = cyclic ? Array.from({ length: COPIES * count }, (_, i) => values[i % count]) : values
   const index = base + Math.max(0, values.indexOf(value))
   const initialOffset = useRef({ x: 0, y: index * ROW }).current
+  // One exact stop per row. A single snap interval is rounded to whole pixels once (44pt is 115.5px on a
+  // 2.625x phone) and the error grows with every row: far down the list (years, the middle copy of hours and
+  // minutes) the wheel stopped half a row off the selection band.
+  const stops = useMemo(() => rows.map((_, i) => i * ROW), [rows.length])
   // Keep February and short months in range when the month/year changes.
   useEffect(() => {
     if (!values.includes(value)) onChange(values[values.length - 1])
@@ -28,12 +32,14 @@ function Wheel({ values, labels, value, onChange, label, cyclic = false }: { val
     const row = Math.max(0, Math.min(rows.length - 1, Math.round(offsetY / ROW)))
     const position = row % count
     if (cyclic && row !== base + position) ref.current?.scrollTo({ y: (base + position) * ROW, animated: false })
+    // Stopped between rows (pixel rounding): settle exactly on the chosen row.
+    else if (Math.abs(offsetY - row * ROW) > 0.5) ref.current?.scrollTo({ y: row * ROW, animated: true })
     onChange(values[position])
   }
   return <View style={s.column}>
     <View pointerEvents="none" style={s.selection} />
     <ScrollView ref={ref} style={s.wheel} contentContainerStyle={{ paddingVertical: ROW * 2 }}
-      contentOffset={initialOffset} snapToInterval={ROW} decelerationRate="fast" bounces={false}
+      contentOffset={initialOffset} snapToOffsets={stops} decelerationRate="fast" bounces={false}
       showsVerticalScrollIndicator={false} onScrollEndDrag={event => {
         if (Math.abs(event.nativeEvent.velocity?.y || 0) < .01) settle(event.nativeEvent.contentOffset.y)
       }} onMomentumScrollEnd={event => settle(event.nativeEvent.contentOffset.y)}>

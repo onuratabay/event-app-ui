@@ -60,6 +60,8 @@ Module._load = function (id, parent, isMain) {
   if (id === "expo-router") return { useFocusEffect: callback => React.useEffect(callback, [callback]), usePathname: () => global.__testPathname || "/discover", useLocalSearchParams: () => global.__testParams || {}, useGlobalSearchParams: () => global.__testParams || {}, useRootNavigationState: () => global.__testRootState, useRouter: () => ({ navigate: href => { global.__testMethods?.push("navigate"); global.__testNavigations?.push(href.pathname ?? href) }, replace: href => { global.__testMethods?.push("replace"); global.__testNavigations?.push(href.pathname ?? href) }, push: href => { global.__testMethods?.push("push"); global.__testNavigations?.push(href.pathname ?? href) }, back: () => global.__testNavigations?.push("back"), canGoBack: () => { let state = global.__testRootState; while (state?.routes?.[state.index ?? 0]?.state) state = state.routes[state.index ?? 0].state; return (state?.index ?? 0) > 0 }, canDismiss: () => true, dismissAll: () => global.__testNavigations?.push("dismissAll") }) }
   if (id === "socket.io-client") return require("./mock-socket.cjs")
   if (id === "expo-notifications") { global.__expoNotificationsLoaded = true; return global.__testNotifications || {} }
+  // Native modules are present unless a test removes them (an app built before an SDK upgrade, or Expo Go).
+  if (id === "expo") return { requireOptionalNativeModule: name => (global.__missingNativeModules || []).includes(name) ? null : {} }
   if (id === "expo-device") return { isDevice: true }
   if (id === "expo-location") return {
     getForegroundPermissionsAsync: async () => ({ granted: global.__testForegroundLocationPermission === true }), requestForegroundPermissionsAsync: async () => ({ granted: global.__testLocationPermission === true }),
@@ -265,7 +267,14 @@ async function tap(tree, label) {
     console.log(`PASS: ${process.env.TEST_PLATFORM || "ios"} chat composer keyboard space is measured after the root makes room.`)
   }
 
-  assert.equal(require("../src/api/config.ts").API_URL, "https://ewent.app", "The app talks only to the ewent.app server, never a local backend")
+  const { resolveApiUrl } = require("../src/api/config.ts")
+  // Development: the local backend on the Expo host, unless EXPO_PUBLIC_API_URL names another server.
+  assert.equal(resolveApiUrl(undefined, "192.168.1.15:8081", "ios", true), "http://192.168.1.15:3000")
+  assert.equal(resolveApiUrl(undefined, "192.168.1.25:8081", "android", true), "http://192.168.1.25:3000")
+  assert.equal(resolveApiUrl("https://ewent.app/", "192.168.1.15:8081", "ios", true), "https://ewent.app")
+  assert.equal(resolveApiUrl(undefined, undefined, "android", true), "http://10.0.2.2:3000")
+  // Published builds: always ewent.app, never a local or overridden address.
+  assert.equal(resolveApiUrl("http://192.168.1.15:3000", "192.168.1.15:8081", "android", false), "https://ewent.app", "A published build never reaches a local backend")
   require("./check-release-version.cjs")()
   const api = require("../src/api/client.ts")
   const server = require("./mock-server.cjs")();
@@ -458,7 +467,7 @@ async function tap(tree, label) {
   assert.equal(destination, "onboarding-2", "A new account continues with the next application step")
   assert.deepEqual(registrationRequest.body.acceptedDocuments, [{ type: "terms", version: 2 }, { type: "community", version: 1 }, { type: "privacy", version: 1 }, { type: "kvkk", version: 1 }], "The accepted server versions are sent; marketing stays opt-in")
   assert.equal(registrationRequest.body.marketingConsent, false)
-  assert.equal(registrationRequest.url, "https://ewent.app/auth/register")
+  assert.equal(registrationRequest.url, "http://192.168.1.15:3000/auth/register")
   assert.equal(registrationRequest.body.birthDate, "15/06/1995")
   assert.equal(registrationRequest.body.city, "İzmir", "The chosen city is sent with the registration")
   assert.equal(registrationRequest.body.phoneNumber, "+905321234567")
