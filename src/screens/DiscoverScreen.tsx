@@ -8,7 +8,7 @@ import { getApiErrorMessage, setFavorite } from "../api/client";
 import { FlatList, Platform, RefreshControl, useWindowDimensions } from "react-native";
 import { useState } from "react";
 import { Line, Path, Polyline } from "react-native-svg";
-import { BrandLogo } from "../components/Brand";
+import { BrandWordmark } from "../components/Brand";
 import FeedHeaderBackdrop from "../components/FeedHeaderBackdrop";
 import HeaderIconButton from "../components/HeaderIconButton";
 import { HeartButton, RippleButton, SpringButton } from "../components/Expressive";
@@ -285,7 +285,7 @@ export default function DiscoverScreen({
 }: Props) {
   // Three 44pt actions per side; the wordmark shrinks on narrow phones so it stays centered.
   const { width: screenWidth } = useWindowDimensions();
-  const logoSize = Math.max(28, Math.min(44, screenWidth - 2 * (12 + 132)));
+  const wordmarkWidth = Math.max(64, Math.min(104, screenWidth - 2 * (12 + 132)));
   const {
     data: store, refreshFeed, loadMoreFeedEvents, moreFeedEvents
   } = useStore();
@@ -385,7 +385,7 @@ export default function DiscoverScreen({
             </HeaderIconButton>
           </Box>
           <Box pointerEvents="none" style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <BrandLogo size={logoSize} />
+            <BrandWordmark width={wordmarkWidth} />
           </Box>
           <Box style={{ width: 132, flexDirection: "row", justifyContent: "flex-end" }}>
             <HeaderIconButton walkthroughId="discover-calendar" plain label="Etkinlik Takvimim" onPress={() => navigate("availability")}><CalendarIcon size={20} strokeWidth={1.8} style={{ color: "#f4f5ff" }} /></HeaderIconButton>

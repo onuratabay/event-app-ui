@@ -1,3 +1,4 @@
+import { categoryIconPath } from "./category-icons"
 import { Circle, Line, Path, Polygon, Polyline, Rect } from "react-native-svg"
 import { Vector, type NativeStyleProp } from "../native/UI"
 interface IconProps {
@@ -487,17 +488,8 @@ export function MyLocationIcon({ size = defaults.size, style, strokeWidth = defa
 }
 export function EyeIcon(props: IconProps) { return <LineSymbol {...props} path="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /> }
 export function EyeOffIcon(props: IconProps) { return <LineSymbol {...props} path="M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.6 3.4M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18" /> }
-export function CategoryIcon({ name = "", ...props }: IconProps & { name?: string }) {
-  const key = name.toLocaleLowerCase("tr-TR");
-  const path = /kahve|coffee|yemek/.test(key) ? "M4 8h12v6a5 5 0 0 1-10 0V8m10 1h2a3 3 0 0 1 0 6h-2M5 21h14M8 3v2m4-2v2"
-    : /bisiklet/.test(key) ? "M9 16a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Zm13 0a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0ZM5.5 16 10 8l3 8H5.5M10 8h6.5l2 8M10 8V5.5M8.5 5.5h3M16.5 8l-1-2.5M14.5 5.5H17"
-    : /müzik|konser|dans/.test(key) ? "M9 18V5l11-2v13M9 18a3 3 0 1 1-3-3c2 0 3 1 3 3Zm11-2a3 3 0 1 1-3-3c2 0 3 1 3 3Z"
-    : /sanat|resim|seramik/.test(key) ? "M12 3a9 9 0 1 0 0 18h2a2 2 0 0 0 0-4h-1a2 2 0 0 1 0-4h4a4 4 0 0 0 4-4c0-3-4-6-9-6Zm-5 7h.01M10 6h.01m5 1h.01"
-    : /yürüyüş|doğa|kamp|tırman/.test(key) ? "m2 20 7-15 5 10 3-6 5 11H2Zm4-9 3 3 3-3"
-    : /tenis|padel|raket/.test(key) ? "M19 3c3 3 2 7-1 10s-7 4-10 1-2-7 1-10 7-4 10-1ZM8 14l-5 7m3-5 2 2M10 5l8 8m-6-10 9 8"
-    : /yüzme|deniz/.test(key) ? "M2 16c3-3 4 3 7 0s4 3 7 0 4 3 6 0M2 21c3-3 4 3 7 0s4 3 7 0 4 3 6 0M7 12l5-5 5 5m-5-5L8 3m8 1a2 2 0 1 0 0 .01"
-    : "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm4 5-3 5-5 3 3-5 5-3Z";
-  return <LineSymbol {...props} path={path} />;
+export function CategoryIcon({ name = "", slug, ...props }: IconProps & { name?: string; slug?: string }) {
+  return <LineSymbol {...props} path={categoryIconPath(name, slug)} />;
 }
 export function CopyIcon({
   size = defaults.size,

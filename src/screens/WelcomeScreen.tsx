@@ -1,6 +1,6 @@
 import { palette } from "../theme/palette";
 import { LockIcon } from "../components/Icons";
-import { BrandLogo } from "../components/Brand";
+import { BrandWordmark } from "../components/Brand";
 import { useSignedOutEntry } from "../native/session";
 import { AtmoBackground } from "../components/GlassUI";
 import { Box, Label, Picture, Touch } from "../native/UI";
@@ -94,7 +94,7 @@ export default function WelcomeScreen({
           borderColor: "rgba(146,125,255,0.15)"
       }]} glass />
           <Box style={[[ui.spaceY4]]} enter>
-            <BrandLogo />
+            <BrandWordmark />
             <Box style={{ position: "relative", zIndex: 5 }}>
               <Label adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={[[ui.fontDisplay, ui.text5xl, ui.textWhite], { fontStyle: "italic", lineHeight: 52, textShadowColor: "rgba(0,0,0,.45)", textShadowRadius: 12 }]}>Meet real</Label>
               <Label adjustsFontSizeToFit minimumFontScale={0.78} numberOfLines={1} style={[[ui.fontDisplay, ui.text5xl], { color: "#c7ceff", fontStyle: "italic", lineHeight: 52, textShadowColor: "rgba(0,0,0,.5)", textShadowRadius: 12 }]}>moments.</Label>

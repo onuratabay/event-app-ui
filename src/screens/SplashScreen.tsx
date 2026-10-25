@@ -1,4 +1,4 @@
-import { BrandLogo } from "../components/Brand";
+import { BrandMark } from "../components/Brand";
 import { useOptionalGuest } from "../guest/GuestSession";
 import { palette } from "../theme/palette";
 import { gatedScreen } from "../native/access";
@@ -78,7 +78,11 @@ export default function SplashScreen({
           <Box style={[[ui.fixed, ui.roundedFull, ui.border, ui.borderWhite8], { width: 128, height: 128 }]} />
         </Animated.View>
         <Animated.View style={{ position: "absolute", top: 58, transform: [{ scale: coreScale }] }}>
-          <BrandLogo size={80} />
+          <Box style={[[ui.w20, ui.h20, ui.rounded28px, ui.flex, ui.itemsCenter, ui.justifyCenter], {
+            backgroundColor: "rgba(105,120,255,.16)", borderWidth: 1, borderColor: "rgba(183,197,255,.42)",
+          }]} glass>
+            <BrandMark size={56} />
+          </Box>
         </Animated.View>
         <Box style={[[ui.textCenter]]}>
           <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite90], { lineHeight: 34, paddingVertical: 2 }]}>

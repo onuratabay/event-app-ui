@@ -121,7 +121,7 @@ export default function CreateEventScreen({
     setPersonalSuggestions(items => items.filter(item => item !== text));
     dismissSuggestion(text).then(result => setPersonalSuggestions(result.items)).catch(error => { setPersonalSuggestions(previous); showAlert('Öneri silinemedi', getApiErrorMessage(error)); });
   };
-  const ACTIVITIES = activities.map(a => ({ label: a.name, icon: '✨' }));
+  const ACTIVITIES = activities.map(a => ({ label: a.name, slug: a.slug }));
   const PRIVACIES = visibilities.filter(v => PRIVACY_OPTIONS[v.enum]).map(v => ({ label: v.name, enum: v.enum, ...PRIVACY_OPTIONS[v.enum] }));
   // The server also enforces the limit on create; a failed check does not block the form.
   const [createBlocked, setCreateBlocked] = useState<string | null>(null);
@@ -419,7 +419,7 @@ export default function CreateEventScreen({
               <Box style={[[ui.grid, ui.gap3]]} columns={2}>
                 {!activities.length && <Touch onPress={loadCatalog}>Seçenekleri yeniden yükle</Touch>}
               {ACTIVITIES.map(a => <Touch key={a.label} onPress={() => chooseActivity(a.label)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, data.activity === a.label ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={data.activity === a.label ? "rgba(105,120,255,.16)" : undefined} />
-                    <CategoryIcon name={a.label} size={28} style={{ color: palette.accent, marginBottom: 12 }} />
+                    <CategoryIcon name={a.label} slug={a.slug} size={28} style={{ color: palette.accent, marginBottom: 12 }} />
                     <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>
                       {a.label}
                     </Label>
