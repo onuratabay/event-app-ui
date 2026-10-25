@@ -674,7 +674,10 @@ export function Field({
       value={value}
       onChangeText={onChangeText}
       style={[
-        { minHeight: 52, paddingVertical: 12, paddingHorizontal: 0, textAlignVertical: "center" },
+        // Defaults only for what the field's own style leaves open: a default paddingHorizontal/Vertical
+        // outranks a `padding` shorthand in React Native whatever the order, which pressed the text of
+        // fields styled with `padding: 14` against the left edge.
+        { minHeight: 52, textAlignVertical: "center", ...paddingDefaults(style) },
         style,
         font({ ...inherited, ...split(style).text }),
         // A line height on a single-line input pushes the text (and placeholder) below the vertical
@@ -696,6 +699,15 @@ export function Field({
       selectionColor={props.selectionColor ?? (Platform.OS === "ios" ? palette.accent : "rgba(105,120,255,.35)")}
     />
   )
+}
+/** Field padding defaults (12 vertical, 0 horizontal) for the sides the style does not set itself. */
+function paddingDefaults(style: NativeStyleProp) {
+  const flat = (StyleSheet.flatten(style) || {}) as ViewStyle
+  const has = (...keys: Array<keyof ViewStyle>) => keys.some(key => flat[key] !== undefined)
+  return {
+    ...(has("padding", "paddingVertical", "paddingTop", "paddingBottom") ? {} : { paddingVertical: 12 }),
+    ...(has("padding", "paddingHorizontal", "paddingLeft", "paddingRight", "paddingStart", "paddingEnd") ? {} : { paddingHorizontal: 0 }),
+  }
 }
 export function Vector({
   style,

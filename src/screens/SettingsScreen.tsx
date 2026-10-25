@@ -156,13 +156,24 @@ export default function SettingsScreen({ navigate }: { navigate: NavigateFn }) {
         <Toggle title="Etkinlik davetleri" detail="Biri seni bir etkinliğe davet ettiğinde" value={notifications.invites} disabled={!notificationsReady} onChange={v => void saveNotification("invites", v)} />
         <Toggle title="Yeni mesajlar" detail="Etkinlik odalarındaki ve bire bir sohbetlerdeki mesajlar" value={notifications.messages} disabled={!notificationsReady} onChange={v => void saveNotification("messages", v)} />
         <Toggle title="Etkinlik hatırlatmaları" detail="Katılacağın etkinlik yaklaştığında" value={notifications.reminders} disabled={!notificationsReady} onChange={v => void saveNotification("reminders", v)} />
-        <Row title="Uygulama içi bildirimler" detail="Davetlerini ve topluluktan gelen haberleri görüntüle" onPress={() => navigate("notifications")} />
         <Row title="Telefon bildirim izinleri" detail="Sistem bildirim iznini telefon ayarlarından yönet" onPress={openSystemSettings} />
       </Section>
 
       </Box>
       <Section title="Görünüm ve etkileşim">
         <Toggle title="Dokunsal geri bildirim" detail="Butonlara dokunduğunda hafif titreşim" value={values.haptics} disabled={!ready} onChange={v => void savePreference({ haptics: v })} />
+        <Box style={[s.row, s.stepsRow]}>
+          <Box style={s.copy}><Label style={s.title}>Arka plan objelerini azalt</Label><Label style={s.detail}>Arka plandaki şekiller ve ışıltı kademe kademe soluklaşır, yazılar daha kolay okunur</Label></Box>
+          <Box accessibilityRole="radiogroup" style={s.steps}>
+            {[0, 1, 2, 3, 4, 5].map(level => {
+              const selected = values.backgroundDim === level
+              return <Touch key={level} accessibilityRole="radio" accessibilityState={{ selected, disabled: !ready }} accessibilityLabel={level ? `Arka plan azaltma ${level}. kademe` : "Arka plan azaltma kapalı"}
+                disabled={!ready} onPress={() => void savePreference({ backgroundDim: level })} style={[s.step, selected && s.stepSelected]}>
+                <Label style={[s.stepLabel, selected && s.stepLabelSelected]}>{level ? String(level) : "Kapalı"}</Label>
+              </Touch>
+            })}
+          </Box>
+        </Box>
         <Toggle title="Saydamlığı azalt" detail="Cam ve bulanıklık efektleri yerine düz zeminler kullan" value={values.reduceTransparency} disabled={!ready} onChange={v => void savePreference({ reduceTransparency: v })} />
         <Row title="Tema" detail="Gece mavisi · Bu sürümde koyu tema kullanılıyor" />
         <Row title="Dil" detail="Türkçe · Diğer diller henüz desteklenmiyor" />
@@ -220,6 +231,12 @@ const s = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, minHeight: 72, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border },
   copy: { flex: 1, minWidth: 0, gap: 5 }, title: { color: palette.text, fontFamily: "Outfit-Medium", fontSize: 15 },
   detail: { color: palette.muted, fontSize: 12, lineHeight: 18 }, chevron: { color: palette.accent, fontSize: 20 },
+  stepsRow: { flexDirection: "column", alignItems: "stretch" },
+  steps: { flexDirection: "row", gap: 6 },
+  step: { flex: 1, minHeight: 36, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: palette.elevated, borderWidth: 1, borderColor: palette.border },
+  stepSelected: { backgroundColor: palette.selected, borderColor: palette.accent },
+  stepLabel: { color: palette.muted, fontSize: 13, fontFamily: "Outfit-Medium" },
+  stepLabelSelected: { color: palette.text },
   danger: { color: palette.error }, error: { color: palette.error, fontSize: 13, lineHeight: 19, marginTop: 12 },
   rules: { flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 4, marginTop: -2, marginBottom: 2 },
   rule: { fontSize: 12, lineHeight: 17 },

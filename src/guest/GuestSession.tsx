@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { getMemberForGuestReturn, hasSession, registerGuestAccountIsolation } from '../api/client'
+import { claimGuestParticipation, getMemberForGuestReturn, hasSession, registerGuestAccountIsolation } from '../api/client'
 import { GUEST_CODE } from './links'
 
 export interface GuestSession { code: string; session?: string; name?: string; expiresAt?: string }
@@ -9,6 +9,8 @@ const Context = createContext<{
   ready: boolean; guest: GuestSession | null;
   enter: (code: string) => Promise<void>; save: (session: GuestSession) => Promise<void>;
   clearParticipation: (code?: string) => Promise<void>; returnToMember: () => Promise<void>;
+  /** Leaves guest mode without a member session (to sign up or sign in); the participation stays resumable. */
+  exit: () => Promise<void>;
 } | null>(null)
 export function GuestProvider({ children }: { children: ReactNode }) {
   const [guest, setGuest] = useState<GuestSession | null>(null)
@@ -76,7 +78,14 @@ export function GuestProvider({ children }: { children: ReactNode }) {
     if (captured !== version.current) throw new Error('Davet değişti. Tekrar dene.')
     version.current++; current.current = null; setGuest(null)
   }, [])
-  return <Context.Provider value={{ ready, guest, enter, save, clearParticipation, returnToMember }}>{children}</Context.Provider>
+  const exit = useCallback(async () => {
+    const previous = current.current
+    const job = queue.current.catch(() => {}).then(() => previous ? AsyncStorage.setItem(KEY, JSON.stringify({ ...previous, active: false })) : AsyncStorage.removeItem(KEY))
+    queue.current = job
+    await job
+    version.current++; current.current = null; setGuest(null)
+  }, [])
+  return <Context.Provider value={{ ready, guest, enter, save, clearParticipation, returnToMember, exit }}>{children}</Context.Provider>
 }
 export const useGuest = () => {
   const context = useContext(Context)
@@ -84,3 +93,25 @@ export const useGuest = () => {
   return context
 }
 export const useOptionalGuest = () => useContext(Context)
+
+/**
+ * After signing up: an event this device joined as a guest moves to the new account (the member takes the guest's
+ * place). Returns that event's id, or null when there was nothing to move. The saved guest record is removed once
+ * the server has taken it over or no longer knows it.
+ */
+export async function claimSavedGuestParticipation(): Promise<string | null> {
+  const raw = await AsyncStorage.getItem(KEY).catch(() => null)
+  if (!raw) return null
+  const stored = JSON.parse(raw) as Partial<GuestSession>
+  if (typeof stored.code !== 'string' || !GUEST_CODE.test(stored.code) || typeof stored.session !== 'string'
+    || !stored.expiresAt || Date.parse(stored.expiresAt) <= Date.now()) return null
+  try {
+    const result = await claimGuestParticipation(stored.code, stored.session)
+    await AsyncStorage.removeItem(KEY).catch(() => {})
+    return result.eventId
+  } catch (cause) {
+    // Expired, already moved, event already started or not a new account: nothing left to claim with this record.
+    if (cause instanceof Error && /^API (400|404):/.test(cause.message)) await AsyncStorage.removeItem(KEY).catch(() => {})
+    return null
+  }
+}

@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from "react-native"
 import { GlassFill, INPUT_FROST } from "./GlassFill"
 import { useScreenActive } from "../native/useScreenActive"
+import { usePreferences } from "../native/preferences"
 import { CheckIcon, LockIcon } from "./Icons"
 import { formatScore } from "../events/score"
 import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, LinearGradient as SvgLinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg"
@@ -436,6 +437,8 @@ export function useReduceMotion() {
   return reduce
 }
 /** Ambient screen backdrop: drifting glows and event glyphs gliding near and far. */
+const SHAPES_BY_DIM = [1, 0.75, 0.55, 0.38, 0.22, 0.1]
+const GLOW_BY_DIM = [1, 0.85, 0.7, 0.55, 0.42, 0.3]
 export function AtmoBackground({
   variant = "violet",
 }: {
@@ -449,6 +452,8 @@ export function AtmoBackground({
   const screenActive = useScreenActive()
   const reduceMotion = useReduceMotion()
   const moving = screenActive && !reduceMotion
+  // "Arka plan objelerini azalt" (off, then 5 steps): the floating shapes and the glow fade back, so text stands out.
+  const dim = usePreferences().values.backgroundDim
   const drift = useRef(new Animated.Value(0)).current
   useEffect(() => {
     if (!moving) return
@@ -464,7 +469,7 @@ export function AtmoBackground({
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}>
       {/* Static gradients that only move: cached as one GPU texture rather than redrawn every frame. */}
-      <Animated.View renderToHardwareTextureAndroid shouldRasterizeIOS style={[s.bleed, { transform: [{ translateX: along(-26, 26) }, { translateY: along(-14, 22) }, { scale: along(1, 1.08) }] }]}>
+      <Animated.View renderToHardwareTextureAndroid shouldRasterizeIOS style={[s.bleed, { opacity: GLOW_BY_DIM[dim] ?? 1, transform: [{ translateX: along(-26, 26) }, { translateY: along(-14, 22) }, { scale: along(1, 1.08) }] }]}>
         <Svg width="100%" height="100%">
           <Defs>
             <RadialGradient id="atmo" cx="28%" cy="14%" rx="82%" ry="65%">
@@ -485,7 +490,9 @@ export function AtmoBackground({
           <Rect width="100%" height="100%" fill="url(#atmoTertiary)" />
         </Svg>
       </Animated.View>
-      {EVENT_SHAPES.map((shape, index) => <DepthGlyph key={index} shape={shape} index={index} moving={moving} drift={drift} />)}
+      <View style={[StyleSheet.absoluteFill, { opacity: SHAPES_BY_DIM[dim] ?? 1 }]}>
+        {EVENT_SHAPES.map((shape, index) => <DepthGlyph key={index} shape={shape} index={index} moving={moving} drift={drift} />)}
+      </View>
     </View>
   )
 }

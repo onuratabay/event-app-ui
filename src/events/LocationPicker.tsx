@@ -1,12 +1,13 @@
 import * as Location from "expo-location"
 import { showAlert } from "../components/AppDialog"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Platform, StyleSheet } from "react-native"
 import MapView, { Marker } from "react-native-maps"
 import CityPicker from "../components/CityPicker"
 import { GlassInput } from "../components/GlassUI"
 import { LocationIcon, SearchIcon } from "../components/Icons"
 import { TURKISH_CITIES } from "../content/cities"
+import { CITY_CENTERS } from "../content/city-centers"
 import { CITY_PRESETS } from "../map/filters"
 import { MAP_PROVIDER } from "../map/provider"
 import { PlaceSuggestionList, usePlaceSuggestions } from "../map/PlaceSuggestions"
@@ -63,10 +64,20 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<(Point & { label: string })[]>([])
   const [busy, setBusy] = useState<"city" | "search" | "locate" | null>(null)
-  const preset = CITY_PRESETS.find(place => place.name === city)
+  // Any of the 81 provinces opens on its centre (the presets only cover the largest cities).
+  const centerOf = (name: string) => CITY_CENTERS[name] ?? CITY_PRESETS.find(place => place.name === name)
+  const preset = city ? centerOf(city) : undefined
   const [initialRegion] = useState(() => value ? { ...point(value), latitudeDelta: POINT_DELTA, longitudeDelta: POINT_DELTA }
     : preset ? { ...point(preset), latitudeDelta: CITY_DELTA, longitudeDelta: CITY_DELTA } : TURKEY)
   const focus = (target: Point, delta: number) => map.current?.animateToRegion?.({ ...point(target), latitudeDelta: delta, longitudeDelta: delta }, 350)
+  // The profile's city can arrive after the picker opened: then it is chosen and the map moves to it.
+  useEffect(() => {
+    const next = matchCity(defaultCity)
+    if (value || city || !next) return
+    setCity(next)
+    const center = centerOf(next)
+    if (center) focus(center, CITY_DELTA)
+  }, [defaultCity])
 
   const pick = async (target: Point) => {
     const id = ++latest.current
@@ -87,7 +98,7 @@ export default function LocationPicker({ value, venue, defaultCity, onChange, on
     if (value && value.city && value.city !== next) onChange(null)
     // Clearing the city also drops the meeting point and zooms back out to the whole country.
     if (!next) { onChange(null); map.current?.animateToRegion?.(TURKEY, 350); return }
-    const known = CITY_PRESETS.find(place => place.name === next)
+    const known = centerOf(next)
     if (known) { focus(known, CITY_DELTA); return }
     setBusy("city")
     try {

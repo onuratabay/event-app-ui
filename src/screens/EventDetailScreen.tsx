@@ -4,26 +4,21 @@ import { useWalkthroughScreenBlocker } from "../walkthrough/activity"
 import EventShareSheet from "../components/EventShareSheet";
 import { palette } from "../theme/palette";
 import { useBottomNavInset } from "../components/BottomNav";
-import { CategoryIcon } from "../components/Icons";
 import { onSocket, socketAction, watchEvent } from '../services/socket';
 import { participate, getApiErrorMessage, getEvent, getEventCandidateCount, cancelEvent, createEventCode } from "../api/client";
 import { GeneratedCode } from "../components/GeneratedCode";
 import { formatScore } from "../events/score";
-import { eventPhase, isLivePhase, isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
-import { useEffect, useState, type ComponentType, type ReactElement, type ReactNode } from "react";
-import { StyleSheet, type ViewProps } from "react-native";
+import { eventPhase, isRoomReady, isUnlimitedCapacity, mapApiEvent, participantCount } from "../native/Store";
+import { useEffect, useState } from "react";
 import { AtmoBackground, Avatar, GlassCard } from "../components/GlassUI";
-import { CheckIcon, ClockIcon, LocationIcon, ShareIcon, StarIcon } from "../components/Icons";
+import { EventCover, EventHostCard, EventMetaGrid, EventParticipantsCard, EventRequirementsCard, EventTextCard, EventTitle, detailStyles } from "../components/EventDetailParts";
+import { CheckIcon, ClockIcon, LocationIcon, ShareIcon } from "../components/Icons";
 import { openDirections } from "../native/directions";
 import TopNavBar, { NAV_ICON_SIZE, NAV_ICON_STROKE, NavAction } from "../components/TopNavBar";
 import { useStore } from "../native/Store";
-import { Box, Label, Picture, Scroll, Touch } from "../native/UI";
-import MaskedViewBase from "@react-native-masked-view/masked-view";
-import { LinearGradient } from "expo-linear-gradient";
+import { Box, Label, Scroll, Touch } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
-// The package's types still extend NativeMethods, which React Native 0.87+ no longer exports.
-const MaskedView = MaskedViewBase as unknown as ComponentType<ViewProps & { maskElement: ReactElement }>;
 import InviteCandidatesSheet from "../availability/InviteCandidatesSheet";
 import { remainingLabel, useRemaining } from "../availability/countdown";
 interface Props {
@@ -32,18 +27,10 @@ interface Props {
 }
 // "90 dk" → "1 saat 30 dk"; events created without a duration say so instead of showing nothing.
 // Event start on the device clock (date "dd/MM/yyyy", time "HH:mm").
-// Every meta box has the same height; long values (location) wrap to two lines at most.
-const META_BOX_HEIGHT = 112;
 function startsAt(event: { date: string; time: string }) {
   const [day, month, year] = event.date.split("/").map(Number);
   const [hour, minute] = event.time.split(":").map(Number);
   return new Date(year, (month || 1) - 1, day || 1, hour || 0, minute || 0);
-}
-// The cover fades to transparent (not to a flat colour) so the animated backdrop shows through below it.
-function FadingCover({ uri, label }: { uri: string; label: string }) {
-  return <MaskedView style={StyleSheet.absoluteFill} maskElement={<LinearGradient colors={["#000", "transparent"]} style={StyleSheet.absoluteFill} />}>
-    <Picture uri={uri} accessibilityLabel={label} style={[[ui.wFull, ui.hFull]]} />
-  </MaskedView>;
 }
 export function durationLabel(duration?: string) {
   const minutes = parseInt(duration || "", 10);
@@ -140,26 +127,15 @@ export default function EventDetailScreen({
       <AtmoBackground />
       <TopNavBar navigate={navigate} fallback="discover" title={event.title} subtitle={`${event.date} · ${event.time}`} floating right={<NavAction label="Paylaş" onPress={() => setShareOpen(true)}><ShareIcon size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} style={{ color: palette.text }} /></NavAction>} />
       <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol], { paddingBottom: 20 + navInset }]}>
-        {/* Cover image header */}
-        <Box style={[[ui.relative, ui.h72, ui.flexShrink0]]}>
-          <FadingCover uri={event.coverImage} label={event.title} />
-
-          {/* Status */}
-          <Box style={[[ui.fixed, ui.bottom4, ui.left5]]}>
-            <Box style={[[ui.px3, ui.py15, ui.roundedFull, ui.textXs, ui.fontMedium, isLivePhase(eventPhase(event)) ? [ui.bgEmerald50025, ui.border, ui.borderEmerald40040, ui.textEmerald300] : [ui.bgAmber50020, ui.border, ui.borderAmber40030, ui.textAmber300]]]}>
-              {{ cancelled: "Etkinlik iptal edildi", closed: "Etkinlik sona erdi", started: "● Etkinlik başladı · Oda açık", active: "● Aktif · Oda açık", forming: "◌ Katılımcı Bekleniyor" }[eventPhase(event)]}
-            </Box>
-          </Box>
-        </Box>
+        {/* Cover image header with the status */}
+        <EventCover uri={event.coverImage} label={event.title} phase={eventPhase(event)} />
 
         {/* Content */}
         <Box style={[[ui.px5, ui.spaceY5]]}>
           <Box>
             <Box style={[[ui.flex, ui.itemsStart, ui.justifyBetween, ui.mt1]]}>
               <Box style={[[ui.flex1]]}>
-                <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mt1, ui.leadingTight]]}>
-                  {event.title}
-                </Label>
+                <EventTitle title={event.title} />
                 {/* Every participation action lives here under the title, as small in-page buttons. */}
                 <Box walkthroughId="event-action" style={[[ui.mt2]]}>
                   {joined ? <>
@@ -214,8 +190,7 @@ export default function EventDetailScreen({
             </Box>
 
             {/* Meta info */}
-            <Box walkthroughId="event-meta" style={[[ui.mt4, ui.grid, ui.gap3]]} columns={2}>
-              {[{
+            <EventMetaGrid walkthroughId="event-meta" items={[{
               icon: <ClockIcon size={17} strokeWidth={1.75} />,
               label: "Tarih ve saat",
               value: `${event.date} · ${event.time}`
@@ -233,37 +208,25 @@ export default function EventDetailScreen({
               icon: <CheckIcon size={17} strokeWidth={1.75} />,
               label: "Seviye",
               value: event.level
-            }] : [])].map((item: { icon: ReactNode; label: string; value: string; onPress?: () => void }, i) => {
-              const card = <GlassCard key={i} style={[[ui.p3], { height: META_BOX_HEIGHT }]}>
-                  <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb1]]}>
-                    <Box style={[[ui.textWhite30]]}>{item.icon}</Box>
-                    {item.onPress ? <Label style={[[ui.text10px, ui.fontMedium], { color: palette.accent }]}>Yol tarifi ›</Label> : null}
-                  </Box>
-                  <Label style={[[ui.text10px, ui.textWhite30, ui.uppercase, ui.trackingWider]]}>
-                    {item.label}
-                  </Label>
-                  <Label numberOfLines={2} style={[[ui.textSm, ui.textWhite80, ui.mt05, ui.fontMedium]]}>
-                    {item.value}
-                  </Label>
-                </GlassCard>;
-              return item.onPress ? <Touch key={i} accessibilityLabel={`${item.label}: ${item.value}, yol tarifi al`} onPress={item.onPress}>{card}</Touch> : card;
-            })}
-            </Box>
+            }] : [])]} />
           </Box>
 
           {/* Participants */}
-          <GlassCard walkthroughId="event-people" style={[[ui.p4]]}>
-            <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb3]]}>
-              <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite70]]}>
-                Katılımcılar
-              </Label>
-              <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-                <Label style={[[ui.textSm, ui.fontSemibold, ui.textWhite]]}>
-                  {participantCount(event.currentParticipants, event.maxParticipants)}
-                </Label>
-              </Box>
-            </Box>
-            <Box style={[[ui.flex, ui.itemsCenter, ui.gap2, ui.flexWrap]]}>
+          <EventParticipantsCard walkthroughId="event-people" count={participantCount(event.currentParticipants, event.maxParticipants)}
+            forming={isForming ? { current: event.currentParticipants, minimum: event.minParticipants } : undefined}
+            // Invitations come only from the in-app availability pool (Etkinlik Takvimim), inside the participants card.
+            footer={canInvite ? <Box style={[[ui.mt4, ui.pt4, ui.borderT, ui.borderWhite8, ui.flex, ui.itemsCenter, ui.gap3]]}>
+                <Box style={[[ui.flex1]]}>
+                  <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>Davet açık</Label>
+                  <Label style={[[ui.textXs, ui.textWhite55, ui.mt05]]}>
+                    {event.inviteOnly ? (waitingCount > 0 ? `Arkadaşlarını ya da takviminde uygun ${waitingCount} kişiyi davet edebilirsin` : "Arkadaşlarını davet edebilirsin; durumlarını da buradan görürsün") : waitingCount > 0 ? `Takviminde bu tarih, saat ve yer için uygun ${waitingCount} kişi var` : "Bu tarih, saat ve konum için davet edebileceğin uygun bir üye bulunamadı"}
+                  </Label>
+                </Box>
+                {/* Opens the people whose calendar (Etkinlik Takvimim) is open for this date, time, place and activity. */}
+                <Touch accessibilityLabel="Davet et" onPress={() => setInviteOpen(true)} style={[[ui.px4, ui.roundedXl, ui.textXs, ui.fontMedium, ui.border, ui.borderC8a44a30, ui.bgC8a44a10, ui.textC8a44a, ui.textCenter], { minHeight: 40, justifyContent: "center" }]}>
+                  Davet et
+                </Touch>
+              </Box> : null}>
               {event.participants.filter(p => p.id !== store.user.id).map(p => {
                 const guest = p.id.startsWith("guest:");
                 const person = <>
@@ -282,85 +245,19 @@ export default function EventDetailScreen({
                   </Box>
                   <Label style={[[ui.text9px, ui.textC8a44a]]}>{event.host.id === store.user.id ? "Sen" : "Katıldın"}</Label>
                 </Box>}
-            </Box>
-            {/* Invitations come only from the in-app availability pool (Etkinlik Takvimim), inside the participants card. */}
-            {canInvite && <Box style={[[ui.mt4, ui.pt4, ui.borderT, ui.borderWhite8, ui.flex, ui.itemsCenter, ui.gap3]]}>
-                <Box style={[[ui.flex1]]}>
-                  <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>Davet açık</Label>
-                  <Label style={[[ui.textXs, ui.textWhite55, ui.mt05]]}>
-                    {event.inviteOnly ? (waitingCount > 0 ? `Arkadaşlarını ya da takviminde uygun ${waitingCount} kişiyi davet edebilirsin` : "Arkadaşlarını davet edebilirsin; durumlarını da buradan görürsün") : waitingCount > 0 ? `Takviminde bu tarih, saat ve yer için uygun ${waitingCount} kişi var` : "Bu tarih, saat ve konum için davet edebileceğin uygun bir üye bulunamadı"}
-                  </Label>
-                </Box>
-                {/* Opens the people whose calendar (Etkinlik Takvimim) is open for this date, time, place and activity. */}
-                <Touch accessibilityLabel="Davet et" onPress={() => setInviteOpen(true)} style={[[ui.px4, ui.roundedXl, ui.textXs, ui.fontMedium, ui.border, ui.borderC8a44a30, ui.bgC8a44a10, ui.textC8a44a, ui.textCenter], { minHeight: 40, justifyContent: "center" }]}>
-                  Davet et
-                </Touch>
-              </Box>}
-
-            {isForming && <Box style={[[ui.mt3]]}>
-                <Box style={[[ui.h1, ui.roundedFull, ui.bgWhite8, ui.overflowHidden]]}>
-                  <Box style={[[ui.hFull, ui.roundedFull], {
-                width: `${event.currentParticipants / event.minParticipants * 100}%`
-              }]} gradient={["#4d5bcb", "#6651c9"]} gradientDirection="right" />
-                </Box>
-                <Label style={[[ui.textXs, ui.textAmber30060, ui.mt15]]}>
-                  Odanın açılması için{" "}
-                  {Math.max(0, event.minParticipants - event.currentParticipants)} kişi daha
-                  gerekiyor
-                </Label>
-                <Label style={[[ui.textXs, ui.textWhite45, ui.mt2]]}>
-                  Etkinlik minimum katılımcı sayısına ulaştığında oda açılacak ({event.currentParticipants}/{event.minParticipants}).
-                </Label>
-              </Box>}
-          </GlassCard>
+          </EventParticipantsCard>
 
           {/* Description */}
-          <GlassCard style={[[ui.p4]]}>
-            <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider, ui.mb2]]}>
-              Açıklama
-            </Label>
-            <Label style={[[ui.textSm, ui.textWhite65, ui.leadingRelaxed]]}>
-              {event.description}
-            </Label>
-          </GlassCard>
+          <EventTextCard title="Açıklama" text={event.description} />
 
           {/* Requirements */}
-          {event.requirements.length > 0 && <GlassCard style={[[ui.p4]]}>
-              <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider, ui.mb2]]}>
-                Gereksinimler
-              </Label>
-              <Box style={[[ui.spaceY15]]}>
-                {event.requirements.map((req, i) => <Box key={i} style={[[ui.flex, ui.itemsCenter, ui.gap2]]}>
-                    <Label style={[[ui.w15, ui.h15, ui.roundedFull, ui.bgC8a44a60, ui.flexShrink0]]} />
-                    <Label style={[[ui.textSm, ui.textWhite60]]}>{req}</Label>
-                  </Box>)}
-              </Box>
-            </GlassCard>}
+          <EventRequirementsCard items={event.requirements} />
 
-          {/* Host */}
-          <GlassCard style={[[ui.p4]]}>
-            <Label style={[[ui.textXs, ui.textWhite35, ui.uppercase, ui.trackingWider, ui.mb3]]}>
-              Düzenleyen
-            </Label>
-            <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-              {/* Your own event shows your own photo; another organizer's photo comes from the server's rule. */}
-              <Avatar uri={event.host.id === store.user.id ? store.user.avatar : event.host.avatar} name={event.host.name} size="md" />
-              <Box style={[[ui.flex1]]}>
-                {/* Another organizer's name opens their profile; your own event has no link to yourself. */}
-                {event.host.id !== store.user.id ? <Touch accessibilityRole="link" accessibilityLabel={`${event.host.name} profilini aç`} onPress={() => navigate("profile", { userId: event.host.id })} style={{ alignSelf: "flex-start", justifyContent: "flex-start", minHeight: 0 }}>
-                  <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>{event.host.name}</Label>
-                </Touch> : <Label style={[[ui.textSm, ui.fontMedium, ui.textWhite85]]}>
-                  {event.host.name}
-                </Label>}
-                <Box style={[[ui.flex, ui.itemsCenter, ui.gap1, ui.mt05]]}>
-                  <StarIcon size={14} style={{ color: palette.accent }} />
-                  <Label style={[[ui.textXs, ui.textWhite40], { flexShrink: 1 }]} numberOfLines={1}>
-                    {`${formatScore(event.host.score)} · ${event.host.stats.organized} etkinlik`}
-                  </Label>
-                </Box>
-              </Box>
-            </Box>
-          </GlassCard>
+          {/* Host: your own event shows your own photo (another organizer's photo comes from the server's rule) and
+              has no link to yourself; another organizer's name opens their profile. */}
+          <EventHostCard name={event.host.name} avatar={event.host.id === store.user.id ? store.user.avatar : event.host.avatar}
+            onPress={event.host.id !== store.user.id ? () => navigate("profile", { userId: event.host.id }) : undefined}
+            score={`${formatScore(event.host.score)} · ${event.host.stats.organized} etkinlik`} />
 
           {/* The organizer's 24-hour event code (EWT-…): whoever enters it in the app opens this event as a guest. */}
           {event.host.id === store.user.id && !["cancelled", "closed"].includes(event.status ?? "") && <GlassCard style={[[ui.p5]]}>
@@ -378,27 +275,3 @@ export default function EventDetailScreen({
     </Box>;
 }
 
-const detailStyles = StyleSheet.create({
-  hostRow: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 32 },
-  hostBadge: {
-    flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 999, backgroundColor: "rgba(111,208,182,.12)", borderWidth: 1, borderColor: "rgba(111,208,182,.30)",
-  },
-  hostBadgeText: { color: palette.success, fontSize: 11, fontFamily: "Outfit-Medium" },
-  rowActions: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 8 },
-  roomChip: {
-    minHeight: 32, paddingHorizontal: 14, borderRadius: 999,
-    color: palette.text, fontSize: 12, fontFamily: "Outfit-SemiBold",
-  },
-  countText: { color: "rgba(241,245,249,.55)", fontSize: 12, fontFamily: "Outfit-Medium" },
-  neutralChip: {
-    minHeight: 32, paddingHorizontal: 12, borderRadius: 999,
-    backgroundColor: palette.elevated, borderWidth: 1, borderColor: palette.border,
-    color: palette.text, fontSize: 12, fontFamily: "Outfit-Medium",
-  },
-  cancelChip: {
-    minHeight: 32, paddingHorizontal: 12, borderRadius: 999,
-    backgroundColor: palette.elevated, borderWidth: 1, borderColor: palette.border,
-    color: palette.error, fontSize: 12, fontFamily: "Outfit-Medium",
-  },
-});

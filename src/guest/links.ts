@@ -8,4 +8,4 @@ export function parseGuestCode(value: string): string | null {
     return candidate && GUEST_CODE.test(candidate) ? candidate : null
   } catch { return null }
 }
-export const isGuestRoute = (pathname: string) => pathname === '/guest-event' || pathname === '/guest-entry'
+export const isGuestRoute = (pathname: string) => pathname === '/guest-event' || pathname === '/guest-entry' || pathname === '/guest-room'

@@ -12,6 +12,7 @@ import { FlatList, Keyboard, KeyboardAvoidingView, ScrollView, Modal, Pressable,
 import { useKeyboardOverlap } from "../native/useKeyboardOverlap";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AtmoBackground, GlassFill } from "../components/GlassUI";
 import ActionSheet, { REPORT_REASONS, type SheetOption } from "../components/ActionSheet";
 import { deleteMessage, editMessage, getApiErrorMessage, getEvent, getEventActivity, getMessageReads, getMessages, markRoomRead, putPreference, renameRoom, reportUser, sendMessage, type ApiMessage } from "../api/client";
@@ -122,8 +123,26 @@ export default function EventRoomScreen({
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   useWalkthroughScreenBlocker(infoOpen || !!sheet || busy || renaming || sending || !!editing || !!input.trim());
+  // The messages this device sent here with the message each one answered: a server that does not keep answers
+  // yet (older backend) returns them without the quote, and the quote still shows from this record.
+  const sentQuotes = useRef(new Map<string, RoomQuote>());
+  const quotesKey = `event-app:room-quotes:${eventId}`;
+  useEffect(() => {
+    sentQuotes.current = new Map();
+    if (!eventId) return;
+    AsyncStorage.getItem(quotesKey).then(raw => {
+      if (!raw) return;
+      sentQuotes.current = new Map(JSON.parse(raw) as Array<[string, RoomQuote]>);
+      setMessages(prev => prev.map(m => !m.replyTo && sentQuotes.current.has(m.id) ? { ...m, replyTo: sentQuotes.current.get(m.id) } : m));
+    }).catch(() => {});
+  }, [eventId]);
+  const rememberQuote = (id: string, quote: RoomQuote) => {
+    sentQuotes.current.set(id, quote);
+    void AsyncStorage.setItem(quotesKey, JSON.stringify([...sentQuotes.current].slice(-200))).catch(() => {});
+  };
   const mapMessage = (message: ApiMessage): RoomMessage => ({ id: message.id, createdAt: message.createdAt, announcement: message.kind === 'announcement', system: message.kind === 'system', deleted: message.deleted === true, edited: Boolean(message.editedAt), text: message.text, time: new Date(message.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), user: { ...EMPTY_USER, id: message.user.id, name: `${message.user.firstName} ${message.user.lastName}`.trim() },
-    ...(message.replyTo ? { replyTo: { id: message.replyTo.id, text: message.replyTo.text, deleted: message.replyTo.deleted === true, userId: message.replyTo.user.id, name: `${message.replyTo.user.firstName} ${message.replyTo.user.lastName}`.trim() } } : {}) });
+    ...(message.replyTo ? { replyTo: { id: message.replyTo.id, text: message.replyTo.text, deleted: message.replyTo.deleted === true, userId: message.replyTo.user.id, name: `${message.replyTo.user.firstName} ${message.replyTo.user.lastName}`.trim() } }
+      : sentQuotes.current.has(message.id) ? { replyTo: sentQuotes.current.get(message.id) } : {}) });
   // Replies quoting an incoming (e.g. edited or deleted) message show its new text too.
   const upsert = (incoming: RoomMessage[]) => setMessages(prev => {
     const byId = new Map(incoming.map(m => [m.id, m]));
@@ -271,6 +290,7 @@ export default function EventRoomScreen({
       try {
         // Socket first; REST only when the realtime connection is down (never after a timeout, to avoid duplicates).
         const saved = socketConnected() ? await socketAction<ApiMessage>('chat:message', { eventId, text, ...(replyToId ? { replyToId } : {}) }) : await sendMessage(eventId, text, replyToId);
+        if (local.replyTo && !saved.replyTo) rememberQuote(saved.id, local.replyTo);
         setMessages(prev => [...prev.filter(m => m.id !== local.id && m.id !== saved.id), mapMessage(saved)]);
         setError('');
       } catch {
@@ -305,9 +325,9 @@ export default function EventRoomScreen({
   };
   const send = () => sendText(input);
   // "Cevapla": pulling a message right (or the option under a long press) quotes it in the next message.
-  // Guests' messages and system lines cannot be answered (the server refuses them too).
+  // System lines cannot be answered (the server refuses them too); members' and guests' messages can.
   const [replyTo, setReplyTo] = useState<RoomMessage | null>(null);
-  const canReply = (msg: RoomMessage) => !cancelled && !msg.system && !msg.deleted && !msg.pending && !msg.failed && !msg.id.startsWith("local-") && !msg.user.id.startsWith("guest:");
+  const canReply = (msg: RoomMessage) => !cancelled && !msg.system && !msg.deleted && !msg.pending && !msg.failed && !msg.id.startsWith("local-");
   const startReply = (msg: RoomMessage) => { if (!canReply(msg)) return; setEditing(null); setReplyTo(msg); };
   const quoteAuthor = (userId: string, name: string) => userId === ME.id ? "Sen" : name.split(" ")[0] || "Bir katılımcı";
   // Tapping a quote scrolls to the answered message (when it is loaded) and marks it for a moment.

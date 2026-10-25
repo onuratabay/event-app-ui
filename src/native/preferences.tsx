@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 
-export const DEFAULT_PREFERENCES = { haptics: true, reduceTransparency: false }
+/** `backgroundDim`: 0 leaves the backdrop as designed; 1–5 fade its shapes and glow step by step. */
+export const DEFAULT_PREFERENCES = { haptics: true, reduceTransparency: false, backgroundDim: 0 }
 export type AppPreferences = typeof DEFAULT_PREFERENCES
 const KEY = "event-app:device-preferences:v1"
 const Preferences = createContext({
@@ -20,7 +21,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       if (!active || !raw) return
       const parsed = JSON.parse(raw)
       const next = { haptics: typeof parsed?.haptics === "boolean" ? parsed.haptics : true,
-        reduceTransparency: typeof parsed?.reduceTransparency === "boolean" ? parsed.reduceTransparency : false }
+        reduceTransparency: typeof parsed?.reduceTransparency === "boolean" ? parsed.reduceTransparency : false,
+        backgroundDim: Number.isInteger(parsed?.backgroundDim) ? Math.min(5, Math.max(0, parsed.backgroundDim)) : parsed?.dimBackground === true ? 3 : 0 }
       current.current = next; setValues(next)
     }).catch(() => {}).finally(() => { if (active) setReady(true) })
     return () => { active = false }

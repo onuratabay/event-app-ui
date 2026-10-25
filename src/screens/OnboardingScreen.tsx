@@ -1,4 +1,5 @@
 import { palette } from "../theme/palette";
+import { claimSavedGuestParticipation } from "../guest/GuestSession";
 import { showAlert } from "../components/AppDialog";
 import { useWalkthroughAutostartBlocker } from "../walkthrough/activity";
 import CityPicker from "../components/CityPicker";
@@ -286,7 +287,8 @@ function Step1({
 }) {
   const {
     data: store,
-    setData: setStore
+    setData: setStore,
+    refreshMyEvents
   } = useStore();
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
@@ -421,6 +423,8 @@ function Step1({
         catch { throw new Error(`API 409: ${JSON.stringify({ message: "Bu e-posta veya telefonla başlamış bir başvuru var. Aynı şifreyi girersen kaldığın yerden devam edersin; şifreni hatırlamıyorsan girişteki “Şifremi unuttum” ile yenileyebilirsin." })}`); }
       }
       enterAccount(response);
+      // An event joined on this device as a guest moves to the new account (best effort, in the background).
+      void claimSavedGuestParticipation().then(eventId => { if (eventId) void refreshMyEvents().catch(() => {}); }).catch(() => {});
     }
   };
   const enterAccount = (response: Awaited<ReturnType<typeof register>>) => {

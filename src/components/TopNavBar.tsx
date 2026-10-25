@@ -76,18 +76,18 @@ export default function TopNavBar({
         {onTitlePress ? (
           <Touch walkthroughId={walkthroughId} accessibilityLabel={title} accessibilityHint={titleHint} onPress={onTitlePress} style={[s.copy, hideBack && s.copyFlush, leading ? s.copyRow : undefined]}>
             {leading}
-            <Box style={leading ? s.copyText : undefined}>
+            {title ? <Box style={leading ? s.copyText : undefined}>
               <Label style={s.title} numberOfLines={1}>{title}</Label>
               {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
-            </Box>
+            </Box> : null}
           </Touch>
         ) : (
           <Box walkthroughId={walkthroughId} style={[s.copy, hideBack && s.copyFlush, leading ? s.copyRow : undefined]}>
             {leading}
-            <Box style={leading ? s.copyText : undefined}>
+            {title ? <Box style={leading ? s.copyText : undefined}>
               <Label style={s.title} numberOfLines={1}>{title}</Label>
               {subtitle ? <Label style={s.subtitle} numberOfLines={1}>{subtitle}</Label> : null}
-            </Box>
+            </Box> : null}
           </Box>
         )}
         <Box style={s.right}>{right}</Box>

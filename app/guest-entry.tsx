@@ -3,6 +3,7 @@ import type { Href } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { useGuest } from '../src/guest/GuestSession'
+import { BrandWordmark } from '../src/components/Brand'
 import { parseGuestCode } from '../src/guest/links'
 import { Box, Field, Label, Touch } from '../src/native/UI'
 import { palette } from '../src/theme/palette'
@@ -30,6 +31,7 @@ export default function GuestEntry() {
     finally { setBusy(false) }
   }
   return <Box style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 18, backgroundColor: palette.background }}>
+    <BrandWordmark width={120} />
     <Label style={{ color: palette.text, fontSize: 28, fontFamily: 'Fraunces' }}>Misafir davetini aç</Label>
     <Label style={{ color: palette.muted, fontSize: 14, lineHeight: 22 }}>Sana gönderilen etkinlik davetinin bağlantısını veya davet kodunu buraya yapıştır.</Label>
     <Field accessibilityLabel="Davet bağlantısı veya kodu" value={input} onChangeText={setInput} autoCapitalize="none" autoCorrect={false} placeholder="EWT-…" style={{ minHeight: 52, padding: 14, borderRadius: 14, backgroundColor: palette.surface, color: palette.text, fontSize: 15 }} />

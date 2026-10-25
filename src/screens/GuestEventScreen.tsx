@@ -5,17 +5,24 @@ import { StyleSheet } from 'react-native'
 import { getApiErrorMessage, hasSession, getGuestEvent, getGuestParticipation, joinGuestEvent, leaveGuestEvent, type GuestEvent } from '../api/client'
 import { useGuest } from '../guest/GuestSession'
 import { parseGuestCode } from '../guest/links'
-import { Box, Field, Label, Picture, Scroll, Touch } from '../native/UI'
+import { Box, Field, Label, Scroll, Touch } from '../native/UI'
 import { palette } from '../theme/palette'
 import { AtmoBackground } from '../components/GlassUI'
-import { BRAND_NAME } from '../components/Brand'
-import { CategoryIcon, CheckIcon } from '../components/Icons'
+import { BrandWordmark } from '../components/Brand'
+import { CheckIcon, ClockIcon, LocationIcon } from '../components/Icons'
+import { durationLabel } from './EventDetailScreen'
+import TopNavBar from '../components/TopNavBar'
+import ActionSheet from '../components/ActionSheet'
+import { openDirections } from '../native/directions'
+import { EventCover, EventHostCard, EventMetaGrid, EventParticipantsCard, EventRequirementsCard, EventTextCard, EventTitle, detailStyles } from '../components/EventDetailParts'
+import { participantCount, type EventPhase } from '../native/Store'
+import { ui } from '../theme/styles'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function GuestEventScreen() {
   const params = useLocalSearchParams<{ code?: string }>()
   const router = useRouter()
-  const { ready, guest, enter, save, clearParticipation, returnToMember } = useGuest()
+  const { ready, guest, enter, save, clearParticipation, returnToMember, exit } = useGuest()
   const code = params.code ? parseGuestCode(params.code) : guest?.code || null
   const [event, setEvent] = useState<GuestEvent | null>(null)
   const [image, setImage] = useState('')
@@ -83,6 +90,16 @@ export default function GuestEventScreen() {
     } catch (cause) { if (captured === generation.current) setError(getApiErrorMessage(cause, 'Katılım iptal edilemedi.')) }
     finally { if (captured === generation.current) { pending.current = false; setBusy(false) } }
   }
+  // The "Misafir" badge opens a menu: sign up (registration) or leave guest mode (welcome page). The guest
+  // participation is kept, so the same invite resumes it later.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const leaveGuest = async (target: '/onboarding-1' | '/welcome') => {
+    if (pending.current) return
+    pending.current = true; setBusy(true)
+    try { await exit(); router.replace(target as Href) }
+    catch (cause) { setError(getApiErrorMessage(cause, 'Misafir oturumundan çıkılamadı. Tekrar dene.')) }
+    finally { pending.current = false; setBusy(false) }
+  }
   const memberReturn = async () => {
     if (pending.current) return
     const captured = generation.current
@@ -91,42 +108,94 @@ export default function GuestEventScreen() {
     catch (cause) { if (captured === generation.current) setError(getApiErrorMessage(cause, 'Üyelik oturumuna dönülemedi. Onaylı üyeliğinin aktif olması gerekir.')) }
     finally { if (captured === generation.current) { pending.current = false; setBusy(false) } }
   }
-  const ended = !event || ['cancelled', 'closed'].includes(event.status)
-  return <Box style={s.screen}>
+  // The same page as a member's event detail (shared parts), showing only what the invitation shares: no
+  // participant list or photos, no organizer photo, score or profile, no exact coordinates,
+  // sharing or invitations. The room opens to a guest who joined, like to members.
+  const phase: EventPhase = !event ? 'forming' : event.status === 'cancelled' ? 'cancelled' : event.status === 'closed' ? 'closed'
+    : event.status === 'started' ? 'started' : event.participantCount >= event.minParticipants ? 'active' : 'forming'
+  const participationOpen = !!event && event.status === 'waiting_participants'
+  const roomOpen = phase === 'active' || phase === 'started'
+  const full = !!event && event.participantCount >= event.maxParticipants
+  const frozenNote = event?.status === 'cancelled' ? 'Etkinlik iptal edildi; katılım durumu değiştirilemez.' : event?.status === 'closed' ? 'Etkinlik sona erdi; katılım durumu değiştirilemez.' : 'Bu etkinliğe katılım kapanmış.'
+  return <Box style={[[ui.fixed, ui.inset0, ui.bg06060e, ui.overflowHidden]]}>
     <AtmoBackground />
-    <Box style={s.header}><Label style={s.brand}>{BRAND_NAME}</Label><Label style={s.badge}>Misafir</Label></Box>
-    {loading ? <Box style={s.center}><LoadingSpinner size="large" /></Box> : <Scroll style={s.scroll}>
+    {/* No back: a guest can open only this event. The Ewent wordmark tops the page (the event's title is right
+        below it); the badge says whose view this is. */}
+    <TopNavBar navigate={() => {}} fallback="discover" hideBack floating title="" leading={<BrandWordmark width={96} />}
+      right={<Touch accessibilityLabel="Misafir menüsü" accessibilityHint="Üye olabilir ya da misafir oturumundan çıkabilirsin" disabled={busy} onPress={() => setMenuOpen(true)} style={[s.badge, { minHeight: 0 }]}>Misafir ▾</Touch>} />
+    {loading ? <Box style={s.center}><LoadingSpinner size="large" /></Box> : <Scroll style={[[ui.relative, ui.hFull, ui.flex, ui.flexCol], { paddingBottom: 32 }]}>
       {event && <>
-        {image ? <Picture uri={image} accessibilityLabel={event.title} style={s.cover} /> : <Box style={s.cover}><CategoryIcon name={event.category} size={48} style={{ color: palette.accent }} /></Box>}
-        <Box style={s.content}>
-          <Label style={s.title}>{event.title}</Label>
-          <Label style={s.meta}>{event.date} · {event.time}</Label>
-          <Label style={s.meta}>{event.location}</Label>
-          <Label style={s.body}>Düzenleyen: {event.hostName}</Label>
-          <Box style={s.card}><Label style={s.cardTitle}>Etkinlik hakkında</Label><Label style={s.body}>{event.description}</Label>{event.requirements ? <Label style={s.body}>{event.requirements}</Label> : null}</Box>
-          <Label style={s.body}>{event.participantCount} katılımcı{event.maxParticipants < 100000 ? ` · ${Math.max(0, event.maxParticipants - event.participantCount)} yer kaldı` : ''}</Label>
-          <Label style={s.note}>Bu davetle yalnızca bu etkinliğe erişebilirsin. Katılımından daveti paylaşan üye sorumludur.</Label>
-          {joined ? <Box style={s.card}>
-            <Box style={s.row}><CheckIcon size={18} style={{ color: palette.success }} /><Label style={s.joined}>{`Katıldın · Misafir ${guest?.name}`}</Label></Box>
-            <Touch disabled={busy} onPress={() => void leave()} style={s.secondary}>Katılımı iptal et</Touch>
-          </Box> : ended || event.status !== 'waiting_participants' ? <Label style={s.note}>Bu etkinliğe katılım kapanmış.</Label> : <Box style={s.card}>
-            <Label style={s.cardTitle}>Misafir olarak katıl</Label>
-            <Field accessibilityLabel="Misafir adın" placeholder="Adın" value={name} onChangeText={setName} maxLength={60} editable={!busy} style={s.field} />
-            <Label style={s.note}>Diğer katılımcılar seni “Misafir · {name.trim() || 'Adın'}” olarak görecek.</Label>
-            <Touch disabled={busy || !name.trim() || event.participantCount >= event.maxParticipants} onPress={() => void join()} style={s.primary} gradient={palette.actionGradient}>{busy ? 'Kaydediliyor…' : event.participantCount >= event.maxParticipants ? 'Kontenjan dolu' : 'Etkinliğe katıl'}</Touch>
-          </Box>}
+        <EventCover uri={image} label={event.title} phase={phase} />
+        <Box style={[[ui.px5, ui.spaceY5]]}>
+          <Box>
+            <EventTitle title={event.title} />
+            {/* Participation under the title, with the same chips as for members. */}
+            <Box style={[[ui.mt2]]}>
+              {joined ? <Box style={detailStyles.hostRow}>
+                <Box style={detailStyles.hostBadge}>
+                  <CheckIcon size={12} strokeWidth={2.2} style={{ color: palette.success }} />
+                  <Label style={detailStyles.hostBadgeText}>{`Katıldın · Misafir ${guest?.name}`}</Label>
+                </Box>
+                <Box style={detailStyles.rowActions}>
+                  {/* Once the room is open (the minimum is reached), the guest talks there with the members. */}
+                  {roomOpen && <Touch accessibilityLabel="Odaya Katıl" disabled={busy} onPress={() => router.push('/guest-room' as Href)} style={detailStyles.roomChip} gradient={palette.actionGradient}>
+                    Odaya Katıl →
+                  </Touch>}
+                  {participationOpen && <Touch accessibilityLabel="Katılımı iptal et" disabled={busy} onPress={() => void leave()} style={detailStyles.cancelChip}>{busy ? 'Bekle…' : 'İptal Et'}</Touch>}
+                </Box>
+              </Box> : <>
+                <Box style={detailStyles.hostRow}>
+                  <Label style={detailStyles.countText}>{`${participantCount(event.participantCount, event.maxParticipants)} kişi`}</Label>
+                  <Box style={detailStyles.rowActions}>
+                    <Touch accessibilityLabel={full ? 'Kontenjan dolu' : 'Katıl'} disabled={busy || !participationOpen || full || !name.trim()} onPress={() => void join()} style={detailStyles.roomChip} gradient={palette.actionGradient}>
+                      {busy ? 'Bekle…' : full ? 'Kontenjan dolu' : 'Katıl'}
+                    </Touch>
+                  </Box>
+                </Box>
+                {/* A guest joins with a name; members see them as "Misafir · Ad". */}
+                {participationOpen && !full && <Box style={[[ui.mt3]]}>
+                  <Field accessibilityLabel="Misafir adın" placeholder="Adın" placeholderTextColor={palette.muted} value={name} onChangeText={setName} maxLength={60} editable={!busy} style={s.field} />
+                  <Label style={[[ui.textXs, ui.mt2, ui.textWhite50]]}>{`Diğer katılımcılar seni “Misafir · ${name.trim() || 'Adın'}” olarak görecek.`}</Label>
+                </Box>}
+              </>}
+              {!participationOpen && <Label accessibilityRole="text" style={[[ui.textXs, ui.mt2, ui.textWhite50]]}>{frozenNote}</Label>}
+            </Box>
+            {/* Date, the place's name, duration and (when set) level. Without coordinates the map app looks the
+                place up by its name, as for members tapping the location. */}
+            <EventMetaGrid items={[
+              { icon: <ClockIcon size={17} strokeWidth={1.75} />, label: 'Tarih ve saat', value: `${event.date} · ${event.time}` },
+              ...(event.location ? [{ icon: <LocationIcon size={17} strokeWidth={1.75} />, label: 'Konum', value: event.location, onPress: () => openDirections({ name: event.location }) }] : []),
+              { icon: <ClockIcon size={17} strokeWidth={1.75} />, label: 'Süre', value: durationLabel(event.durationMinutes ? String(event.durationMinutes) : undefined) },
+              ...(event.level ? [{ icon: <CheckIcon size={17} strokeWidth={1.75} />, label: 'Seviye', value: event.level }] : []),
+            ]} />
+          </Box>
+          {/* The count only: who joined is not shared with guests. */}
+          <EventParticipantsCard count={participantCount(event.participantCount, event.maxParticipants)}
+            forming={phase === 'forming' ? { current: event.participantCount, minimum: event.minParticipants } : undefined} />
+          <EventTextCard title="Açıklama" text={event.description} />
+          <EventRequirementsCard items={(event.requirements ?? '').split('\n').map(line => line.trim()).filter(Boolean)} />
+          {/* The organizer's name only: no photo, score or profile link for guests. */}
+          <EventHostCard name={event.hostName} avatar="" />
+          <Label style={[[ui.textXs, ui.textWhite45]]}>Bu davetle yalnızca bu etkinliğe erişebilirsin. Katılımından daveti paylaşan üye sorumludur.</Label>
         </Box>
       </>}
       {error ? <Label accessibilityRole="alert" style={s.error}>{error}</Label> : null}
-      {canReturnToMember && <Touch disabled={busy} onPress={() => void memberReturn()} style={s.secondary}>Üyeliğime dön</Touch>}
-      {!event && !loading && <Touch onPress={() => router.replace('/guest-entry' as Href)} style={s.secondary}>Davet kodunu yeniden gir</Touch>}
+      <Box style={s.actions}>
+        {canReturnToMember && <Touch disabled={busy} onPress={() => void memberReturn()} style={s.secondary}>Üyeliğime dön</Touch>}
+        {!event && !loading && <Touch onPress={() => router.replace('/guest-entry' as Href)} style={s.secondary}>Davet kodunu yeniden gir</Touch>}
+      </Box>
     </Scroll>}
+    {menuOpen && <ActionSheet title="Misafir olarak geziyorsun" onClose={() => setMenuOpen(false)} options={[
+      { label: 'Üye ol', onPress: () => void leaveGuest('/onboarding-1') },
+      { label: 'Misafirlikten çık', danger: true, onPress: () => void leaveGuest('/welcome') },
+    ]} />}
   </Box>
 }
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: palette.background }, header: { paddingHorizontal: 20, height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, brand: { color: palette.text, fontSize: 20, fontFamily: 'Outfit-SemiBold' }, badge: { color: palette.accent, fontSize: 12, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: palette.selected, borderRadius: 20 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' }, scroll: { flex: 1, paddingBottom: 32 }, cover: { width: '100%', height: 230, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.surface }, content: { padding: 20, gap: 14 }, title: { color: palette.text, fontSize: 27, fontFamily: 'Fraunces', lineHeight: 34 }, meta: { color: palette.accent, fontSize: 14 },
-  card: { padding: 18, borderRadius: 20, backgroundColor: palette.surface, gap: 12, borderWidth: 1, borderColor: palette.border }, cardTitle: { color: palette.text, fontFamily: 'Outfit-SemiBold', fontSize: 15 }, body: { color: palette.muted, fontSize: 13, lineHeight: 21 }, note: { color: palette.muted, fontSize: 12, lineHeight: 19 },
-  field: { minHeight: 48, padding: 12, backgroundColor: palette.elevated, color: palette.text, borderRadius: 12, fontSize: 16 }, primary: { minHeight: 50, color: palette.text, fontSize: 15, fontFamily: 'Outfit-SemiBold', borderRadius: 14 }, secondary: { minHeight: 48, paddingHorizontal: 16, color: palette.muted, backgroundColor: palette.elevated, borderRadius: 14 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 }, joined: { flex: 1, color: palette.success, fontSize: 14, fontFamily: 'Outfit-Medium' }, error: { margin: 20, color: palette.error, fontSize: 13, lineHeight: 20 },
+  badge: { color: palette.accent, fontSize: 12, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: palette.selected, borderRadius: 20, overflow: 'hidden' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  field: { minHeight: 48, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: palette.glassBorder, backgroundColor: palette.glass, color: palette.text, fontSize: 15 },
+  actions: { paddingHorizontal: 20, paddingTop: 20, gap: 10 },
+  secondary: { minHeight: 48, paddingHorizontal: 16, color: palette.muted, backgroundColor: palette.elevated, borderRadius: 14 },
+  error: { marginHorizontal: 20, marginTop: 16, color: palette.error, fontSize: 13, lineHeight: 20 },
 })

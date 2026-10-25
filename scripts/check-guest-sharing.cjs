@@ -83,7 +83,7 @@ module.exports = async ({ act, text, storage, tap, audit }) => {
   assert.equal(requests.length, beforeAccountRequest, 'Hidden account routes cannot send a member API call in guest mode')
   const name = tree.root.findByType('TextInput')
   await act(async () => name.props.onChangeText('Ayşe'))
-  await press(tree, 'Etkinliğe katıl')
+  await press(tree, 'Katıl')
   assert(text(tree.toJSON()).includes('Katıldın · Misafir Ayşe'))
   const saved = JSON.parse(storage.get('event-app:guest-token'))
   assert.equal(saved.code, code); assert.equal(saved.name, 'Ayşe')
@@ -116,7 +116,7 @@ module.exports = async ({ act, text, storage, tap, audit }) => {
   await act(async () => { tree = create(React.createElement(GuestProvider, null, React.createElement(GuestScreen))) })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
   await act(async () => tree.root.findByType('TextInput').props.onChangeText('Ayşe'))
-  await press(tree, 'Etkinliğe katıl')
+  await press(tree, 'Katıl')
   assert(finishHeldJoin, 'The old event join is pending')
   global.__testParams = { code: secondCode }
   await act(async () => { tree.update(React.createElement(GuestProvider, null, React.createElement(GuestScreen))); await new Promise(resolve => setTimeout(resolve, 20)) })
