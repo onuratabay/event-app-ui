@@ -27,3 +27,7 @@ expo-env.d.ts
 .expo/
 ios/
 android/
+
+# Firebase config; EAS gets it as the GOOGLE_SERVICES_JSON file variable
+google-services.json
+GoogleService-Info.plist
