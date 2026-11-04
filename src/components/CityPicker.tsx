@@ -88,7 +88,8 @@ const s = StyleSheet.create({
   action: { minWidth: 60, height: 44, justifyContent: "center", alignItems: "center" },
   title: { fontFamily: "Outfit-SemiBold", fontSize: 16, color: palette.text },
   cancel: { fontFamily: "Outfit", fontSize: 15, color: palette.muted },
-  search: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.background, paddingHorizontal: 14, color: palette.text, fontFamily: "Outfit", fontSize: 15, marginBottom: 8 },
+  // Text and cursor centred vertically: no line height (iOS pushes it down), explicit centre on Android.
+  search: { minHeight: 44, paddingVertical: 0, textAlignVertical: "center", borderRadius: 12, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.background, paddingHorizontal: 14, color: palette.text, fontFamily: "Outfit", fontSize: 15, marginBottom: 8 },
   list: { flex: 1 },
   option: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, borderRadius: 12 },
   selected: { backgroundColor: palette.selected },

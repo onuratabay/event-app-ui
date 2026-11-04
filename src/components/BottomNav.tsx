@@ -12,7 +12,8 @@ import { MessageIcon, LocationIcon, CompassIcon, PersonIcon } from "./Icons"
 const nav: [Screen, string][] = [
   ["discover", "Keşfet"],
   ["map", "Harita"],
-  ["create-event", "Oluştur"],
+  // "Oluştur" opens the start page: host an event, or share free time and get invited.
+  ["start", "Oluştur"],
   ["rooms", "Odalar"],
   ["profile", "Profil"],
 ]
@@ -76,11 +77,11 @@ export default function BottomNav({
             key={screen}
             accessibilityLabel={label}
             accessibilityState={{ selected: active === screen }}
-            onPress={() => { if (screen === "create-event") spinMark(); navigate(screen) }}
+            onPress={() => { if (screen === "start") spinMark(); navigate(screen) }}
             style={[
               s.item,
               active === screen && { backgroundColor: "rgba(185,195,255,.12)", borderColor: "rgba(185,195,255,.20)" },
-              screen === "create-event" && s.create,
+              screen === "start" && s.create,
             ]}
           >
             {screen === "map" ? (
@@ -107,13 +108,13 @@ export default function BottomNav({
                 style={{ color: active === screen ? palette.accent : palette.muted }}
               />
             ) : (
-              screen === "create-event" ? <Animated.View style={{ transform: [
+              screen === "start" ? <Animated.View style={{ transform: [
                 { perspective: 600 },
                 { rotateY: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) },
                 { scale: spin.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.18, 1] }) },
               ] }}><BrandMark size={34} /></Animated.View> : <CompassIcon size={22} strokeWidth={1.75} style={{ color: active === screen ? "#c7ceff" : palette.muted }} />
             )}
-            {screen !== "create-event" && (
+            {screen !== "start" && (
               <Label
                 numberOfLines={1}
                 style={[s.label, { color: active === screen ? "#c7ceff" : palette.muted }]}

@@ -5,7 +5,7 @@ import type { Screen } from "../types"
 import BottomNav, { useKeyboardVisible } from "./BottomNav"
 
 // Unknown routes (404) and pre-app screens have no bottom bar.
-const VISIBLE_ROUTES = new Set(["/availability", "/create-event", "/direct-chat", "/discover", "/event-detail", "/event-room", "/map", "/member", "/notifications", "/profile", "/rate-event", "/rooms", "/search", "/settings"])
+const VISIBLE_ROUTES = new Set(["/availability", "/create-event", "/direct-chat", "/discover", "/event-detail", "/event-room", "/map", "/member", "/notifications", "/profile", "/rate-event", "/rooms", "/search", "/settings", "/start"])
 
 export default function AppBottomNav() {
   const pathname = usePathname()

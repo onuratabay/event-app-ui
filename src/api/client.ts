@@ -366,7 +366,7 @@ export const decideInterest = (id: string, decision: 'approved' | 'rejected') =>
 /** Stock cover images of an interest (empty for a member-proposed one until an admin adds some). */
 export const getInterestImages = (interestId: string) => request<Array<{ id: string }>>(`/interests/${encodeURIComponent(interestId)}/images`, { background: true })
 export function getMapInterests(_signal?: AbortSignal) {
-  return cached("interests", 6 * HOURS, () => request<Array<{ id: string; name: string; slug: string; levels?: InterestLevel[]; requiresCover?: boolean }>>("/interests", { headers: { "Accept-Language": "tr" } }))
+  return cached("interests", 6 * HOURS, () => request<Array<{ id: string; name: string; slug: string; levels?: InterestLevel[]; requiresCover?: boolean; featured?: boolean }>>("/interests", { headers: { "Accept-Language": "tr" } }))
 }
 
 export interface VersionPolicy { minimumVersion: { ios: string; android: string }; storeUrl: { ios: string | null; android: string | null } }

@@ -9,6 +9,7 @@ import * as Haptics from "expo-haptics"
 import { Image } from "expo-image"
 import { LinearGradient, type LinearGradientProps } from "expo-linear-gradient"
 import React, {
+  Children,
   createContext,
   useContext,
   useEffect,
@@ -286,7 +287,9 @@ export function Touch({
     <Typography.Provider
       value={{
         ...inherited,
-        ...(typeof children === "string"
+        // Button text is centred whenever the button holds plain text, also next to a background layer
+        // (gradient, glass fill); a textAlign in the button's own style still wins.
+        ...(Children.toArray(children).some(child => typeof child === "string" || typeof child === "number")
           ? { textAlign: "center" as const }
           : {}),
         ...text,

@@ -1,10 +1,10 @@
-/** Ewent: midnight surfaces, restrained blue/violet accents, clear semantic states. */
+/** Ewent: deep-navy surfaces (lifted from near-black so screens read brighter), restrained blue/violet accents, clear semantic states. */
 export const palette = {
-  background: "#080b18",
-  surface: "#11162a",
-  elevated: "#18203a",
+  background: "#0e1430",
+  surface: "#172045",
+  elevated: "#1f2a55",
   text: "#f4f5ff",
-  muted: "#929db8",
+  muted: "#a4aecb",
   accent: "#b9c3ff",
   blue: "#6978ff",
   violet: "#927dff",
@@ -15,11 +15,11 @@ export const palette = {
   error: "#f39baf",
   actionGradient: ["#4d5bcb", "#6651c9", "#4b5cce"] as const,
   /** Frosted surfaces: translucent tints laid over a blur so the ambient background glows through. */
-  glass: "rgba(24,31,60,.52)",
-  glassCard: "rgba(24,31,60,.66)",
-  glassCardStrong: "rgba(30,39,72,.66)",
-  glassStrong: "rgba(30,39,72,.66)",
-  glassSheet: "rgba(16,21,42,.78)",
-  glassBorder: "rgba(205,214,255,.15)",
+  glass: "rgba(36,46,88,.50)",
+  glassCard: "rgba(36,46,88,.60)",
+  glassCardStrong: "rgba(44,56,102,.62)",
+  glassStrong: "rgba(44,56,102,.62)",
+  glassSheet: "rgba(24,32,66,.82)",
+  glassBorder: "rgba(205,214,255,.18)",
   glassHighlight: ["rgba(255,255,255,.09)", "rgba(255,255,255,.015)", "rgba(185,195,255,.04)"] as const,
 } as const

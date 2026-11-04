@@ -73,9 +73,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#080b18",
+          "backgroundColor": "#0e1430",
           "dark": {
-            "backgroundColor": "#080b18"
+            "backgroundColor": "#0e1430"
           }
         }
       ],
@@ -99,6 +99,6 @@
       }
     },
     "owner": "onuratabay",
-    "backgroundColor": "#080b18"
+    "backgroundColor": "#0e1430"
   }
 }

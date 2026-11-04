@@ -17,7 +17,7 @@ module.exports = ({ config }) => {
     ...config,
     icon: "./.cache/brand/ewentapp-logo-ios.png",
     plugins: [...(config.plugins || []),
-      ['react-native-google-mobile-ads', { ...admob, userTrackingUsageDescription: trackingText }],
+      ['react-native-google-mobile-ads', { ...admob, skAdNetworkItems: require('./plugins/skadnetwork-ids.cjs'), userTrackingUsageDescription: trackingText }],
       ['expo-tracking-transparency', { userTrackingPermission: trackingText }],
       ...(mapsKey ? [['react-native-maps', { androidGoogleMapsApiKey: mapsKey, iosGoogleMapsApiKey: mapsKey }]] : [])],
     extra: { ...config.extra, googleMapsConfigured: !!mapsKey },

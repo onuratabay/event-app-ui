@@ -12,7 +12,7 @@ if (fs.existsSync(marker) && fs.readFileSync(marker, 'utf8') === digest && ['ewe
   const { generateImageAsync, generateImageBackgroundAsync, compositeImagesAsync } = require('@expo/image-utils')
   fs.mkdirSync(target, { recursive: true })
   const image = async options => (await generateImageAsync({ projectRoot: root, cacheType: 'ewentapp-brand' }, { src: source, resizeMode: 'contain', ...options })).source
-  const ios = await image({ width: 1024, height: 1024, backgroundColor: '#080b18', removeTransparency: true })
+  const ios = await image({ width: 1024, height: 1024, backgroundColor: '#0e1430', removeTransparency: true })
   const foreground = await image({ width: 660, height: 660, backgroundColor: 'transparent' })
   const background = await generateImageBackgroundAsync({ width: 1024, height: 1024, resizeMode: 'contain', backgroundColor: 'transparent' })
   const adaptive = await compositeImagesAsync({ foreground, background, x: 182, y: 182 })

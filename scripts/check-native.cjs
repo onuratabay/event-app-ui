@@ -131,7 +131,7 @@ Module._load = function (id, parent, isMain) {
   if (id === "expo-blur") return { BlurView: "BlurView", BlurTargetView: "BlurTargetView" }
   if (id === "react-native-safe-area-context") return { SafeAreaView: "View", useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }) }
   if (id === "@react-native-community/datetimepicker")
-    return { __esModule: true, default: "DateTimePicker" }
+    return { __esModule: true, default: "DateTimePicker", DateTimePickerAndroid: { open: options => { global.__androidPicker = options }, dismiss: () => { global.__androidPicker = null } } }
   if (id === "@react-native-async-storage/async-storage")
     return {
       __esModule: true,
@@ -218,21 +218,32 @@ async function tap(tree, label) {
     assert.equal(errors.length, 0, errors.join("\n"))
     return
   }
-  // Selection behavior must remain identical on both platform hosts, including leap-day clamping.
+  // Dates and times use the phone's own picker: Android's system dialog, Apple's picker in a panel on iOS.
   const Wheel = require("../src/components/DateTimeWheel.tsx").default
+  const onAndroid = (process.env.TEST_PLATFORM || "ios") === "android"
   let wheel, result, closed = 0
-  await act(async () => { wheel = create(React.createElement(Wheel, { mode: "date", value: "2024-01-31", onConfirm: value => { result = value }, onClose: () => { closed++ } }), { createNodeMock: () => ({ scrollTo() {} }) }) })
-  const february = wheel.root.findAllByType("Pressable").find(node => node.props.accessibilityLabel === "Ay: Şubat")
-  await act(async () => february.props.onPress())
-  const confirm = wheel.root.findAllByType("Pressable").find(node => text(node.toJSON ? node.toJSON() : null) === "Tamam" || node.findAllByType("Text").some(child => child.props.children === "Tamam"))
-  await act(async () => confirm.props.onPress())
+  await act(async () => { wheel = create(React.createElement(Wheel, { mode: "date", value: "2024-01-31", onConfirm: value => { result = value }, onClose: () => { closed++ } })) })
+  if (onAndroid) {
+    assert.equal(global.__androidPicker.mode, "date", "Android opens the system date dialog")
+    assert.equal(global.__androidPicker.value.getDate(), 31, "The dialog starts on the field's date")
+    await act(async () => global.__androidPicker.onChange({ type: "set" }, new Date(2024, 1, 29, 12)))
+  } else {
+    const picker = wheel.root.findAll(node => node.type === "DateTimePicker")[0]
+    assert(picker && picker.props.display === "inline", "iOS shows Apple's calendar picker")
+    await act(async () => picker.props.onChange({ type: "set" }, new Date(2024, 1, 29, 12)))
+    const confirm = wheel.root.findAllByType("Pressable").find(node => node.findAllByType("Text").some(child => child.props.children === "Tamam"))
+    await act(async () => confirm.props.onPress())
+  }
   assert.equal(result, "2024-02-29")
   assert.equal(closed, 1)
   await act(async () => wheel.unmount())
   result = undefined
   await act(async () => { wheel = create(React.createElement(Wheel, { mode: "time", value: "23:59", onConfirm: value => { result = value }, onClose: () => { closed++ } })) })
-  const cancel = wheel.root.findAllByType("Pressable").find(node => node.findAllByType("Text").some(child => child.props.children === "İptal"))
-  await act(async () => cancel.props.onPress())
+  if (onAndroid) await act(async () => global.__androidPicker.onChange({ type: "dismissed" }))
+  else {
+    const cancel = wheel.root.findAllByType("Pressable").find(node => node.findAllByType("Text").some(child => child.props.children === "İptal"))
+    await act(async () => cancel.props.onPress())
+  }
   assert.equal(result, undefined, "Cancelling does not mutate the field")
   await act(async () => wheel.unmount())
   console.log(`PASS: ${process.env.TEST_PLATFORM || "ios"} common date/time panel, leap-day selection and cancellation.`)
@@ -721,21 +732,37 @@ async function tap(tree, label) {
   await tap(createEvent, "Başlangıç")
   await act(async () => { await new Promise(r=>setTimeout(r,220)) })
   assert(text(createEvent.toJSON()).includes("Hangi seviyede"), "Choosing a level stays on the step")
-  const maxCard = () => createEvent.root.findAllByType("Pressable").some(n => n.props.accessibilityLabel === "Maksimum artır")
+  // Counts are steppers (− / +), with the activity's usual sizes as presets; tapping the number allows typing it.
+  const pressLabel = async label => { const node = createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === label); assert(node, `Missing button: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })) }
+  const countOf = label => Number(createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel?.startsWith(`${label}: `))?.props.accessibilityLabel.match(/: (\d+)/)[1])
+  const maxCard = () => !Number.isNaN(countOf("En fazla"))
+  const adjust = (label, actionName) => pressLabel(`${label} ${actionName === "increment" ? "artır" : "azalt"}`)
+  assert(createEvent.root.findAllByType("Pressable").some(n => n.props.accessibilityLabel === "4 kişi, Çiftler"), "Padel offers its doubles format as a preset")
   // "Sınır yok / Sınır koy" is offered from a minimum of 2; no limit by default, and a limit starts at the minimum.
   assert(!maxCard() && text(createEvent.toJSON()).includes("Sınır koy"), "Limit options show while the minimum is 2, no limit by default")
-  const pressLabel = async label => { const node = createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === label); assert(node, `Missing button: ${label}`); await act(async () => node.props.onPress?.({ stopPropagation() {} })) }
   await tap(createEvent, "Sınır koy")
   assert(maxCard() && text(createEvent.toJSON()).includes("Tam 2 kişilik"), "A limit starts at the minimum: exactly that many")
-  const maxDecrease = () => createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "Maksimum azalt")
-  assert.equal(maxDecrease().props.disabled, true, "The maximum never goes below the minimum")
-  await pressLabel("Minimum artır")
-  await pressLabel("Minimum artır")
+  assert.equal(createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel === "En fazla azalt").props.disabled, true, "The maximum never goes below the minimum")
+  await adjust("Minimum", "increment")
+  await adjust("Minimum", "increment")
   assert(text(createEvent.toJSON()).includes("Tam 4 kişilik"), "Raising the minimum pushes the limit along")
+  const typeCount = async (label, value) => {
+    const button = createEvent.root.findAllByType("Pressable").find(n => n.props.accessibilityLabel?.startsWith(`${label}: `))
+    assert(button, `Missing count button: ${label}`)
+    await act(async () => button.props.onPress?.({ stopPropagation() {} }))
+    const input = createEvent.root.findAll(n => n.props.accessibilityLabel === `${label} kişi sayısı` && typeof n.props.onChangeText === "function")[0]
+    assert(input, `Tapping the ${label} number opens a field`)
+    await act(async () => input.props.onChangeText(value))
+    await act(async () => input.props.onSubmitEditing?.())
+  }
+  await typeCount("En fazla", "12")
+  assert(text(createEvent.toJSON()).includes("4 kişide etkinlik başlar, 12 kişide katılım kapanır"), "A typed maximum is used")
+  await typeCount("En fazla", "1")
+  assert.equal(countOf("En fazla"), 4, "A typed maximum below the minimum is raised to it")
   await tap(createEvent, "Sınır yok")
-  assert(!maxCard(), "Choosing no limit hides the max card")
-  assert(text(createEvent.toJSON()).includes("Sınır yok: minimum katılımcı sayısına ulaşınca oda açılır"), "No limit is explained")
-  for (let i = 0; i < 2; i++) await pressLabel("Minimum azalt")
+  assert(!maxCard(), "Choosing no limit hides the max slider")
+  assert(text(createEvent.toJSON()).includes("Etkinlik başlayana kadar yeni katılımcılar katılabilir"), "No limit is explained")
+  for (let i = 0; i < 2; i++) await adjust("Minimum", "decrement")
   assert(!maxCard() && text(createEvent.toJSON()).includes("Sınır koy"), "Back at 2 the options stay, still without a limit")
   assert.equal(continueButton().props.disabled, false, "With a level chosen the step can continue")
   await tap(createEvent, "Devam Et")

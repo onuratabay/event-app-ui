@@ -473,15 +473,15 @@ export function AtmoBackground({
         <Svg width="100%" height="100%">
           <Defs>
             <RadialGradient id="atmo" cx="28%" cy="14%" rx="82%" ry="65%">
-              <Stop offset="0" stopColor={colors[0]} stopOpacity={0.26} />
+              <Stop offset="0" stopColor={colors[0]} stopOpacity={0.36} />
               <Stop offset="1" stopColor={colors[0]} stopOpacity={0} />
             </RadialGradient>
             <RadialGradient id="atmoSecondary" cx="88%" cy="78%" rx="70%" ry="62%">
-              <Stop offset="0" stopColor={colors[1]} stopOpacity={0.18} />
+              <Stop offset="0" stopColor={colors[1]} stopOpacity={0.26} />
               <Stop offset="1" stopColor={colors[1]} stopOpacity={0} />
             </RadialGradient>
             <RadialGradient id="atmoTertiary" cx="6%" cy="62%" rx="55%" ry="40%">
-              <Stop offset="0" stopColor={palette.cyan} stopOpacity={0.09} />
+              <Stop offset="0" stopColor={palette.cyan} stopOpacity={0.13} />
               <Stop offset="1" stopColor={palette.cyan} stopOpacity={0} />
             </RadialGradient>
           </Defs>

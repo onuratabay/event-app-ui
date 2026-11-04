@@ -8,12 +8,12 @@ import { CategoryIcon, ClockIcon, LocationIcon, UsersIcon, StarIcon } from "../c
 import { canCreateEvent, createEvent, getEvent, inviteEventCandidates, dismissSuggestion, getActiveFriends, type FriendUser, getMapInterests, getEnums, getApiErrorMessage, type InterestLevel, getSuggestions, getMyProposedInterests, proposeInterest, getInterestImages } from "../api/client";
 import { isUnlimitedCapacity, mapApiEvent, UNLIMITED_PARTICIPANTS } from "../native/Store";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { View, type ViewInstance } from "react-native";
+import { StyleSheet, TextInput, View, type ViewInstance } from "react-native";
 import { Avatar, AtmoBackground, Checkbox, GlassCard, GlassFill, GlassInput, GlassTextarea } from "../components/GlassUI";
 import { CameraIcon, CloseIcon, GlobeIcon, ImageIcon, LockIcon, PlusIcon, UserPlusIcon } from "../components/Icons";
 import { selectPhoto } from "../native/media";
 import { useStore } from "../native/Store";
-import { Box, Field, Label, Picture, Scroll, Touch, Reveal, useScrollAnchor } from "../native/UI";
+import { Box, Field, Label, Picture, Scroll, Touch, Reveal } from "../native/UI";
 import { ui } from "../theme/styles";
 import { NavigateFn } from "../types";
 import TopNavBar from "../components/TopNavBar";
@@ -91,13 +91,6 @@ const REQUIREMENTS_SUGGESTIONS: {
   Hiking: ["Yürüyüş ayakkabısı gerekli.", "En az 1 litre su getir.", "Atıştırmalık al."],
   default: ["Rahat kıyafet yeterli."]
 };
-/** Scrolls its content into view each time `on` changes to a new non-zero value (a tap, not a revisit). */
-function ScrollIntoViewOn({ on, children }: { on: number; children: ReactNode }) {
-  const anchor = useScrollAnchor();
-  const ref = useRef<ViewInstance>(null);
-  useEffect(() => { if (on) anchor?.(ref.current); }, [on]);
-  return <View ref={ref} collapsable={false}>{children}</View>;
-}
 export default function CreateEventScreen({
   navigate,
   initialActivity,
@@ -107,7 +100,7 @@ export default function CreateEventScreen({
     data: store,
     setData: setStore
   } = useStore();
-  const [activities, setActivities] = useState<Array<{ id: string; name: string; slug?: string; levels?: InterestLevel[]; status?: string; requiresCover?: boolean }>>([]);
+  const [activities, setActivities] = useState<Array<{ id: string; name: string; slug?: string; levels?: InterestLevel[]; status?: string; requiresCover?: boolean; featured?: boolean }>>([]);
   const [visibilities, setVisibilities] = useState<Array<{ id: string; name: string; enum: string }>>([]);
   const [creating, setCreating] = useState(false);
   // One id per creation attempt, kept across retries: if a slow request timed out but the server created the
@@ -129,7 +122,11 @@ export default function CreateEventScreen({
     setPersonalSuggestions(items => items.filter(item => item !== text));
     dismissSuggestion(text).then(result => setPersonalSuggestions(result.items)).catch(error => { setPersonalSuggestions(previous); showAlert('Öneri silinemedi', getApiErrorMessage(error)); });
   };
-  const ACTIVITIES = activities.map(a => ({ label: a.name, slug: a.slug }));
+  // Featured activities are big tiles; the rest open as small chips under "Diğer". Both arrive most-used first.
+  // Your own pending proposals count as featured so you find what you just added.
+  const isFeatured = (a: (typeof activities)[number]) => a.featured !== false || a.status === "pending";
+  const ACTIVITIES = activities.filter(isFeatured).map(a => ({ label: a.name, slug: a.slug }));
+  const OTHER_ACTIVITIES = activities.filter(a => !isFeatured(a)).map(a => ({ label: a.name, slug: a.slug }));
   const PRIVACIES = visibilities.filter(v => PRIVACY_OPTIONS[v.enum]).map(v => ({ label: v.name, enum: v.enum, ...PRIVACY_OPTIONS[v.enum] }));
   // The server also enforces the limit on create; a failed check does not block the form.
   const [createBlocked, setCreateBlocked] = useState<string | null>(null);
@@ -149,9 +146,7 @@ export default function CreateEventScreen({
   const toggleInvite = (id: string) => setInvitedIds(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
   const [step, setStep] = useState(0);
   // Counts level taps: each one scrolls the "how many people" section into view.
-  const [participantReveals, setParticipantReveals] = useState(0);
   // Counts taps on "Sınır yok / Sınır koy": each one scrolls their explanation (under the buttons) into view.
-  const [limitReveals, setLimitReveals] = useState(0);
   useWalkthroughAutostartBlocker(step > 0);
   const [customDurationOpen, setCustomDurationOpen] = useState(false);
   const [customDuration, setCustomDuration] = useState({ hours: "", minutes: "" });
@@ -177,6 +172,20 @@ export default function CreateEventScreen({
   };
   // "Yeni ilgi alanı": a member may propose one that is not in the list; they decide whether levels are asked.
   const [proposalOpen, setProposalOpen] = useState(false);
+  const [othersOpen, setOthersOpen] = useState(false);
+  // A copied event (or a back-step) with a "Diğer" activity keeps that list open so the choice stays visible.
+  const otherChosen = OTHER_ACTIVITIES.some(a => a.label === data.activity);
+  const showOthers = othersOpen || otherChosen;
+  // The chosen option stays; a set limit never drops below the minimum (equal = exactly that many).
+  const setMinimum = (value: number) => setData(p => {
+    const min = Math.min(MAX_PARTICIPANTS, Math.max(MIN_PARTICIPANTS, value));
+    return { ...p, minParticipants: min, maxParticipants: p.maxParticipants === null ? null : Math.max(min, p.maxParticipants) };
+  });
+  // "Diğer" opens with a filter; the list keeps the server's most-used-first order.
+  const [otherQuery, setOtherQuery] = useState("");
+  const fold = (value: string) => value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ı/g, "i");
+  // "Diğer" lists every activity (featured ones too), so the search finds anything; most used first.
+  const filteredOthers = activities.map(a => ({ label: a.name, slug: a.slug })).filter(a => fold(a.label).includes(fold(otherQuery.trim())));
   const [proposalName, setProposalName] = useState("");
   const [proposalLevels, setProposalLevels] = useState<boolean | null>(null);
   const [proposing, setProposing] = useState(false);
@@ -422,25 +431,43 @@ export default function CreateEventScreen({
 
           {/* Step 0 - Activity */}
           {step === 0 && <Box style={[[]]} enter><Box walkthroughId="create-activity">
-              <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
-                Ne yapmak{"\n"}istiyorsun?
+              <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite, ui.mb1]]}>
+                Ne yapmak istiyorsun?
               </Label>
-              <Label style={[[ui.textSm, ui.textWhite40, ui.mb6]]}>
+              <Label style={[[ui.textSm, ui.textWhite40, ui.mb4]]}>
                 Birlikte yapmak istediğin aktiviteyi seç.
               </Label></Box>
-              <Box style={[[ui.grid, ui.gap3]]} columns={2}>
+              {/* Three columns of the featured activities, ending with "Diğer" (the full list, its search and proposals). */}
+              <Box style={[[ui.grid, ui.gap2]]} columns={3}>
                 {!activities.length && <Touch onPress={loadCatalog}>Seçenekleri yeniden yükle</Touch>}
-              {ACTIVITIES.map(a => <Touch key={a.label} onPress={() => chooseActivity(a.label)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, data.activity === a.label ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={data.activity === a.label ? "rgba(105,120,255,.16)" : undefined} />
-                    <CategoryIcon name={a.label} slug={a.slug} size={28} style={{ color: palette.accent, marginBottom: 12 }} />
-                    <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>
+              {ACTIVITIES.map(a => <Touch key={a.label} onPress={() => chooseActivity(a.label)} style={[s.tile, data.activity === a.label ? [ui.borderC8a44a50] : [ui.borderWhite8]]}><GlassFill radius={14} tint={data.activity === a.label ? "rgba(105,120,255,.16)" : undefined} />
+                    <CategoryIcon name={a.label} slug={a.slug} size={22} style={{ color: palette.accent }} />
+                    <Label numberOfLines={2} style={s.tileLabel}>
                       {a.label}
                     </Label>
                   </Touch>)}
-                {activities.length > 0 && <Touch accessibilityLabel="Yeni ilgi alanı ekle" onPress={() => setProposalOpen(open => !open)} style={[[ui.p4, ui.rounded2xl, ui.textLeft, ui.border, proposalOpen ? [ui.borderC8a44a50] : [ui.borderWhite8]], { borderStyle: "dashed" }]}><GlassFill radius={16} tint={proposalOpen ? "rgba(105,120,255,.16)" : undefined} />
-                    <PlusIcon size={28} style={{ color: palette.accent, marginBottom: 12 }} />
-                    <Label style={[[ui.textSm, ui.textWhite75, ui.fontMedium]]}>Yeni ilgi alanı</Label>
+                {activities.length > 0 && <Touch accessibilityLabel="Diğer aktiviteler" accessibilityState={{ expanded: showOthers }} onPress={() => setOthersOpen(open => !open)} style={[s.tile, showOthers ? [ui.borderC8a44a50] : [ui.borderWhite8]]}><GlassFill radius={14} tint={showOthers ? "rgba(105,120,255,.16)" : undefined} />
+                    <Label style={{ fontSize: 18, lineHeight: 22, color: palette.accent }}>•••</Label>
+                    <Label numberOfLines={2} style={s.tileLabel}>{otherChosen ? data.activity : "Diğer"}</Label>
                   </Touch>}
               </Box>
+              {showOthers && <Reveal><Box style={[[ui.mt4, ui.spaceY3]]} enter>
+                <GlassInput label="Tüm aktivitelerde ara" placeholder="Örn. Kamp, Satranç, Karaoke" value={otherQuery} maxLength={40} onChangeText={setOtherQuery} />
+                <Box style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {filteredOthers.map(a => {
+                    const selected = data.activity === a.label;
+                    return <Touch key={a.label} accessibilityLabel={a.label} accessibilityState={{ selected }} onPress={() => chooseActivity(a.label)} style={[{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1 }, selected ? [ui.borderC8a44a50] : [ui.borderWhite8]]}><GlassFill radius={12} tint={selected ? "rgba(105,120,255,.16)" : undefined} />
+                      <CategoryIcon name={a.label} slug={a.slug} size={16} style={{ color: palette.accent }} />
+                      <Label style={[[ui.textXs, selected ? ui.textC8a44a : ui.textWhite75, ui.fontMedium]]}>{a.label}</Label>
+                    </Touch>;
+                  })}
+                  {/* Always last: propose a new interest; a typed search carries over as its name. */}
+                  <Touch accessibilityLabel="Yeni ilgi alanı ekle" accessibilityState={{ expanded: proposalOpen }} onPress={() => { if (!proposalOpen && otherQuery.trim()) setProposalName(otherQuery.trim()); setProposalOpen(open => !open); }} style={[{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderStyle: "dashed" }, proposalOpen ? [ui.borderC8a44a50] : [ui.borderWhite10]]}><GlassFill radius={12} tint={proposalOpen ? "rgba(105,120,255,.16)" : undefined} />
+                    <PlusIcon size={16} style={{ color: palette.accent }} />
+                    <Label style={[[ui.textXs, ui.textWhite75, ui.fontMedium]]}>{otherQuery.trim() && !filteredOthers.length ? `"${otherQuery.trim()}" ekle` : "Yeni ilgi alanı"}</Label>
+                  </Touch>
+                </Box>
+                </Box></Reveal>}
               {proposalOpen && <Reveal><Box style={[[ui.mt4, ui.p4, ui.rounded2xl, ui.border, ui.borderWhite10, ui.spaceY3], { backgroundColor: palette.surface }]} enter>
                   <GlassInput label="İlgi alanının adı" placeholder="Örn. Okçuluk" value={proposalName} maxLength={40} onChangeText={setProposalName} />
                   <Label style={[[ui.textSm, ui.textWhite60, ui.fontMedium]]}>Katılımcılara seviye sorulsun mu?</Label>
@@ -453,107 +480,81 @@ export default function CreateEventScreen({
                 </Box></Reveal>}
             </Box>}
 
-          {/* Step 1 - Level (only for interests with levels) and how many people; "Devam Et" goes on. */}
-          {step === 1 && <Box style={[[ui.spaceY6]]} enter>
-              {LEVELS.length > 0 && <Box>
-              <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
-                Hangi seviyede{"\n"}oynamak istersin?
+          {/* Step 1 - Level (only for interests with levels) and how many people, on one screen; "Devam Et" goes on. */}
+          {step === 1 && <Box style={[[ui.spaceY5]]} enter>
+              {levels.length > 0 && <Box>
+              <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite, ui.mb1]]}>
+                Hangi seviyede oynanacak?
               </Label>
-              <Label style={[[ui.textSm, ui.textWhite40, ui.mb6]]}>
-                Etkinliğe uygun seviyeyi seç.
+              <Label style={[[ui.textSm, ui.textWhite40, ui.mb3]]}>
+                Katılımcılar buna göre katılır.
               </Label>
-              <Box style={[[ui.spaceY3]]}>
-                {LEVELS.map(level => <Touch key={level} accessibilityState={{ selected: data.level === level }} onPress={() => { setData(prev => ({ ...prev, level })); setParticipantReveals(n => n + 1); }} style={[[ui.wFull, ui.p4, ui.rounded2xl, ui.textLeft, ui.flex, ui.itemsCenter, ui.justifyBetween, ui.border, data.level === level ? [ui.borderC8a44a50] : [ui.borderWhite8]]]}><GlassFill radius={16} tint={data.level === level ? "rgba(105,120,255,.16)" : undefined} />
-                    <Label style={[[ui.textBase, ui.textWhite80, ui.fontMedium]]}>
-                      {level}
-                    </Label>
-                    {data.level === level && <Label style={[[ui.textC8a44a]]}>✓</Label>}
-                  </Touch>)}
-              </Box>
-              </Box>}
-              {/* Picking a level brings the "how many people" section into view. */}
-              <ScrollIntoViewOn on={participantReveals}><Box style={[[ui.spaceY6]]}>
-              <Box>
-              <Label style={[[ui.fontDisplay, LEVELS.length > 0 ? ui.text2xl : ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
-                {LEVELS.length > 0 ? "Kaç kişilik bir buluşma?" : "Kaç kişilik\nbir buluşma?"}
-              </Label>
-              <Label style={[[ui.textSm, ui.textWhite40]]}>
-                Minimum katılımcı sayısına ulaşınca sohbet odası açılır.
-              </Label>
-              </Box>
-              {[{
-            label: "Minimum",
-            value: data.minParticipants,
-            display: `${data.minParticipants} kişi`,
-            canDecrease: data.minParticipants > MIN_PARTICIPANTS,
-            canIncrease: data.minParticipants < MAX_PARTICIPANTS,
-            change: (delta: number) => setData(p => {
-              const min = Math.min(MAX_PARTICIPANTS, Math.max(MIN_PARTICIPANTS, p.minParticipants + delta));
-              // The chosen option stays; a set limit never drops below the minimum (equal = exactly that many).
-              return { ...p, minParticipants: min, maxParticipants: p.maxParticipants === null ? null : Math.max(min, p.maxParticipants) };
-            })
-          }, {
-            label: "Maksimum",
-            value: data.maxParticipants ?? 0,
-            display: data.maxParticipants ? `${data.maxParticipants} kişi` : "",
-            // Shown only when the organizer chose to set a limit.
-            hidden: data.maxParticipants === null,
-            canDecrease: data.maxParticipants !== null && data.maxParticipants > data.minParticipants,
-            canIncrease: data.maxParticipants !== null && data.maxParticipants < MAX_PARTICIPANTS,
-            change: (delta: number) => setData(p => p.maxParticipants === null ? p : {
-              ...p,
-              maxParticipants: Math.min(MAX_PARTICIPANTS, Math.max(p.minParticipants, p.maxParticipants + delta))
-            })
-          }].filter(card => !("hidden" in card && card.hidden)).map(({
-            label,
-            value,
-            display,
-            canDecrease,
-            canIncrease,
-            change
-          }) => <Box key={label} style={[[ui.glass, ui.rounded2xl, ui.p5]]} glass>
-                  <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween, ui.mb3]]}>
-                    <Label style={[[ui.textSm, ui.textWhite60]]}>{label}</Label>
-                    <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>
-                      {display}
-                    </Label>
-                  </Box>
-                  <Box style={[[ui.flex, ui.itemsCenter, ui.gap3]]}>
-                    <Touch accessibilityLabel={`${label} azalt`} disabled={!canDecrease} onPress={() => change(-1)} style={[[ui.w10, ui.h10, ui.roundedXl, ui.glassStrong, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite70, ui.textXl, ui.fontLight]]} glass>
-                      −
-                    </Touch>
-                    <Box style={[[ui.flex1, ui.h15, ui.roundedFull, ui.bgWhite10, ui.overflowHidden]]}>
-                      <Box style={[[ui.hFull, ui.bgC8a44a, ui.roundedFull], {
-                  width: `${value / MAX_PARTICIPANTS * 100}%`
-                }]} />
+              {/* One row: signal bars show the level at a glance; the line below says who it suits. */}
+              <Box style={{ flexDirection: "row", gap: 8 }} accessibilityRole="radiogroup">
+                {levels.map(level => {
+                  const selected = data.level === level.name;
+                  const bars = LEVEL_BARS[level.enum] ?? 0;
+                  return <Touch key={level.id} accessibilityRole="radio" accessibilityLabel={level.name} accessibilityState={{ selected }} onPress={() => setData(prev => ({ ...prev, level: level.name }))} style={[s.levelPill, selected ? [ui.borderC8a44a50] : [ui.borderWhite8]]}><GlassFill radius={14} tint={selected ? "rgba(105,120,255,.18)" : undefined} />
+                    <Box style={s.bars}>
+                      {[1, 2, 3].map(n => <Box key={n} style={[s.bar, { height: 4 + n * 4, backgroundColor: bars === 0 || n <= bars ? (selected ? palette.accent : "rgba(185,195,255,.45)") : "rgba(255,255,255,.10)" }]} />)}
                     </Box>
-                    <Touch accessibilityLabel={`${label} artır`} disabled={!canIncrease} onPress={() => change(1)} style={[[ui.w10, ui.h10, ui.roundedXl, ui.glassStrong, ui.flex, ui.itemsCenter, ui.justifyCenter, ui.textWhite70, ui.textXl, ui.fontLight]]} glass>
-                      +
-                    </Touch>
-                  </Box>
-                </Box>)}
-              {/* The maximum is optional: no limit, or a cap that starts at the minimum (equal = exactly that many). */}
-              {<Box>
-                <Label style={[[ui.textSm, ui.textWhite60, ui.mb2]]}>Maksimum katılımcı</Label>
-                <Box style={[[ui.flex, ui.gap3]]}>
-                  {([[false, "Sınır yok"], [true, "Sınır koy"]] as const).map(([limited, label]) => {
-                    const selected = (data.maxParticipants !== null) === limited;
-                    return <Touch key={label} accessibilityState={{ selected }} onPress={() => { setData(p => ({ ...p, maxParticipants: limited ? Math.max(p.minParticipants, p.maxParticipants ?? 0) : null })); setLimitReveals(n => n + 1); }} style={[[ui.flex1, ui.p3, ui.rounded2xl, ui.textCenter, ui.border, ui.textSm, selected ? [ui.borderC8a44a50, ui.bgC8a44a10, ui.textC8a44a] : [ui.borderWhite8, ui.bgWhite004, ui.textWhite70]]]}>{label}</Touch>;
+                    <Label numberOfLines={2} style={[s.levelLabel, { color: selected ? palette.accent : "rgba(241,245,249,.8)" }]}>{level.name}</Label>
+                  </Touch>;
+                })}
+              </Box>
+              <Label style={[[ui.textXs, ui.textWhite40], { marginTop: 8, minHeight: 16 }]}>
+                {LEVEL_HINTS[levels.find(level => level.name === data.level)?.enum ?? ""] ?? "Bir seviye seç."}
+              </Label>
+              </Box>}
+
+              <Box>
+              <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite, ui.mb1]]}>
+                Kaç kişilik bir buluşma?
+              </Label>
+              <Label style={[[ui.textSm, ui.textWhite40, ui.mb3]]}>
+                Minimuma ulaşınca sohbet odası açılır.
+              </Label>
+              {/* One card: the activity's usual formats as one-tap presets, then exact steppers for the minimum and the
+                  optional maximum (tap a number to type it). */}
+              <Box style={[[ui.glass, ui.rounded2xl], s.countCard]} glass>
+                <Box style={s.presets}>
+                  {countPresets(activities.find(a => a.name === data.activity)?.slug).map(([count, hint]) => {
+                    const selected = data.minParticipants === count;
+                    return <Touch key={count} accessibilityLabel={`${count} kişi${hint ? `, ${hint}` : ""}`} accessibilityState={{ selected }} onPress={() => setMinimum(count)} style={[s.preset, selected && s.presetActive]}>
+                      <Label style={[s.presetCount, selected && { color: palette.accent }]}>{count}</Label>
+                      {hint ? <Label numberOfLines={1} style={s.presetHint}>{hint}</Label> : null}
+                    </Touch>;
                   })}
                 </Box>
-              </Box>}
-              <ScrollIntoViewOn on={limitReveals}><Label style={[[ui.textXs, ui.textWhite40]]}>
-                {data.maxParticipants === null ? "Sınır yok: minimum katılımcı sayısına ulaşınca oda açılır. Etkinlik başlayana kadar yeni katılımcılar katılabilir." : data.maxParticipants === data.minParticipants ? `Tam ${data.minParticipants} kişilik: ${data.minParticipants} kişi dolunca katılım kapanır.` : `${data.minParticipants} kişi dolunca etkinlik hayata geçer; ${data.maxParticipants} kişide katılım kapanır.`}
-              </Label></ScrollIntoViewOn>
-
-              </Box></ScrollIntoViewOn>
+                <Box style={s.divider} />
+                <CountStepper label="Minimum" value={data.minParticipants} min={MIN_PARTICIPANTS} max={MAX_PARTICIPANTS} onChange={setMinimum} />
+                <Box style={s.divider} />
+                <Box style={[[ui.flex, ui.itemsCenter, ui.justifyBetween]]}>
+                  <Label style={[[ui.textSm, ui.textWhite60]]}>Maksimum</Label>
+                  <Box style={s.segment}>
+                    {([[false, "Sınır yok"], [true, "Sınır koy"]] as const).map(([limited, label]) => {
+                      const selected = (data.maxParticipants !== null) === limited;
+                      return <Touch key={label} accessibilityState={{ selected }} onPress={() => setData(p => ({ ...p, maxParticipants: limited ? Math.max(p.minParticipants, p.maxParticipants ?? 0) : null }))} style={[s.segmentItem, selected && s.segmentActive]}>
+                        <Label style={[[ui.textXs, ui.fontMedium], { color: selected ? palette.accent : palette.muted }]}>{label}</Label>
+                      </Touch>;
+                    })}
+                  </Box>
+                </Box>
+                {data.maxParticipants !== null && <CountStepper label="En fazla" value={data.maxParticipants} min={data.minParticipants} max={MAX_PARTICIPANTS}
+                  onChange={value => setData(p => p.maxParticipants === null ? p : { ...p, maxParticipants: Math.min(MAX_PARTICIPANTS, Math.max(p.minParticipants, value)) })} />}
+              </Box>
+              <Label style={[[ui.textXs, ui.textWhite40], { marginTop: 8 }]}>
+                {data.maxParticipants === null ? "Etkinlik başlayana kadar yeni katılımcılar katılabilir." : data.maxParticipants === data.minParticipants ? `Tam ${data.minParticipants} kişilik: dolunca katılım kapanır.` : `${data.minParticipants} kişide etkinlik başlar, ${data.maxParticipants} kişide katılım kapanır.`}
+              </Label>
+              </Box>
             </Box>}
 
           {/* Step 2 - Date, time & duration */}
           {step === 2 && <Box style={[[ui.spaceY5]]} enter>
-              <Label style={[[ui.fontDisplay, ui.text3xl, ui.fontLight, ui.textWhite, ui.mb2]]}>
-                Ne zaman{"\n"}buluşuyorsunuz?
+              <Label style={[[ui.fontDisplay, ui.text2xl, ui.fontLight, ui.textWhite]]}>
+                Ne zaman buluşuyorsunuz?
               </Label>
+              <Box style={[[ui.flex, ui.gap3]]}>
               <GlassInput label="Tarih" value={data.date} onChangeText={e => setData(p => ({
             ...p,
             date: e
@@ -562,6 +563,7 @@ export default function CreateEventScreen({
             ...p,
             time: e
           }))} mode="time" />
+              </Box>
               {startsInPast && <Label style={[[ui.textSm], { color: palette.error }]}>
                 Geçmiş bir tarih veya saat seçemezsin.
               </Label>}
@@ -729,3 +731,97 @@ export default function CreateEventScreen({
         </StickyBar>}
     </Box>;
 }
+
+/** Signal bars per level (0 = all levels, every bar lit) and who each level suits. */
+const LEVEL_BARS: Record<string, number> = { beginner: 1, intermediate: 2, advanced: 3, all: 0 };
+const LEVEL_HINTS: Record<string, string> = {
+  beginner: "Yeni başlayanlar ve kuralları öğrenenler için; tempo rahat.",
+  intermediate: "Düzenli yapanlar için; temel teknik oturmuş, oyun akıcı.",
+  advanced: "Deneyimliler için; tempo ve rekabet yüksek.",
+  all: "Her seviyeden katılımcı gelebilir; herkese uygun bir buluşma.",
+};
+
+/** Usual group sizes per activity (count, format), so most organizers pick theirs in one tap. */
+const COUNT_PRESETS: Record<string, Array<[number, string]>> = {
+  "hali-saha": [[10, "5'e 5"], [12, "6'ya 6"], [14, "7'ye 7"]],
+  basketbol: [[6, "3'e 3"], [8, "4'e 4"], [10, "5'e 5"]],
+  voleybol: [[8, "4'e 4"], [12, "6'ya 6"]],
+  "plaj-voleybolu": [[4, "2'ye 2"], [8, "4'e 4"]],
+  padel: [[4, "Çiftler"]],
+  tenis: [[2, "Tekler"], [4, "Çiftler"]],
+  squash: [[2, "Tekler"], [4, "Rotasyon"]],
+  "masa-tenisi": [[2, "Tekler"], [4, "Çiftler"]],
+  badminton: [[2, "Tekler"], [4, "Çiftler"]],
+  pickleball: [[4, "Çiftler"]],
+  "bowling-bilardo": [[4, "Bir şerit"], [6, ""], [8, "İki şerit"]],
+  paintball: [[6, "3'e 3"], [10, "5'e 5"]],
+  "go-kart": [[4, ""], [6, ""], [10, "Yarış"]],
+  dart: [[2, "Tekler"], [4, "Çiftler"]],
+  "kutu-oyunlari": [[3, ""], [4, ""], [6, ""]],
+  quiz: [[4, "Bir takım"], [6, "Bir takım"]],
+};
+const DEFAULT_PRESETS: Array<[number, string]> = [[2, ""], [4, ""], [6, ""], [8, ""], [10, ""]];
+const countPresets = (slug?: string) => (slug && COUNT_PRESETS[slug]) || DEFAULT_PRESETS;
+
+/** An exact count: − and + step by one; tapping the number opens the keypad to type it (clamped on done). */
+function CountStepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const typed = parseInt(draft, 10);
+    if (!Number.isNaN(typed)) onChange(Math.min(max, Math.max(min, typed)));
+    setDraft(null);
+  };
+  return <View style={cs.row}>
+    <Label style={cs.label}>{label}</Label>
+    <View style={cs.controls}>
+      <Touch accessibilityLabel={`${label} azalt`} disabled={value <= min} onPress={() => onChange(value - 1)} style={[cs.step, value <= min && cs.stepDisabled]}>
+        <Label style={cs.stepText}>−</Label>
+      </Touch>
+      {draft === null
+        ? <Touch accessibilityLabel={`${label}: ${value} kişi. Elle girmek için dokun`} onPress={() => setDraft(String(value))} style={cs.valueBox}>
+            <Label style={cs.value}>{value}</Label>
+          </Touch>
+        : <View style={[cs.valueBox, cs.valueEditing]}>
+            <TextInput autoFocus value={draft} onChangeText={text => setDraft(text.replace(/\D/g, "").slice(0, 3))} onBlur={commit} onSubmitEditing={commit}
+              keyboardType="number-pad" returnKeyType="done" selectTextOnFocus maxLength={3} style={[cs.value, cs.input]} accessibilityLabel={`${label} kişi sayısı`} />
+          </View>}
+      <Touch accessibilityLabel={`${label} artır`} disabled={value >= max} onPress={() => onChange(value + 1)} style={[cs.step, value >= max && cs.stepDisabled]}>
+        <Label style={cs.stepText}>+</Label>
+      </Touch>
+    </View>
+  </View>;
+}
+
+const cs = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  label: { color: "rgba(241,245,249,.6)", fontSize: 14 },
+  controls: { flexDirection: "row", alignItems: "center", gap: 8 },
+  step: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,.06)", borderWidth: 1, borderColor: "rgba(255,255,255,.10)" },
+  stepDisabled: { opacity: 0.35 },
+  stepText: { color: palette.text, fontSize: 20, lineHeight: 24 },
+  valueBox: { minWidth: 64, height: 40, paddingHorizontal: 8, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(105,120,255,.35)", backgroundColor: "rgba(105,120,255,.10)" },
+  valueEditing: { borderColor: palette.blue },
+  value: { color: palette.text, fontFamily: "Fraunces", fontSize: 20, lineHeight: 26 },
+  // A single-line input with a line height sits low on iOS; drop it so the digits and cursor stay centred.
+  input: { minWidth: 40, height: 38, padding: 0, lineHeight: undefined, textAlign: "center", textAlignVertical: "center" },
+});
+
+const s = StyleSheet.create({
+  tile: { alignItems: "center", justifyContent: "center", gap: 6, minHeight: 72, paddingHorizontal: 4, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+  tileLabel: { color: "rgba(241,245,249,.8)", fontSize: 11, lineHeight: 14, fontFamily: "Outfit-Medium", textAlign: "center" },
+  levelPill: { flex: 1, alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 4, borderRadius: 14, borderWidth: 1 },
+  bars: { flexDirection: "row", alignItems: "flex-end", gap: 3, height: 16 },
+  bar: { width: 5, borderRadius: 2 },
+  levelLabel: { fontSize: 12, lineHeight: 15, fontFamily: "Outfit-SemiBold", textAlign: "center" },
+  countCard: { padding: 16, gap: 12 },
+  presets: { flexDirection: "row", gap: 8 },
+  preset: { flex: 1, minHeight: 52, alignItems: "center", justifyContent: "center", gap: 2, paddingHorizontal: 4, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,.08)", backgroundColor: "rgba(255,255,255,.04)" },
+  presetActive: { borderColor: "rgba(105,120,255,.55)", backgroundColor: "rgba(105,120,255,.16)" },
+  presetCount: { color: palette.text, fontFamily: "Fraunces", fontSize: 18, lineHeight: 22 },
+  presetHint: { color: palette.muted, fontSize: 10, lineHeight: 12 },
+  divider: { height: 1, backgroundColor: "rgba(255,255,255,.08)" },
+  segment: { flexDirection: "row", padding: 3, borderRadius: 12, backgroundColor: "rgba(255,255,255,.05)", borderWidth: 1, borderColor: "rgba(255,255,255,.08)" },
+  segmentItem: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 9 },
+  segmentActive: { backgroundColor: "rgba(105,120,255,.18)" },
+});
