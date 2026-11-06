@@ -184,8 +184,8 @@ export default function CreateEventScreen({
   // "Diğer" opens with a filter; the list keeps the server's most-used-first order.
   const [otherQuery, setOtherQuery] = useState("");
   const fold = (value: string) => value.toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ı/g, "i");
-  // "Diğer" lists every activity (featured ones too), so the search finds anything; most used first.
-  const filteredOthers = activities.map(a => ({ label: a.name, slug: a.slug })).filter(a => fold(a.label).includes(fold(otherQuery.trim())));
+  // "Diğer" lists only the activities that have no card above; most used first.
+  const filteredOthers = OTHER_ACTIVITIES.filter(a => fold(a.label).includes(fold(otherQuery.trim())));
   const [proposalName, setProposalName] = useState("");
   const [proposalLevels, setProposalLevels] = useState<boolean | null>(null);
   const [proposing, setProposing] = useState(false);
@@ -452,7 +452,7 @@ export default function CreateEventScreen({
                   </Touch>}
               </Box>
               {showOthers && <Reveal><Box style={[[ui.mt4, ui.spaceY3]]} enter>
-                <GlassInput label="Tüm aktivitelerde ara" placeholder="Örn. Kamp, Satranç, Karaoke" value={otherQuery} maxLength={40} onChangeText={setOtherQuery} />
+                <GlassInput label="Diğer aktivitelerde ara" placeholder="Örn. Kamp, Satranç, Karaoke" value={otherQuery} maxLength={40} onChangeText={setOtherQuery} />
                 <Box style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {filteredOthers.map(a => {
                     const selected = data.activity === a.label;
