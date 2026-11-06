@@ -50,12 +50,14 @@ export function GeneratedCode({ label, hint, create, load, storageKey }: { label
   const live = issued && remaining !== null && remaining > 0
   return <Box style={{ gap: 8 }}>
     {live ? <Box style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: "rgba(105,120,255,.35)", backgroundColor: palette.selected }}>
-      <Box style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <Label selectable numberOfLines={1} ellipsizeMode="middle" style={[[ui.textSm, ui.fontSemibold], { color: palette.text, letterSpacing: 0.5 }]}>{issued.code}</Label>
+      {/* Tapping the code copies it too; the labelled button on its right makes copying obvious. */}
+      <Touch accessibilityLabel={`${issued.code}. Kopyalamak için dokun`} onPress={() => void copy()} style={{ flex: 1, minWidth: 0, gap: 2, alignItems: "flex-start" }}>
+        <Label numberOfLines={1} ellipsizeMode="middle" style={[[ui.textSm, ui.fontSemibold], { color: palette.text, letterSpacing: 0.5 }]}>{issued.code}</Label>
         <Label accessibilityLiveRegion="polite" style={[[ui.textXs], { color: palette.accent }]}>{remainingLabel(remaining)}</Label>
-      </Box>
-      <Touch accessibilityLabel={copied ? "Kod kopyalandı" : "Kodu kopyala"} onPress={() => void copy()} hitSlop={8} style={{ width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: palette.glass, borderWidth: 1, borderColor: palette.glassBorder }}>
+      </Touch>
+      <Touch accessibilityLabel={copied ? "Kod kopyalandı" : "Kodu kopyala"} onPress={() => void copy()} hitSlop={8} style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 40, paddingHorizontal: 12, borderRadius: 12, backgroundColor: copied ? "rgba(74,222,128,.12)" : palette.glass, borderWidth: 1, borderColor: copied ? "rgba(74,222,128,.45)" : palette.glassBorder }}>
         {copied ? <CheckIcon size={18} style={{ color: palette.success }} /> : <CopyIcon size={18} style={{ color: palette.text }} />}
+        <Label style={[[ui.textXs, ui.fontSemibold], { color: copied ? palette.success : palette.text }]}>{copied ? "Kopyalandı" : "Kopyala"}</Label>
       </Touch>
     </Box> : <Touch accessibilityLabel={label} onPress={() => void generate()} disabled={busy} glass style={[[ui.py3, ui.roundedXl, ui.textSm, ui.fontMedium], { color: palette.accent, borderWidth: 1, borderColor: "rgba(105,120,255,.35)", backgroundColor: palette.glass }]}>
       {busy ? "Oluşturuluyor…" : label}
