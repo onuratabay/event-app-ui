@@ -1,0 +1,15 @@
+{
+  "metadata": "ready",
+  "supportEmail": "confirmed: onuratabay@icloud.com",
+  "reviewNotes": "prepared; approved account credentials must be entered privately in App Store Connect",
+  "privacy": "draft; SDK data handling and retention verification required",
+  "ageRating": "draft; questionnaire and developer 18+ policy confirmation required",
+  "copyrightHolder": "missing",
+  "screenshots": "pending iOS member session and working backend",
+  "privacyApiLastHttpStatus": 502,
+  "latestEasIosBuildObserved": {
+    "version": "1.0.0",
+    "build": "4"
+  },
+  "submittedToAppStoreConnect": false
+}

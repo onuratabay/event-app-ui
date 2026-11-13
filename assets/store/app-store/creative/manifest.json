@@ -1,0 +1,90 @@
+[
+  {
+    "file": "ewent-header-3840x1646.png",
+    "width": 3840,
+    "height": 1646,
+    "pngColorType": 2,
+    "alphaChannel": false,
+    "bytes": 7109206,
+    "safeArea": [
+      1097,
+      493,
+      1646,
+      661
+    ],
+    "logoBounds": [
+      1630,
+      534,
+      580,
+      580
+    ]
+  },
+  {
+    "file": "ewent-search-3840x2560.png",
+    "width": 3840,
+    "height": 2560,
+    "pngColorType": 2,
+    "alphaChannel": false,
+    "bytes": 9548275,
+    "safeArea": [
+      836,
+      765,
+      2168,
+      1030
+    ],
+    "logoBounds": [
+      1495,
+      855,
+      850,
+      850
+    ]
+  },
+  {
+    "file": "ewent-search-1920x1280.png",
+    "width": 1920,
+    "height": 1280,
+    "pngColorType": 2,
+    "alphaChannel": false,
+    "bytes": 3794312,
+    "safeArea": [
+      418,
+      383,
+      1084,
+      515
+    ],
+    "logoBounds": [
+      748,
+      428,
+      425,
+      425
+    ]
+  },
+  {
+    "file": "ewent-universal-5244x2950.png",
+    "width": 5244,
+    "height": 2950,
+    "pngColorType": 2,
+    "alphaChannel": false,
+    "bytes": 12661335,
+    "safeArea": [
+      1921,
+      660,
+      1402,
+      962
+    ],
+    "logoBounds": [
+      2197,
+      716,
+      850,
+      850
+    ]
+  },
+  {
+    "file": "ewent-icon-1024.png",
+    "width": 1024,
+    "height": 1024,
+    "pngColorType": 2,
+    "alphaChannel": false,
+    "bytes": 1587125
+  }
+]

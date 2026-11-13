@@ -1,0 +1,17 @@
+Ewent is a Turkish-language community app for adults aged 18 and over. Members discover and organize real-world activities, share availability, and communicate in event rooms and direct chats.
+
+New memberships are subject to reference and approval requirements. Please use the dedicated, approved review account entered in the App Review sign-in fields to access the member features. The account must remain approved and accessible throughout review.
+
+Suggested review flow:
+1. Tap “Giriş yap” on the welcome screen and sign in with the supplied review credentials.
+2. Open “Keşfet” to browse events, and “Harita” to view events on the map.
+3. Open an event to inspect its time, location and participation information.
+4. Tap the center W button to open “Oluştur”, which offers event creation and availability sharing.
+5. Open “Odalar” to access the account’s available conversations and event rooms.
+
+Location permission is requested for nearby/location features. Contacts permission is used to find existing members for reference requests. Camera/photo access is used for profile and event images. These permissions can be declined. The iOS advertising tracking request can also be declined.
+
+Account deletion is available in the app under Profil > Ayarlar > Hesabı sil > Hesabımı sil.
+
+Public support: https://ewent.app/#iletisim
+Privacy policy: https://ewent.app/gizlilik

@@ -51,6 +51,13 @@ The backend must run migration `1790000000000-ServerOwnedUserData` before using 
 
 EAS preview/production profiles are provided in `eas.json`. Set your own application identifiers in `app.json` before store distribution.
 
+Google Play closed testing uses `eas build --platform android --profile closed-test`.
+This profile inherits production environment/signing settings and explicitly produces a store AAB.
+Android `versionCode` is managed remotely by EAS (`cli.appVersionSource: remote`); `autoIncrement`
+raises it for each build. Check it with `eas build:version:get --platform android --profile closed-test`.
+The user-facing version stays in `app.json` (`expo.version`). Upload the resulting AAB to the desired
+closed testing track in Play Console; the build command does not submit or publish it.
+
 ## Native event map
 
 The map uses `react-native-maps`, included in Expo Go, with the platform default provider: Apple Maps on iOS and Google Maps on Android. No extra map key is needed in Expo Go. Standalone Android distribution requires Google Maps configuration; it is not covered by the Expo Go setup. No OpenStreetMap public tile server or paid tile API is configured.

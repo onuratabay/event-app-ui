@@ -1,0 +1,32 @@
+[
+  {
+    "file": "01-welcome-1206x2622.png",
+    "width": 1206,
+    "height": 2622,
+    "bytes": 1853745,
+    "sha256": "13ff48590059aaa997cc42f8459bcdfede72c56e4b234a06d966a0e1a05089e1",
+    "source": "iPhone 17 Pro iOS 26.5 simulator; actual app framebuffer",
+    "pngColorType": 2,
+    "alphaChannel": false
+  },
+  {
+    "file": "02-login-1206x2622.png",
+    "width": 1206,
+    "height": 2622,
+    "bytes": 1757808,
+    "sha256": "efbd4d3902592e91f86e4b77b52adb90dc83ac2eff733e449d11af2e8594f85d",
+    "source": "iPhone 17 Pro iOS 26.5 simulator; actual app framebuffer",
+    "pngColorType": 2,
+    "alphaChannel": false
+  },
+  {
+    "file": "03-membership-1206x2622.png",
+    "width": 1206,
+    "height": 2622,
+    "bytes": 1674214,
+    "sha256": "7583f20bd731bb8304852e21bdbad3f5a5861e0aec106bb630774c0b11919fb9",
+    "source": "iPhone 17 Pro iOS 26.5 simulator; actual app framebuffer",
+    "pngColorType": 2,
+    "alphaChannel": false
+  }
+]

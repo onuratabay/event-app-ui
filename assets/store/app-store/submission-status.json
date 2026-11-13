@@ -1,0 +1,16 @@
+{
+  "metadata": "ready",
+  "supportEmail": "confirmed: onuratabay@icloud.com",
+  "reviewNotes": "prepared; approved account credentials must be entered privately in App Store Connect",
+  "privacy": "draft; SDK data handling and retention verification required",
+  "ageRating": "draft; questionnaire and developer 18+ policy confirmation required",
+  "copyrightHolder": "missing",
+  "screenshots": "ready: 3 actual public iPhone screens, 1206x2622, Dynamic Island medium display; member feature screens pending API availability",
+  "privacyApiLastHttpStatus": 502,
+  "latestEasIosBuildObserved": {
+    "version": "1.0.0",
+    "build": "4"
+  },
+  "submittedToAppStoreConnect": false,
+  "creativeAssets": "ready: header, search (two sizes), universal, icon; exact dimensions, RGB PNG, safe-area checked"
+}

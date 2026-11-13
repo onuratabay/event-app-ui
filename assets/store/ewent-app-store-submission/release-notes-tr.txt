@@ -1,0 +1,3 @@
+Ewent ile etkinlikleri keşfet, birlikte plan yap ve toplulukla buluş.
+
+Bu sürümde etkinlik keşfi, harita, etkinlik oluşturma, müsaitlik paylaşımı ve sohbet özellikleri sunuluyor.
