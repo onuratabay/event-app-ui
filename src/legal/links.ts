@@ -7,7 +7,7 @@ export const LEGAL_TITLES: Record<LegalDocumentType, string> = {
   community: "Topluluk Kuralları",
   privacy: "Gizlilik Politikası",
   kvkk: "KVKK Aydınlatma Metni",
-  marketing: "Ticari Elektronik İleti İzni",
+  marketing: "Ticari Elektronik İleti Bilgilendirme Metni",
 }
 
 /**

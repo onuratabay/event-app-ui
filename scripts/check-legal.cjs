@@ -39,7 +39,7 @@ module.exports = async ({ mount, tap, act, text, storage }) => {
   storage.set('event-app.access-token', 'valid-session')
   tree = await mount('Settings')
   await settle()
-  for (const title of ['Kullanım Koşulları', 'Topluluk Kuralları', 'Gizlilik Politikası', 'KVKK Aydınlatma Metni']) assert(text(tree.toJSON()).includes(title), title)
+  for (const title of ['Kullanım Koşulları', 'Topluluk Kuralları', 'Gizlilik Politikası', 'KVKK Aydınlatma Metni', 'Ticari Elektronik İleti Bilgilendirme Metni']) assert(text(tree.toJSON()).includes(title), title)
   const marketing = tree.root.findAll(node => node.type === 'Switch' && node.props.accessibilityLabel === 'Kampanya ve duyurular')[0]
   assert(marketing && !marketing.props.disabled && marketing.props.value === false, 'Marketing consent loads switched off')
   await act(async () => marketing.props.onValueChange(true)); await settle()
