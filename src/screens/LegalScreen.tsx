@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react"
-import { StyleSheet } from "react-native"
+import { ScrollView, StyleSheet } from "react-native"
 import { useRouter } from "expo-router"
 import { getApiErrorMessage, getLegalDocument, type LegalDocumentType } from "../api/client"
 import TopNavBar from "../components/TopNavBar"
 import { AtmoBackground } from "../components/GlassUI"
 import LoadingSpinner from "../components/LoadingSpinner"
 import { LEGAL_TITLES } from "../legal/links"
+import { KVKK_COLUMNS, parseKvkkTable } from "../legal/table"
 import { Box, Label, Scroll, Touch } from "../native/UI"
 import { palette } from "../theme/palette"
 import type { NavigateFn } from "../types"
@@ -13,7 +14,7 @@ import type { NavigateFn } from "../types"
 type Document = Awaited<ReturnType<typeof getLegalDocument>>
 
 /** Server text format: "## " heading, "- " bullet, blank line between paragraphs. */
-function Body({ text }: { text: string }) {
+function TextBody({ text }: { text: string }) {
   return <Box style={s.body}>
     {text.split(/\n{2,}/).map((block, i) => {
       const lines = block.split("\n").filter(line => line.trim())
@@ -25,6 +26,26 @@ function Body({ text }: { text: string }) {
             : <Label key={j} style={s.paragraph}>{line}</Label>)}
       </Box>
     })}
+  </Box>
+}
+
+export function Body({ text, type }: { text: string; type: LegalDocumentType }) {
+  const table = type === "kvkk" ? parseKvkkTable(text) : null
+  if (!table) return <TextBody text={text} />
+  return <Box style={s.body}>
+    <TextBody text={table.before} />
+    <Label style={s.meta}>Tablonun tamamını görmek için yatay kaydırabilirsin.</Label>
+    <ScrollView horizontal accessibilityLabel="Kişisel veri işleme tablosu" style={s.tableScroll}>
+      <Box style={s.table}>
+        <Box style={[s.tableRow, s.tableHeader]}>
+          {KVKK_COLUMNS.map(title => <Box key={title} style={s.tableCell}><Label accessibilityRole="header" style={s.tableTitle}>{title}</Label></Box>)}
+        </Box>
+        {table.rows.map((row, i) => <Box key={i} style={s.tableRow}>
+          {row.map((cell, j) => <Box key={j} style={s.tableCell}><TextBody text={cell} /></Box>)}
+        </Box>)}
+      </Box>
+    </ScrollView>
+    <TextBody text={table.after} />
   </Box>
 }
 
@@ -53,7 +74,7 @@ export default function LegalScreen({ navigate, type }: { navigate: NavigateFn; 
         <Touch onPress={() => setAttempt(value => value + 1)} style={s.retry}><Label style={s.retryLabel}>Tekrar dene</Label></Touch>
       </Box> : doc && <>
         <Label style={s.meta}>{`Sürüm ${doc.version} · ${updated}`}</Label>
-        <Body text={doc.body} />
+        <Body text={doc.body} type={type} />
       </>}
     </Scroll>}
   </Box>
@@ -65,6 +86,12 @@ const s = StyleSheet.create({
   page: { paddingTop: 84, paddingHorizontal: 20, paddingBottom: 60 },
   meta: { color: palette.muted, fontSize: 12, marginBottom: 16 },
   body: { gap: 14 },
+  tableScroll: { borderWidth: 1, borderColor: palette.border, borderRadius: 12 },
+  table: { width: 990 },
+  tableRow: { flexDirection: "row", alignItems: "stretch" },
+  tableHeader: { backgroundColor: palette.glassStrong },
+  tableCell: { width: 330, padding: 14, borderRightWidth: 1, borderBottomWidth: 1, borderColor: palette.border },
+  tableTitle: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 15, lineHeight: 22 },
   block: { gap: 8 },
   heading: { color: palette.text, fontFamily: "Outfit-SemiBold", fontSize: 16, marginTop: 6 },
   paragraph: { color: "rgba(244,245,255,.78)", fontSize: 14, lineHeight: 22 },
